@@ -1,0 +1,7 @@
+{
+  "name": "ParlezPlus Web",
+  "description": "A professional French shadowing and pronunciation correction tool powered by Gemini 3 Flash.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

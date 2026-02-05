@@ -1,0 +1,407 @@
+
+import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
+import { MediaResource, Classroom, Submission } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Key, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck } from 'lucide-react';
+import { getClassroomById, getClassrooms, getSubmissions } from '../utils/storage';
+import { generateRandomCoverArt } from '../utils/mediaUtils';
+import { ThemeContext } from '../App';
+
+// Icons used in StudentDashboard
+const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
+const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>;
+const XIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
+const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></svg>;
+
+interface StudentDashboardProps {
+  resources: MediaResource[];
+  onSelectResource: (resource: MediaResource) => void;
+  onEnterTeacherMode: () => void;
+}
+
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelectResource, onEnterTeacherMode }) => {
+  const { user, logout } = useAuth();
+  const { isDarkMode, toggleTheme } = useContext(ThemeContext);
+  const [activeClass, setActiveClass] = useState<Classroom | null>(null);
+  const [allClassrooms, setAllClassrooms] = useState<Classroom[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isClassSwitcherOpen, setIsClassSwitcherOpen] = useState(false);
+  const [filterTab, setFilterTab] = useState<'all' | 'incomplete'>('incomplete'); 
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  
+  const classSwitcherRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (user) {
+        setAllClassrooms(getClassrooms());
+        setSubmissions(getSubmissions());
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.classId && !activeClass) {
+      const assignedClass = getClassroomById(user.classId);
+      if (assignedClass) {
+        setActiveClass(assignedClass);
+      }
+    }
+  }, [user, activeClass]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (classSwitcherRef.current && !classSwitcherRef.current.contains(event.target as Node)) {
+        setIsClassSwitcherOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const displayedResources = useMemo(() => {
+    let result = resources.filter(r => {
+        if (activeClass?.id && r.assignedClassIds?.includes(activeClass.id)) return true;
+        if (r.status === 'ready' && (!r.assignedClassIds || r.assignedClassIds.length === 0)) return true;
+        return false;
+    });
+    
+    if (filterTab === 'incomplete') {
+      result = result.filter(r => {
+          // Check explicit submission status first
+          const sub = submissions.find(s => s.resourceId === r.id && s.studentId === user?.id);
+          const isGraded = sub?.status === 'graded';
+          return !r.isCompleted && !isGraded;
+      });
+    } else {
+      result = result.sort((a, b) => {
+        if (a.isCompleted === b.isCompleted) return 0;
+        return a.isCompleted ? 1 : -1;
+      });
+    }
+    return result;
+  }, [resources, filterTab, activeClass?.id, submissions, user]);
+
+  const incompleteCount = resources.filter(r => {
+      const isAssigned = (activeClass?.id && r.assignedClassIds?.includes(activeClass.id)) || (!r.assignedClassIds || r.assignedClassIds.length === 0);
+      const sub = submissions.find(s => s.resourceId === r.id && s.studentId === user?.id);
+      const isGraded = sub?.status === 'graded';
+      return isAssigned && !r.isCompleted && !isGraded && r.status === 'ready';
+  }).length;
+  
+  const completedCount = resources.filter(r => {
+      const isAssigned = (activeClass?.id && r.assignedClassIds?.includes(activeClass.id)) || (!r.assignedClassIds || r.assignedClassIds.length === 0);
+      const sub = submissions.find(s => s.resourceId === r.id && s.studentId === user?.id);
+      const isGraded = sub?.status === 'graded';
+      return isAssigned && (r.isCompleted || isGraded) && r.status === 'ready';
+  }).length;
+
+  // 使用 ID 生成唯一的动态封面作为保底
+  const getFallbackCover = (id: string) => {
+    return generateRandomCoverArt(id);
+  };
+
+  return (
+    <div className="h-[100dvh] w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center relative overflow-hidden transition-colors duration-300">
+      
+      {/* Universal Header */}
+      <div className="w-full bg-white dark:bg-slate-900 pb-6 pt-10 px-6 shadow-sm border-b border-slate-100 dark:border-slate-800 z-50 flex-shrink-0">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100 dark:shadow-none hidden sm:flex">
+              <SparklesIcon />
+            </div>
+            
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl md:text-2xl font-black text-indigo-900 dark:text-indigo-400 leading-none tracking-tight">ParlezPlus</h1>
+                
+                <div className="relative" ref={classSwitcherRef}>
+                  <button 
+                    onClick={() => setIsClassSwitcherOpen(!isClassSwitcherOpen)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-100 dark:border-slate-700 rounded-full text-xs font-bold text-slate-600 dark:text-slate-300 transition-all active:scale-95"
+                  >
+                    <Layers size={14} className="text-indigo-500" />
+                    <span className="max-w-[120px] truncate">{activeClass?.name || '选择班级'}</span>
+                    <ChevronDown size={14} className={`text-slate-400 transition-transform ${isClassSwitcherOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {isClassSwitcherOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 py-2 animate-fade-in-up z-[100]">
+                      <p className="px-4 py-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">切换我的班级</p>
+                      {allClassrooms.map((cls) => (
+                        <button
+                          key={cls.id}
+                          onClick={() => {
+                            setActiveClass(cls);
+                            setIsClassSwitcherOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 text-sm flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors ${activeClass?.id === cls.id ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}
+                        >
+                          {cls.name}
+                          {activeClass?.id === cls.id && <CheckCircleIcon />}
+                        </button>
+                      ))}
+                      {allClassrooms.length === 0 && (
+                        <p className="px-4 py-3 text-xs text-slate-400 italic">暂无可选班级</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 md:gap-4">
+            <button 
+              onClick={toggleTheme}
+              className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95"
+              title={isDarkMode ? "切换到浅色模式" : "切换到深色模式"}
+            >
+              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+
+            <div className="hidden lg:flex items-center gap-6 mr-6">
+               <div className="flex flex-col items-end">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">已完成</span>
+                  <span className="text-sm font-black text-emerald-600">{completedCount}</span>
+               </div>
+               <div className="w-[1px] h-6 bg-slate-100 dark:bg-slate-800"></div>
+               <div className="flex flex-col items-end">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">待继续</span>
+                  <span className="text-sm font-black text-orange-500">{incompleteCount}</span>
+               </div>
+            </div>
+
+            <button 
+              onClick={() => setIsMenuOpen(true)}
+              className="p-2 -mr-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95"
+            >
+              <MenuIcon />
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div className="w-full flex-1 overflow-y-auto no-scrollbar pb-12">
+        <div className="max-w-7xl mx-auto px-6 pt-6 space-y-8">
+          
+          <div className="flex flex-col md:flex-row md:items-center justify-end gap-4">
+            <div className="flex items-center bg-white dark:bg-slate-900 p-1 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 self-start">
+               <button 
+                 onClick={() => setFilterTab('incomplete')}
+                 className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filterTab === 'incomplete' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+               >
+                 待完成
+                 {incompleteCount > 0 && (
+                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${filterTab === 'incomplete' ? 'bg-white text-indigo-600' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
+                     {incompleteCount}
+                   </span>
+                 )}
+               </button>
+               <button 
+                 onClick={() => setFilterTab('all')}
+                 className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${filterTab === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+               >
+                 全部任务
+               </button>
+            </div>
+          </div>
+
+          {!activeClass ? (
+            <div className="py-20 text-center text-slate-400 dark:text-slate-500 text-sm bg-white dark:bg-slate-900 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800 p-8">
+               <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-300 dark:text-slate-600 mx-auto mb-4">
+                  <Lock size={32} />
+               </div>
+               <p className="font-bold text-slate-600 dark:text-slate-300 text-base">请在上方切换您的班级</p>
+               <p className="text-xs mt-1">若没有可选班级，请联系您的法语老师。</p>
+            </div>
+          ) : displayedResources.length === 0 ? (
+            <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex flex-col items-center">
+               <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-full flex items-center justify-center mb-4">
+                 <CheckCircleIcon />
+               </div>
+               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">暂无新任务</h3>
+               <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">
+                 {filterTab === 'incomplete' ? '太棒了！您已完成所有分配的任务 🎉' : '老师尚未给本班级发布跟读资源'}
+               </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {displayedResources.map((resource) => {
+                 const isOverdue = resource.deadline && Date.now() > resource.deadline;
+                 const submission = submissions.find(s => s.resourceId === resource.id && s.studentId === user?.id);
+                 const status = submission?.status; // 'pending_review' | 'graded' | undefined
+
+                 return (
+                    <div 
+                      key={resource.id}
+                      className={`bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] hover:shadow-xl border group relative flex flex-col isolate ${resource.isCompleted ? 'border-indigo-50 dark:border-indigo-900/30 opacity-90' : 'border-slate-100 dark:border-slate-800'}`}
+                      onClick={() => onSelectResource(resource)}
+                    >
+                      <div className={`relative h-48 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 rounded-t-[2rem] ${resource.isCompleted ? 'grayscale-[50%]' : ''}`}>
+                         <img 
+                           src={resource.coverImage || getFallbackCover(resource.id)} 
+                           alt={resource.title} 
+                           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                           onError={(e) => {
+                               e.currentTarget.src = getFallbackCover(resource.id);
+                           }} 
+                         />
+                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                         
+                         <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+                           <div className={`text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg backdrop-blur-md ${
+                             resource.level === 'A1' ? 'bg-emerald-500/80' :
+                             resource.level === 'A2' ? 'bg-blue-500/80' :
+                             resource.level === 'B1' ? 'bg-orange-500/80' : 'bg-red-500/80'
+                           }`}>
+                             {resource.level}
+                           </div>
+                           
+                           {/* Status Badges */}
+                           {status === 'graded' ? (
+                               <div className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
+                                   <FileCheck size={12} /> 已批改
+                               </div>
+                           ) : status === 'pending_review' ? (
+                               <div className="bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
+                                   <Clock size={12} /> 批改中
+                               </div>
+                           ) : resource.isCompleted && (
+                             <div className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
+                               <CheckCircleIcon /> 已达标
+                             </div>
+                           )}
+
+                           {isOverdue && !resource.isCompleted && !status && (
+                               <div className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-pulse">
+                                  <AlertCircle size={12} /> 已逾期
+                               </div>
+                           )}
+                         </div>
+
+                         <div className="absolute bottom-4 left-4 right-4">
+                            <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 drop-shadow-md">
+                              {resource.title}
+                            </h3>
+                         </div>
+                      </div>
+
+                      <div className="p-5 flex-1 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-2">
+                           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                              <BookOpen size={12} className="text-indigo-400" />
+                              {resource.transcript.length} 个段落
+                           </div>
+                           <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md">
+                             <Play size={14} fill="currentColor" />
+                           </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
+                           <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">截止时间</span>
+                              <span className={`text-[10px] font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                                 <Clock size={10} />
+                                 {resource.deadline ? new Date(resource.deadline).toLocaleDateString() : '无限制'}
+                              </span>
+                           </div>
+                           {status === 'graded' && submission?.aiScore ? (
+                               <div className="flex flex-col items-end">
+                                   <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">得分</span>
+                                   <span className="text-lg font-black text-indigo-600 leading-none">{submission.aiScore.overallScore}</span>
+                               </div>
+                           ) : resource.isCompleted && (
+                             <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500/80">
+                                100% 已学完
+                             </div>
+                           )}
+                        </div>
+                      </div>
+                    </div>
+                 );
+              })}
+            </div>
+          )}
+
+          <div className="text-center pt-8 pb-12 border-t border-slate-100 dark:border-slate-800">
+             <p className="text-xs text-slate-400 dark:text-slate-500 font-medium italic">更多精彩课程正在录制中，敬请期待...</p>
+          </div>
+        </div>
+      </div>
+
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
+            onClick={() => setIsMenuOpen(false)}
+          ></div>
+          
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl z-50 overflow-hidden animate-fade-in-up border-t dark:border-slate-800 sm:border dark:border-slate-800">
+            <div className="p-8 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+              <div>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">账户信息</h3>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">Account & Preferences</p>
+              </div>
+              <button onClick={() => setIsMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-white dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-700 transition-all">
+                <XIcon />
+              </button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="flex items-center gap-4 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/30">
+                 <img src={user?.avatar || `https://i.pravatar.cc/150?u=${user?.id}`} className="w-14 h-14 rounded-full border-2 border-white dark:border-slate-800 shadow-sm" />
+                 <div>
+                    <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg">{user?.name}</h4>
+                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{activeClass?.name || '自由学习者'}</p>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">完成资源</p>
+                    <p className="text-xl font-black text-slate-800 dark:text-slate-100">{completedCount}</p>
+                 </div>
+                 <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">活跃天数</p>
+                    <p className="text-xl font-black text-slate-800 dark:text-slate-100">12</p>
+                 </div>
+              </div>
+
+              <div className="space-y-3">
+                 <div className="flex items-center justify-between gap-2 text-indigo-900 dark:text-indigo-400 font-bold text-sm">
+                    <div className="flex items-center gap-2">
+                       < Sun size={16} className="text-amber-500" />
+                       <span>暗夜模式</span>
+                    </div>
+                    <button 
+                      onClick={toggleTheme}
+                      className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
+                 </div>
+              </div>
+
+              <div className="space-y-3 pt-4">
+                <button 
+                  onClick={logout}
+                  className="w-full p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center gap-2 font-black shadow-sm hover:bg-red-100 dark:hover:bg-red-900/30 transition-all active:scale-95"
+                >
+                   <LogOut size={18} /> 退出当前登录
+                </button>
+                <button 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="w-full p-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl flex items-center justify-center gap-2 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                >
+                   返回主页
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default StudentDashboard;
