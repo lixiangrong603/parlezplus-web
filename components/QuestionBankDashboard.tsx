@@ -26,8 +26,8 @@ const QuestionBankDashboard: React.FC = () => {
   const [editingOriginal, setEditingOriginal] = useState<Question | null>(null);
 
   useEffect(() => {
-    setCourses(getSyllabusCourses(CURRENT_USER_ID));
-    setBankQuestions(getBankQuestions());
+        setCourses(getSyllabusCourses(CURRENT_USER_ID));
+        setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
   }, []);
 
   // Sync with context to find active job (persisted background job)
@@ -69,7 +69,7 @@ const QuestionBankDashboard: React.FC = () => {
 
   const handleSaveGeneratedQuestions = (questions: Question[]) => {
       questions.forEach(q => saveBankQuestion(q));
-      setBankQuestions(getBankQuestions());
+      setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
       setShowWizard(false);
       // Clean up job on save
       if (activeJobId) clearJob(activeJobId);
@@ -87,7 +87,7 @@ const QuestionBankDashboard: React.FC = () => {
 
   const handleUpdateExistingQuestion = (q: Question) => {
       saveBankQuestion(q);
-      setBankQuestions(getBankQuestions());
+      setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
       // FIXED: Do not close the editor (setEditingQId(null)) here. 
       // This allows continuous editing. The "Finish" button handles closing.
   };
@@ -95,14 +95,14 @@ const QuestionBankDashboard: React.FC = () => {
   const handleDeleteExistingQuestion = (id: string) => {
       if(confirm('确定要删除这道题吗？')) {
           deleteBankQuestion(id);
-          setBankQuestions(getBankQuestions());
+          setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
       }
   };
 
   const handleCancelEdit = () => {
       if (editingOriginal) {
           saveBankQuestion(editingOriginal);
-          setBankQuestions(getBankQuestions());
+          setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
       }
       setEditingQId(null);
       setEditingOriginal(null);

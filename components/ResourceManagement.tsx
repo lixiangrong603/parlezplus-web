@@ -112,7 +112,10 @@ export const ResourceManagement = ({ onExit, onPreview }: { onExit: () => void, 
 
 // --- SUB-COMPONENTS ---
 
+import { useAuth } from '../contexts/AuthContext';
+
 const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit: (r: MediaResource) => void, onCreateWithFiles: (resources: MediaResource[]) => void, onBack: () => void, onPreview: (r: MediaResource) => void }) => {
+  const { user } = useAuth();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string>('default');
   const [resources, setResources] = useState<MediaResource[]>([]);
@@ -126,17 +129,19 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
   } | null>(null);
 
   useEffect(() => {
-    setChannels(getChannels());
-    setResources(getResources());
-  }, []);
+    if (user) {
+      setChannels(getChannels(user.id));
+      setResources(getResources(user.id));
+    }
+  }, [user]);
 
   const activeResources = resources.filter(r => r.channelId === activeChannelId);
 
   const handleAddChannel = () => {
-    if (!newChannelName) return;
-    const nc: Channel = { id: Date.now().toString(), userId: CURRENT_USER_ID, name: newChannelName, createdAt: Date.now() };
-    saveChannel(nc);
-    setChannels(getChannels());
+    if (!newChannelName || !user) return;
+    const nc: Channel = { id: Date.now().toString(), userId: user.id, name: newChannelName, createdAt: Date.now() };
+    saveChannel(nc, user.id);
+    setChannels(getChannels(user.id));
     setNewChannelName('');
     setShowAddChannel(false);
     setActiveChannelId(nc.id);
@@ -149,10 +154,11 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
       title: "删除频道",
       message: "确定要删除这个频道吗？频道内的所有资源也将被永久物理删除，无法撤销。",
       onConfirm: () => {
+        if (!user) return;
         deleteChannel(id);
-        const updatedChannels = getChannels();
+        const updatedChannels = getChannels(user.id);
         setChannels(updatedChannels);
-        const allResources = getResources();
+        const allResources = getResources(user.id);
         const filteredResources = allResources.filter(r => r.channelId !== id);
         localStorage.setItem('parlezplus_resources', JSON.stringify(filteredResources));
         setResources(filteredResources);
@@ -312,7 +318,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                                 isOpen: true,
                                 title: "彻底删除资源",
                                 message: `确定要删除“${resource.title}”吗？此操作无法恢复。`,
-                                onConfirm: () => { deleteResource(resource.id); setResources(getResources()); }
+                                onConfirm: () => { if (user) { deleteResource(resource.id); setResources(getResources(user.id)); } }
                               });
                             }} 
                             className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all" 
@@ -351,8 +357,9 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
           onConfirm={(newResources) => {
             onCreateWithFiles(newResources);
             setShowUploadModal(false);
-            setResources(getResources());
+            if (user) setResources(getResources(user.id));
           }}
+          userId={user?.id}
         />
       )}
 
@@ -362,8 +369,9 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
           onClose={() => setPublishingResource(null)}
           onSuccess={() => {
             setPublishingResource(null);
-            setResources(getResources());
+            if (user) setResources(getResources(user.id));
           }}
+          userId={user?.id}
         />
       )}
 
@@ -378,8 +386,8 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
   );
 };
 
-const PublishToClassModal = ({ resource, onClose, onSuccess }: { resource: MediaResource, onClose: () => void, onSuccess: () => void }) => {
-  const classrooms = getClassrooms(CURRENT_USER_ID);
+const PublishToClassModal = ({ resource, onClose, onSuccess, userId }: { resource: MediaResource, onClose: () => void, onSuccess: () => void, userId?: string }) => {
+  const classrooms = userId ? getClassrooms(userId) : [];
   const [selectedIds, setSelectedIds] = useState<string[]>(resource.assignedClassIds || []);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -388,13 +396,14 @@ const PublishToClassModal = ({ resource, onClose, onSuccess }: { resource: Media
   };
 
   const handlePublish = async () => {
+    if (!userId) return;
     setIsSaving(true);
     const updated: MediaResource = {
       ...resource,
       status: selectedIds.length > 0 ? 'ready' : 'draft',
       assignedClassIds: selectedIds
     };
-    saveResource(updated);
+    saveResource(updated, userId);
     if (updated.status === 'ready' && !updated.transcriptUrl) {
       await uploadResourceToMockCDN(updated);
     }
@@ -458,7 +467,7 @@ const PublishToClassModal = ({ resource, onClose, onSuccess }: { resource: Media
   );
 };
 
-const UploadModal = ({ channelId, onClose, onConfirm }: { channelId: string, onClose: () => void, onConfirm: (resources: MediaResource[]) => void }) => {
+const UploadModal = ({ channelId, onClose, onConfirm, userId }: { channelId: string, onClose: () => void, onConfirm: (resources: MediaResource[]) => void, userId?: string }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -539,7 +548,8 @@ const UploadModal = ({ channelId, onClose, onConfirm }: { channelId: string, onC
 
         const newResource: MediaResource = {
             id: resourceId,
-            userId: CURRENT_USER_ID, 
+            userId: userId || CURRENT_USER_ID, 
+            teacherId: userId,
             channelId,
             title: name,
             level: 'A1',

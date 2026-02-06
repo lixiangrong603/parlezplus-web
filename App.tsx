@@ -35,7 +35,7 @@ function AppContent() {
   // Reload resources whenever user role is resolved or we return to dashboard
   useEffect(() => {
     if (!isLoading && user) {
-      setResources(getResources());
+      setResources(getResources(user.id));
     }
   }, [isLoading, user, selectedResource]);
 

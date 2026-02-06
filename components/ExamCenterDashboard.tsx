@@ -205,7 +205,7 @@ const ExamCenterDashboard: React.FC = () => {
         folderId: exam.folderId === folderId ? undefined : exam.folderId
       }));
       updatedPapers.forEach(exam => {
-        const allPapers = getExamPapers();
+        const allPapers = getExamPapers(user?.id);
         const index = allPapers.findIndex(p => p.id === exam.id);
         if (index !== -1) {
           allPapers[index] = exam;
@@ -217,7 +217,7 @@ const ExamCenterDashboard: React.FC = () => {
   };
 
   const handleMoveToFolder = (examId: string, folderId: string | null) => {
-    const allPapers = getExamPapers();
+    const allPapers = getExamPapers(user?.id);
     const examIndex = allPapers.findIndex(p => p.id === examId);
     if (examIndex !== -1) {
       allPapers[examIndex] = { ...allPapers[examIndex], folderId };
@@ -289,7 +289,7 @@ const ExamCenterDashboard: React.FC = () => {
       createdAt: Date.now(),
     };
     // Save directly to storage
-    const allPapers = getExamPapers();
+    const allPapers = getExamPapers(user?.id);
     allPapers.push(duplicatedExam);
     localStorage.setItem('parlezplus_exam_papers', JSON.stringify(allPapers));
     loadExamPapers();

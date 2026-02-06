@@ -9,6 +9,7 @@ import { Submission, MediaResource, Classroom, Student, RecorderState, AIRespons
 import { getResources, getClassroomById, getSubmissions, submitAssignment } from '../utils/storage';
 import { dataURLtoBlob } from '../utils/audioUtils';
 import { useJobs } from '../contexts/JobContext';
+import { useAuth } from '../contexts/AuthContext';
 import { CURRENT_USER_ID } from '../constants';
 import MediaPlayer from './MediaPlayer';
 
@@ -59,6 +60,7 @@ interface SubmissionManagerProps {
 }
 
 const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, onBack }) => {
+  const { user } = useAuth();
   const { startBatchEvaluationJob, jobs, clearJob } = useJobs();
   
   const [resource, setResource] = useState<MediaResource | null>(null);
@@ -88,7 +90,7 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
 
   // 初始化加载数据
   useEffect(() => {
-    const res = getResources().find(r => r.id === taskId);
+    const res = getResources(user?.id).find(r => r.id === taskId);
     if (res) setResource(res);
     
     const cls = getClassroomById(classId);
@@ -96,7 +98,7 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
         setClassroom(cls);
         refreshSubmissions();
     }
-  }, [taskId, classId]);
+  }, [taskId, classId, user?.id]);
 
   const refreshSubmissions = () => {
     const allSubmissions = getSubmissions();

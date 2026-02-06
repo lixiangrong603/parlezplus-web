@@ -329,9 +329,9 @@ const ClassDetailView = ({
   const loadData = () => {
     const cls = getClassrooms(teacherId).find(c => c.id === classId);
     if (cls) setClassroom(cls);
-    const allResources = getResources();
+    const allResources = getResources(teacherId);
     setAssignedResources(allResources.filter(r => r.assignedClassIds?.includes(classId)).sort((a, b) => b.createdAt - a.createdAt));
-    const allExams = getExamPapers();
+    const allExams = getExamPapers(teacherId);
     setAssignedExams(allExams.filter(e => e.assignedClassIds?.includes(classId)));
   };
 
@@ -434,7 +434,7 @@ const ClassDetailView = ({
       title: "撤回任务",
       message: "确定要从该班级撤回此任务吗？学生将无法再看到该任务。",
       onConfirm: () => {
-        const resource = getResources().find(r => r.id === resourceId);
+        const resource = getResources(teacherId).find(r => r.id === resourceId);
         if (resource) {
           const updated = { ...resource, assignedClassIds: (resource.assignedClassIds || []).filter(id => id !== classId) };
           saveResource(updated);
@@ -450,7 +450,7 @@ const ClassDetailView = ({
       title: "撤回试卷",
       message: "确定要从该班级撤回此试卷吗？学生将无法再看到该试卷任务。",
       onConfirm: () => {
-        const exam = getExamPapers().find(e => e.id === examId);
+        const exam = getExamPapers(teacherId).find(e => e.id === examId);
         if (exam) {
           const nextAssigned = (exam.assignedClassIds || []).filter(id => id !== classId);
           const nextDeadlines = { ...(exam.assignedClassDeadlines || {}) };
@@ -779,7 +779,7 @@ const ClassDetailView = ({
           classId={classId}
           onClose={() => setShowAddTask(false)}
           onAssignResource={(rid, d) => {
-            const resource = getResources().find(r => r.id === rid);
+            const resource = getResources(teacherId).find(r => r.id === rid);
             if (resource) {
               const nextClassIds = Array.from(new Set([...(resource.assignedClassIds || []), classId]));
               saveResource({ ...resource, status: 'ready', deadline: d, assignedClassIds: nextClassIds });
@@ -902,7 +902,7 @@ const AddTaskModal = ({
   alreadyAssignedResourceIds: string[];
   alreadyAssignedExamIds: string[];
 }) => {
-  const resources = getResources().filter(r => !alreadyAssignedResourceIds.includes(r.id));
+  const resources = getResources(teacherId).filter(r => !alreadyAssignedResourceIds.includes(r.id));
   const exams = getExamPapers(teacherId).filter(e => !alreadyAssignedExamIds.includes(e.id));
   const [activeTab, setActiveTab] = useState<'resources' | 'exams'>('resources');
   const [selectedDeadline, setSelectedDeadline] = useState<string>('');

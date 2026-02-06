@@ -42,10 +42,10 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
   const [kpTypeFilter, setKpTypeFilter] = useState<string>('ALL');
 
   useEffect(() => {
-    setBankQuestions(getBankQuestions());
-    setResources(getResources());
+    setBankQuestions(getBankQuestions(user.id));
+    setResources(getResources(user.id));
     setCourses(getSyllabusCourses(user.id));
-    setChannels(getChannels());
+    setChannels(getChannels(user.id));
   }, [user.id]);
 
   // 构建知识点映射

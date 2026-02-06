@@ -105,24 +105,38 @@ export const deleteSyllabusCourse = (id: string) => {
   localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(filtered));
 };
 
-export const getBankQuestions = (): Question[] => {
+// 内部函数：读取所有题目（不过滤）
+const getAllBankQuestionsRaw = (): Question[] => {
   const data = localStorage.getItem(STORAGE_KEYS.QUESTION_BANK);
   return data ? JSON.parse(data) : [];
 };
 
-export const saveBankQuestion = (question: Question) => {
-  const questions = getBankQuestions();
+export const getBankQuestions = (teacherId?: string): Question[] => {
+  const questions = getAllBankQuestionsRaw();
+  // 如果提供了 teacherId，只返回该教师的题目
+  if (!teacherId) return questions;
+  // 兼容旧题目：如果题目没有 teacherId，将其视为属于 CURRENT_USER_ID
+  return questions.filter((q: Question) => (q.teacherId || CURRENT_USER_ID) === teacherId);
+};
+
+export const saveBankQuestion = (question: Question, teacherId?: string) => {
+  const questions = getAllBankQuestionsRaw();
+  // 确保保存时关联 teacherId
+  const questionToSave = {
+    ...question,
+    teacherId: teacherId || question.teacherId || CURRENT_USER_ID
+  };
   const index = questions.findIndex(q => q.id === question.id);
   if (index >= 0) {
-    questions[index] = question;
+    questions[index] = questionToSave;
   } else {
-    questions.push(question);
+    questions.push(questionToSave);
   }
   localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
 };
 
 export const deleteBankQuestion = (id: string) => {
-  const questions = getBankQuestions();
+  const questions = getAllBankQuestionsRaw();
   const filtered = questions.filter(q => q.id !== id);
   localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(filtered));
 };
@@ -255,24 +269,33 @@ export const toggleBlockUser = (id: string) => {
 };
 
 // --- CHANNELS ---
-export const getChannels = (): Channel[] => {
+export const getChannels = (userId?: string): Channel[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CHANNELS);
   const allChannels: Channel[] = data ? JSON.parse(data) : [];
   if (allChannels.length === 0) {
-      return [{ id: 'default', userId: CURRENT_USER_ID, name: '法语基础资源', createdAt: Date.now() }];
+      const defaultChannel = { id: 'default', userId: CURRENT_USER_ID, name: '法语基础资源', createdAt: Date.now() };
+      return userId ? (defaultChannel.userId === userId ? [defaultChannel] : []) : [defaultChannel];
   }
-  return allChannels;
+  // 添加 userId 过滤，兼容旧频道：如果没有 userId，默认归属于 CURRENT_USER_ID
+  return userId 
+    ? allChannels.filter(c => (c.userId || CURRENT_USER_ID) === userId) 
+    : allChannels;
 };
 
-export const saveChannel = (channel: Channel) => {
+export const saveChannel = (channel: Channel, userId?: string) => {
   const allChannels = localStorage.getItem(STORAGE_KEYS.CHANNELS) 
       ? JSON.parse(localStorage.getItem(STORAGE_KEYS.CHANNELS)!) 
       : [];
+  // 确保 channel 有 userId
+  const channelToSave = {
+    ...channel,
+    userId: userId || channel.userId || CURRENT_USER_ID
+  };
   const index = allChannels.findIndex((c: Channel) => c.id === channel.id);
   if (index >= 0) {
-      allChannels[index] = channel;
+      allChannels[index] = channelToSave;
   } else {
-      allChannels.push(channel);
+      allChannels.push(channelToSave);
   }
   localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(allChannels));
 };
@@ -286,20 +309,40 @@ export const deleteChannel = (id: string) => {
 };
 
 // --- MEDIA RESOURCES ---
-export const getResources = (): MediaResource[] => {
+export const getResources = (teacherId?: string): MediaResource[] => {
   const data = localStorage.getItem(STORAGE_KEYS.RESOURCES);
+  let resources: MediaResource[] = [];
+  
   if (!data) {
     const seeded = MOCK_RESOURCES.map(r => ({
        ...r,
-       assignedClassIds: ['default-class'] 
+       assignedClassIds: ['default-class'],
+       channelId: r.channelId || 'default'
     }));
     localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(seeded));
-    return seeded;
+    resources = seeded;
+  } else {
+    resources = JSON.parse(data);
   }
-  return JSON.parse(data);
+  
+  // 如果提供了 teacherId，过滤该教师的频道下的资源
+  if (teacherId) {
+    const channels = getChannels(teacherId);
+    const channelIds = channels.map(c => c.id);
+    // 兼容旧资源：如果资源没有 teacherId，使用 channelId 推导
+    return resources.filter(r => {
+      // 如果资源在该教师的频道中，显示它
+      if (channelIds.includes(r.channelId || 'default')) return true;
+      // 兼容：如果资源明确有 teacherId 匹配，也显示
+      if (r.teacherId && r.teacherId === teacherId) return true;
+      return false;
+    });
+  }
+  
+  return resources;
 };
 
-export const saveResource = (resource: MediaResource) => {
+export const saveResource = (resource: MediaResource, teacherId?: string) => {
   const rawData = localStorage.getItem(STORAGE_KEYS.RESOURCES);
   let allResources: MediaResource[] = rawData ? JSON.parse(rawData) : [];
   
@@ -315,11 +358,17 @@ export const saveResource = (resource: MediaResource) => {
       resource.title = newTitle;
   }
 
+  // 确保 resource 有 teacherId（通过 channelId 所属教师推导）
+  const resourceToSave = {
+    ...resource,
+    teacherId: teacherId || resource.teacherId || CURRENT_USER_ID
+  };
+
   const index = allResources.findIndex(r => r.id === resource.id);
   if (index >= 0) {
-      allResources[index] = resource;
+      allResources[index] = resourceToSave;
   } else {
-      allResources.push(resource);
+      allResources.push(resourceToSave);
   }
   localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(allResources));
 };

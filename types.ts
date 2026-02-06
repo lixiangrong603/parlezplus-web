@@ -98,6 +98,7 @@ export interface Question {
   // Metadata
   createdAt?: number;
   createdBy?: 'ai' | 'manual';
+  teacherId?: string; // 关联的教师ID，用于权限隔离
 }
 
 // --- End Question Bank Types ---
@@ -111,7 +112,8 @@ export interface Channel {
 
 export interface MediaResource {
   id: string;
-  userId?: string; 
+  userId?: string;
+  teacherId?: string; // 关联的教师ID，用于权限隔离
   channelId: string;
   title: string;
   level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
