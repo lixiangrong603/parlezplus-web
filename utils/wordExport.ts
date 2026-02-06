@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle, TabStopType } from "docx";
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle, TabStopType, ImageRun } from "docx";
 import saveAs from "file-saver";
 import { ExamPaper, Question, QuestionOption } from "../types";
 
@@ -284,6 +284,80 @@ const createOptionsParagraphs = (options: string[]): Paragraph[] => {
     return paragraphs;
 };
 
+// Helper to create Image Paragraph from base64
+const createImageParagraph = (imageUrl: string): Paragraph | null => {
+    try {
+        // Extract base64 data
+        const matches = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+        if (!matches) {
+            console.warn('Image URL format not recognized:', imageUrl?.substring(0, 50));
+            return null;
+        }
+        
+        const base64Data = matches[2];
+        
+        // Convert base64 to Uint8Array (browser-compatible)
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Create image with complete parameters to avoid Word warnings
+        return new Paragraph({
+            children: [
+                new ImageRun({
+                    data: bytes,
+                    transformation: {
+                        width: 300,  // Reduced size for better compatibility
+                        height: 225, // Maintain 4:3 aspect ratio
+                    },
+                    altText: {
+                        title: "Question Image",
+                        description: "Image for exam question",
+                    },
+                } as any) as any,
+            ],
+            spacing: { before: 120, after: 120 },
+            alignment: AlignmentType.CENTER,
+        });
+    } catch (error) {
+        console.error('Failed to create image paragraph:', error, imageUrl?.substring(0, 50));
+        return null;
+    }
+};
+
+// Helper to create Options Layout with Images
+const createOptionsParagraphsWithImages = (options: QuestionOption[]): Paragraph[] => {
+    if (!options || options.length === 0) return [];
+
+    const paragraphs: Paragraph[] = [];
+    
+    for (let idx = 0; idx < options.length; idx++) {
+        const option = options[idx];
+        const letter = String.fromCharCode(65 + idx); // A, B, C...
+        
+        // Option text
+        paragraphs.push(new Paragraph({
+            children: [
+                new TextRun({ text: `${letter}. `, bold: true, font: MAIN_FONT, size: MAIN_SIZE }),
+                new TextRun({ text: option.text || '', font: MAIN_FONT, size: MAIN_SIZE }),
+            ],
+            spacing: { after: 50 },
+        }));
+        
+        // Option image if exists
+        if (option.imageUrl) {
+            const imgPara = createImageParagraph(option.imageUrl);
+            if (imgPara) {
+                paragraphs.push(imgPara);
+            }
+        }
+    }
+    
+    return paragraphs;
+};
+
 // Helper to get the correct answer letter for MCQ
 const getCorrectAnswerLetter = (q: Question): string => {
     if (!q.options || !q.correctOptionId) return '';
@@ -436,8 +510,8 @@ export const generateWordDocument = async (exam: ExamPaper, allQuestions: Questi
           });
           children.push(...stemParagraphs);
 
-          // Sub-questions with options (for cloze-test)
-          if (q.subQuestions && q.subQuestions.some(sq => sq.options && sq.options.length > 0)) {
+          // Sub-questions with options (only for cloze-test, not compound-fill)
+          if (q.type === 'cloze-test' && q.subQuestions && q.subQuestions.some(sq => sq.options && sq.options.length > 0)) {
               q.subQuestions.forEach((sq, idx) => {
                   if (!sq.options || sq.options.length === 0) return;
                   
@@ -451,14 +525,17 @@ export const generateWordDocument = async (exam: ExamPaper, allQuestions: Questi
                       })
                   );
 
-                  // Options layout (same as reading comprehension)
+                  // Options layout with image support
                   if (sq.options && sq.options.length > 0) {
-                      children.push(...createOptionsParagraphs(getOptionsAsStrings(sq.options)));
+                      const hasImages = sq.options.some(opt => opt.imageUrl);
+                      if (hasImages) {
+                          children.push(...createOptionsParagraphsWithImages(sq.options));
+                      } else {
+                          children.push(...createOptionsParagraphs(getOptionsAsStrings(sq.options)));
+                      }
                   }
 
-                  if (version === 'TEACHER') {
-                      appendTeacherBlock(getCorrectAnswerLetter(sq), sq.explanation);
-                  }
+                  // Teacher answer removed here - will be shown in grouped explanation at bottom
               });
           }
 
@@ -523,9 +600,20 @@ export const generateWordDocument = async (exam: ExamPaper, allQuestions: Questi
                   })
               );
 
-              // Options layout
+              // Sub-question image if exists
+              if (sq.imageUrl) {
+                  const imgPara = createImageParagraph(sq.imageUrl);
+                  if (imgPara) children.push(imgPara);
+              }
+
+              // Options layout with image support
               if (sq.options && sq.options.length > 0) {
-                  children.push(...createOptionsParagraphs(getOptionsAsStrings(sq.options)));
+                  const hasImages = sq.options.some(opt => opt.imageUrl);
+                  if (hasImages) {
+                      children.push(...createOptionsParagraphsWithImages(sq.options));
+                  } else {
+                      children.push(...createOptionsParagraphs(getOptionsAsStrings(sq.options)));
+                  }
               }
 
               if (version === 'TEACHER') {
@@ -552,13 +640,28 @@ export const generateWordDocument = async (exam: ExamPaper, allQuestions: Questi
         });
         children.push(...stemParagraphs);
 
-        // Options layout for MCQ
-        if (q.type === 'multiple-choice' && q.options) {
-            children.push(...createOptionsParagraphs(getOptionsAsStrings(q.options)));
+        // Question image if exists
+        if (q.imageUrl) {
+            const imgPara = createImageParagraph(q.imageUrl);
+            if (imgPara) children.push(imgPara);
+        }
+
+        // Options layout - check for options existence instead of type
+        if (q.options && q.options.length > 0) {
+            // Check if any option has image
+            const hasImages = q.options.some(opt => opt.imageUrl);
+            if (hasImages) {
+                // Use version with images
+                const optionParas = createOptionsParagraphsWithImages(q.options);
+                children.push(...optionParas);
+            } else {
+                // Use simple text version
+                children.push(...createOptionsParagraphs(getOptionsAsStrings(q.options)));
+            }
         } 
         
         if (version === 'TEACHER') {
-            const correctAnswer = q.type === 'multiple-choice' 
+            const correctAnswer = q.options && q.options.length > 0
                 ? getCorrectAnswerLetter(q) 
                 : (q.correctOptionId || '');
             appendTeacherBlock(correctAnswer, q.explanation);

@@ -18,6 +18,11 @@ interface MediaPlayerProps {
   isPreviewingMovie: boolean;
   userAudioUrl: string | null;
   recorderState: RecorderState;
+
+  // Optional UI/behavior controls
+  hideExportButton?: boolean;
+  hideMoviePreviewButton?: boolean;
+  controlsDisabled?: boolean;
   
   // Handlers
   onTimeUpdate: () => void;
@@ -41,6 +46,9 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
   isPreviewingMovie,
   userAudioUrl,
   recorderState,
+  hideExportButton = false,
+  hideMoviePreviewButton = false,
+  controlsDisabled = false,
   onTimeUpdate,
   onLoadedMetadata,
   onEnded,
@@ -153,23 +161,27 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
         {/* TOP ACTION BAR - Highest Z-Index Layer 2 (Separated from auto-hide overlay for reliability) */}
         <div className="absolute top-4 right-4 z-[90] flex items-center gap-2 pointer-events-none">
-            <button
-              onClick={(e) => { e.stopPropagation(); onExport(e); }}
-              disabled={!userAudioUrl}
-              className="backdrop-blur text-white p-2.5 rounded-full border border-white/20 bg-black/50 hover:bg-black/70 transition-all disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto active:scale-90"
-              title={userAudioUrl ? "导出合成音轨 (WAV)" : "请先录音"}
-            >
-              <Download size={20} />
-            </button>
+            {!hideExportButton && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onExport(e); }}
+                disabled={!userAudioUrl || controlsDisabled}
+                className="backdrop-blur text-white p-2.5 rounded-full border border-white/20 bg-black/50 hover:bg-black/70 transition-all disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto active:scale-90"
+                title={userAudioUrl ? "导出合成音轨 (WAV)" : "请先录音"}
+              >
+                <Download size={20} />
+              </button>
+            )}
 
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleMoviePreview(e); }}
-              disabled={!userAudioUrl}
-              className={`backdrop-blur text-white text-xs font-bold px-4 py-2 rounded-full border flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto active:scale-95 ${isPreviewingMovie ? 'bg-indigo-600 border-indigo-400 shadow-lg shadow-indigo-500/30' : 'bg-black/50 hover:bg-black/70 border-white/20'}`}
-            >
-              <Film size={20} />
-              <span className="hidden sm:inline">{isPreviewingMovie ? '停止预览' : '预览全部'}</span>
-            </button>
+            {!hideMoviePreviewButton && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleMoviePreview(e); }}
+                disabled={!userAudioUrl || controlsDisabled}
+                className={`backdrop-blur text-white text-xs font-bold px-4 py-2 rounded-full border flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto active:scale-95 ${isPreviewingMovie ? 'bg-indigo-600 border-indigo-400 shadow-lg shadow-indigo-500/30' : 'bg-black/50 hover:bg-black/70 border-white/20'}`}
+              >
+                <Film size={20} />
+                <span className="hidden sm:inline">{isPreviewingMovie ? '停止预览' : '预览全部'}</span>
+              </button>
+            )}
         </div>
 
         {/* Controls Overlay - Main Container */}
@@ -179,8 +191,9 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
            {/* Center Play Button */}
            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <button 
-                 onClick={onTogglePlay}
-                 className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 hover:scale-105 transition-all shadow-lg border border-white/10 pointer-events-auto active:scale-90"
+                  onClick={onTogglePlay}
+                  disabled={controlsDisabled}
+                  className={`w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 hover:scale-105 transition-all shadow-lg border border-white/10 pointer-events-auto active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed ${controlsDisabled ? 'hover:scale-100 hover:bg-white/20' : ''}`}
               >
                  {isPlaying ? <PauseIcon /> : <PlayIcon />}
               </button>
@@ -194,13 +207,15 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
                    type="range" 
                    min="0" max={duration || 100} step="0.1" 
                    value={currentTime} onChange={onSeek}
-                   className="flex-1 h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:h-2 transition-all"
+                   disabled={controlsDisabled}
+                   className={`flex-1 h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:h-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${controlsDisabled ? 'hover:h-1.5' : ''}`}
                  />
                  <span className="w-8 tabular-nums">{formatTime(duration)}</span>
                  
                  <button 
                    onClick={(e) => { e.stopPropagation(); onToggleSpeed(e); }} 
-                   className="ml-1 bg-white/20 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg hover:bg-white/30 border border-white/10 min-w-[36px] active:scale-90 transition-transform"
+                   disabled={controlsDisabled}
+                   className={`ml-1 bg-white/20 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg hover:bg-white/30 border border-white/10 min-w-[36px] active:scale-90 transition-transform disabled:opacity-50 disabled:cursor-not-allowed ${controlsDisabled ? 'hover:bg-white/20' : ''}`}
                  >
                    {playbackRate}x
                  </button>

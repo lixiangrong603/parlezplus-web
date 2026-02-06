@@ -207,11 +207,18 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
             return `<span data-gap="${gapIndex}"${attrs}>(${gapIndex}) ____________</span>`;
         });
 
-        // 仅在有变化时更新
-        if (gapCount !== currentSubs.length || renumberedHtml !== html) {
-            onChange({ ...question, readingPassage: renumberedHtml, subQuestions: newSubs });
-        } else if (JSON.stringify(newSubs.map(s => s.id)) !== JSON.stringify(currentSubs.map(s => s.id))) {
-            updateField('subQuestions', newSubs);
+        const currentPassage = question.readingPassage || '';
+        const shouldUpdatePassage = renumberedHtml !== currentPassage;
+        const shouldUpdateSubs =
+            gapCount !== currentSubs.length ||
+            JSON.stringify(newSubs.map(s => s.id)) !== JSON.stringify(currentSubs.map(s => s.id));
+
+        if (shouldUpdatePassage || shouldUpdateSubs) {
+            onChange({
+                ...question,
+                readingPassage: shouldUpdatePassage ? renumberedHtml : currentPassage,
+                subQuestions: shouldUpdateSubs ? newSubs : currentSubs,
+            });
         }
     };
 
@@ -371,6 +378,10 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
                                 ref={passageEditorRef}
                                 value={question.readingPassage || ''}
                                 onChange={(html) => {
+                                    if (question.type === 'reading-comprehension') {
+                                        updateField('readingPassage', html);
+                                        return;
+                                    }
                                     syncGapsFromPassage(html);
                                 }}
                                 placeholder={question.type === 'reading-comprehension' ? "在此粘贴或输入阅读理解的文章内容..." : "例如: Je suis (1) ________ à Paris. Il (2) ________ beau."}

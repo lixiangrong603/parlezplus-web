@@ -76,12 +76,22 @@ const ExamStemRenderer: React.FC<ExamStemRendererProps> = ({ content, type, show
 
   // Reading Comprehension - Only passage (sub-questions handled separately)
   if (type === 'reading-comprehension' && content.readingPassage) {
-    return <div className="whitespace-pre-wrap text-justify leading-relaxed">{content.readingPassage}</div>;
+    return (
+      <div
+        className="whitespace-pre-wrap text-justify leading-relaxed prose max-w-none font-serif"
+        dangerouslySetInnerHTML={{ __html: content.readingPassage }}
+      />
+    );
   }
 
   // Cloze Test - Show passage with blanks
   if (type === 'cloze-test' && content.readingPassage) {
-    return <div className="whitespace-pre-wrap text-justify leading-relaxed">{content.readingPassage}</div>;
+    return (
+      <div
+        className="whitespace-pre-wrap text-justify leading-relaxed prose max-w-none font-serif"
+        dangerouslySetInnerHTML={{ __html: content.readingPassage }}
+      />
+    );
   }
 
   // Multiple Choice or Fill-in-the-blank - Show stem

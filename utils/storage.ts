@@ -1,5 +1,5 @@
 
-import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper } from '../types';
+import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession } from '../types';
 import { CURRENT_USER_ID, MOCK_RESOURCES } from '../constants';
 
 const STORAGE_KEYS = {
@@ -13,6 +13,7 @@ const STORAGE_KEYS = {
   SYLLABUS: 'parlezplus_syllabus', // New
   QUESTION_BANK: 'parlezplus_question_bank', // New
   EXAM_PAPERS: 'parlezplus_exam_papers', // New
+  EXAM_SESSIONS: 'parlezplus_exam_sessions', // New: For online exam sessions
 };
 
 // --- INITIAL DATA SEEDS ---
@@ -472,4 +473,69 @@ export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
   }
   
   return results;
+};
+
+// Get questions with their resource info
+export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array<{ question: Question; resourceId?: string; resourceTitle?: string }>> => {
+  const allQuestions = getBankQuestions();
+  const allResources = getResources();
+  
+  const results: Array<{ question: Question; resourceId?: string; resourceTitle?: string }> = [];
+  
+  for (const id of ids) {
+    // Try from question bank first
+    const bankQ = allQuestions.find(q => q.id === id);
+    if (bankQ) {
+      results.push({ question: bankQ });
+      continue;
+    }
+    
+    // Try from media resources
+    for (const resource of allResources) {
+      if (resource.questions) {
+        const resourceQ = resource.questions.find(q => q.id === id);
+        if (resourceQ) {
+          results.push({ 
+            question: resourceQ, 
+            resourceId: resource.id,
+            resourceTitle: resource.title
+          });
+          break;
+        }
+      }
+    }
+  }
+  
+  return results;
+};
+
+// --- Exam Session Management ---
+export const getExamSessions = (studentId?: string): ExamSession[] => {
+  const allSessions: ExamSession[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXAM_SESSIONS) || '[]');
+  if (studentId) {
+    return allSessions.filter(s => s.studentId === studentId);
+  }
+  return allSessions;
+};
+
+export const getExamSessionById = (id: string): ExamSession | undefined => {
+  const sessions = getExamSessions();
+  return sessions.find(s => s.id === id);
+};
+
+export const saveExamSession = (session: ExamSession) => {
+  const sessions = getExamSessions();
+  const index = sessions.findIndex(s => s.id === session.id);
+  if (index !== -1) {
+    sessions[index] = session;
+  } else {
+    sessions.push(session);
+  }
+  localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+};
+
+export const deleteExamSession = (id: string) => {
+  const sessions = getExamSessions();
+  const filtered = sessions.filter(s => s.id !== id);
+  localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(filtered));
 };

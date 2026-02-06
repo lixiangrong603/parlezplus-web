@@ -224,4 +224,42 @@ export interface ExamPaper {
   createdAt: number;
   sharedWith?: string[]; // Class IDs or student IDs
   folderId?: string; // Optional: Folder organization
+  assignedClassIds?: string[]; // Classes that this exam is assigned to
+  assignedClassDeadlines?: Record<string, number>; // classId -> deadline timestamp (ms)
+
+  // [NEW] Online exam runtime settings (teacher-configurable)
+  examTakerSettings?: ExamTakerSettings;
+}
+
+export interface ExamTakerResourcePlaybackSettings {
+  playCount?: number; // times to play (>= 1)
+  playbackRate?: 0.5 | 0.75 | 1;
+  preCountdownSec?: number;
+  postCountdownSec?: number;
+  pauseBetweenPlaysSec?: number;
+}
+
+export interface ExamTakerSectionSettings {
+  durationSec?: number; // section duration; when exceeded, auto advance
+}
+
+export interface ExamTakerSettings {
+  durationSec?: number; // total exam duration; when exceeded, auto submit
+  sections?: Record<string, ExamTakerSectionSettings>; // sectionId -> settings
+  resources?: Record<string, ExamTakerResourcePlaybackSettings>; // resourceId -> settings
+}
+// --- Exam Session Types (for online testing) ---
+export interface ExamSession {
+  id: string;
+  examPaperId: string;
+  examTitle: string;
+  studentId: string;
+  studentName: string;
+  answers: Record<string, string>; // questionId -> answer (optionId or text)
+  startTime: number;
+  submitTime?: number;
+  elapsedTime: number; // in milliseconds
+  score?: number;
+  totalScore: number;
+  isSubmitted: boolean;
 }

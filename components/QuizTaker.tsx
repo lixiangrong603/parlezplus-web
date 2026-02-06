@@ -240,7 +240,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                                 <img 
                                     src={q.imageUrl} 
                                     alt="Question" 
-                                    className="w-full h-auto max-h-[500px] object-contain rounded-xl mb-4 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" 
+                                    className="max-w-[200px] h-auto rounded-xl my-3 border border-slate-200 dark:border-slate-700" 
                                 />
                             )}
                         </div>
@@ -309,16 +309,18 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                                     key={opt.id}
                                     onClick={() => handleSelect(q.id, opt.id)}
                                     disabled={isSubmitted}
-                                    className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between group ${btnClass}`}
+                                    className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-start justify-between group ${btnClass}`}
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected || (isSubmitted && isThisCorrect) ? 'border-current' : 'border-slate-300 dark:border-slate-700'}`}>
-                                            {isSelected && <div className="w-2 h-2 rounded-full bg-current" />}
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected || (isSubmitted && isThisCorrect) ? 'border-current' : 'border-slate-300 dark:border-slate-700'}`}>
+                                                {isSelected && <div className="w-2 h-2 rounded-full bg-current" />}
+                                            </div>
+                                            <span className={`font-medium ${optionClass} transition-all dark:text-slate-200`}>{opt.text}</span>
                                         </div>
-                                        <span className={`font-medium ${optionClass} transition-all dark:text-slate-200`}>{opt.text}</span>
+                                        {opt.imageUrl && <img src={opt.imageUrl} alt="Option" className="max-w-[200px] h-auto rounded border border-slate-200 dark:border-slate-700 ml-7" />}
                                     </div>
-                                    {opt.imageUrl && <img src={opt.imageUrl} className="h-10 w-10 object-cover rounded ml-2" />}
-                                    {icon}
+                                    {icon && <div className="ml-2 shrink-0">{icon}</div>}
                                 </button>
                             );
                         })}

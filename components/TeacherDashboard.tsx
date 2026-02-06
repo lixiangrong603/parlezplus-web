@@ -8,9 +8,9 @@ import {
   Send, History, BookmarkPlus, MinusCircle, ChevronDown, ChevronUp, FileCheck, Edit2, Loader2, FileSpreadsheet,
   AlertTriangle
 } from 'lucide-react';
-import { Classroom, Student, Submission, MediaResource, User } from '../types';
+import { Classroom, Student, Submission, MediaResource, User, ExamPaper } from '../types';
 import { 
-  getClassrooms, saveClassroom, deleteClassroom, saveUser, getUsers, getUserById, getResources, saveResource
+  getClassrooms, saveClassroom, deleteClassroom, saveUser, getUsers, getUserById, getResources, saveResource, getExamPapers, updateExamPaper
 } from '../utils/storage';
 import { MOCK_RESOURCES, CURRENT_USER_ID } from '../constants'; 
 import { ResourceManagement } from './ResourceManagement';
@@ -308,6 +308,7 @@ const ClassDetailView = ({
 }) => {
   const [classroom, setClassroom] = useState<Classroom | null>(null);
   const [assignedResources, setAssignedResources] = useState<MediaResource[]>([]);
+  const [assignedExams, setAssignedExams] = useState<ExamPaper[]>([]);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
@@ -330,6 +331,8 @@ const ClassDetailView = ({
     if (cls) setClassroom(cls);
     const allResources = getResources();
     setAssignedResources(allResources.filter(r => r.assignedClassIds?.includes(classId)).sort((a, b) => b.createdAt - a.createdAt));
+    const allExams = getExamPapers();
+    setAssignedExams(allExams.filter(e => e.assignedClassIds?.includes(classId)));
   };
 
   useEffect(() => { loadData(); }, [classId, teacherId]);
@@ -435,6 +438,29 @@ const ClassDetailView = ({
         if (resource) {
           const updated = { ...resource, assignedClassIds: (resource.assignedClassIds || []).filter(id => id !== classId) };
           saveResource(updated);
+          loadData();
+        }
+      }
+    });
+  };
+
+  const handleWithdrawExam = (examId: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: "撤回试卷",
+      message: "确定要从该班级撤回此试卷吗？学生将无法再看到该试卷任务。",
+      onConfirm: () => {
+        const exam = getExamPapers().find(e => e.id === examId);
+        if (exam) {
+          const nextAssigned = (exam.assignedClassIds || []).filter(id => id !== classId);
+          const nextDeadlines = { ...(exam.assignedClassDeadlines || {}) };
+          delete nextDeadlines[classId];
+          const updated = {
+            ...exam,
+            assignedClassIds: nextAssigned,
+            assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
+          };
+          updateExamPaper(updated);
           loadData();
         }
       }
@@ -594,6 +620,61 @@ const ClassDetailView = ({
             )}
           </div>
         </div>
+
+        {/* Exam Papers Section */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-2">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <FileCheck size={18} className="text-purple-600" /> 已分发试卷
+            </h2>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-colors">
+            {assignedExams.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center text-slate-400">
+                <FileCheck size={48} className="mb-2 opacity-10" />
+                <p className="text-sm font-bold">班级暂无分发的试卷</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {assignedExams.map(exam => (
+                  <div key={exam.id} className="p-4 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                        <FileCheck size={20} className="text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{exam.title}</p>
+                        <p className="text-xs text-slate-500">
+                          共 {exam.sections.reduce((acc, s) => acc + s.items.length, 0)} 题 · 
+                          总分 {exam.sections.reduce((acc, s) => {
+                            const subPoints = s.items.flatMap(item => item.subPoints || []);
+                            return acc + (subPoints.length > 0
+                              ? subPoints.reduce((a, b) => a + b, 0)
+                              : s.items.reduce((a, item) => a + item.points, 0));
+                          }, 0)} 分
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                          <Clock size={12} className={exam.assignedClassDeadlines?.[classId] && Date.now() > exam.assignedClassDeadlines?.[classId] ? 'text-red-500' : ''} />
+                          <span className={exam.assignedClassDeadlines?.[classId] && Date.now() > exam.assignedClassDeadlines?.[classId] ? 'text-red-500 font-bold' : ''}>
+                            {exam.assignedClassDeadlines?.[classId] ? new Date(exam.assignedClassDeadlines[classId]).toLocaleDateString() : '无限制'}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleWithdrawExam(exam.id)} 
+                      className="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                      title="撤回试卷"
+                    >
+                      <MinusCircle size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Deadlines Update Modal */}
@@ -692,11 +773,43 @@ const ClassDetailView = ({
       />
 
       {/* Other Modals (Add Student, Add Task) */}
-      {showAddTask && <AddTaskModal onClose={() => setShowAddTask(false)} onAssign={(rid, d) => {
-        const resource = getResources().find(r => r.id === rid);
-        if(resource) saveResource({ ...resource, status: 'ready', deadline: d, assignedClassIds: [...(resource.assignedClassIds || []), classId] });
-        loadData(); setShowAddTask(false);
-      }} alreadyAssignedIds={assignedResources.map(r => r.id)} />}
+      {showAddTask && (
+        <AddTaskModal
+          teacherId={teacherId}
+          classId={classId}
+          onClose={() => setShowAddTask(false)}
+          onAssignResource={(rid, d) => {
+            const resource = getResources().find(r => r.id === rid);
+            if (resource) {
+              const nextClassIds = Array.from(new Set([...(resource.assignedClassIds || []), classId]));
+              saveResource({ ...resource, status: 'ready', deadline: d, assignedClassIds: nextClassIds });
+            }
+            loadData();
+            setShowAddTask(false);
+          }}
+          onAssignExam={(examId, d) => {
+            const exam = getExamPapers(teacherId).find(e => e.id === examId);
+            if (exam) {
+              const nextClassIds = Array.from(new Set([...(exam.assignedClassIds || []), classId]));
+              const nextDeadlines = { ...(exam.assignedClassDeadlines || {}) };
+              if (typeof d === 'number') {
+                nextDeadlines[classId] = d;
+              } else {
+                delete nextDeadlines[classId];
+              }
+              updateExamPaper({
+                ...exam,
+                assignedClassIds: nextClassIds,
+                assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
+              });
+            }
+            loadData();
+            setShowAddTask(false);
+          }}
+          alreadyAssignedResourceIds={assignedResources.map(r => r.id)}
+          alreadyAssignedExamIds={assignedExams.map(e => e.id)}
+        />
+      )}
       
       {showAddStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -772,30 +885,98 @@ const BatchImportModal = ({ onClose, onImport }: { onClose: () => void, onImport
     );
 };
 
-const AddTaskModal = ({ onClose, onAssign, alreadyAssignedIds }: { onClose: () => void, onAssign: (id: string, deadline?: number) => void, alreadyAssignedIds: string[] }) => {
-    const resources = getResources().filter(r => !alreadyAssignedIds.includes(r.id));
-    const [selectedDeadline, setSelectedDeadline] = useState<string>('');
+const AddTaskModal = ({
+  teacherId,
+  classId,
+  onClose,
+  onAssignResource,
+  onAssignExam,
+  alreadyAssignedResourceIds,
+  alreadyAssignedExamIds
+}: {
+  teacherId: string;
+  classId: string;
+  onClose: () => void;
+  onAssignResource: (id: string, deadline?: number) => void;
+  onAssignExam: (examId: string, deadline?: number) => void;
+  alreadyAssignedResourceIds: string[];
+  alreadyAssignedExamIds: string[];
+}) => {
+  const resources = getResources().filter(r => !alreadyAssignedResourceIds.includes(r.id));
+  const exams = getExamPapers(teacherId).filter(e => !alreadyAssignedExamIds.includes(e.id));
+  const [activeTab, setActiveTab] = useState<'resources' | 'exams'>('resources');
+  const [selectedDeadline, setSelectedDeadline] = useState<string>('');
+  const [selectedExamDeadline, setSelectedExamDeadline] = useState<string>('');
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden animate-fade-in-up border dark:border-slate-800">
                 <div className="p-8 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
-                    <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">分发新任务</h3>
+          <div>
+            <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">分发新任务</h3>
+            <div className="mt-3 inline-flex rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 gap-1">
+              <button
+                onClick={() => setActiveTab('resources')}
+                className={`px-3 py-1.5 text-xs font-black rounded-lg transition ${activeTab === 'resources' ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                资源任务
+              </button>
+              <button
+                onClick={() => setActiveTab('exams')}
+                className={`px-3 py-1.5 text-xs font-black rounded-lg transition ${activeTab === 'exams' ? 'bg-purple-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                试卷任务
+              </button>
+            </div>
+          </div>
                     <button onClick={onClose} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={20} /></button>
                 </div>
-                <div className="p-8 bg-indigo-50/30 border-b border-indigo-100 shrink-0">
-                    <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">任务截止时间 (可选)</label>
-                    <input type="date" className="w-full bg-white border border-indigo-100 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:text-white" value={selectedDeadline} onChange={e => setSelectedDeadline(e.target.value)} />
-                </div>
+        {activeTab === 'resources' && (
+          <div className="p-8 bg-indigo-50/30 border-b border-indigo-100 shrink-0">
+            <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">任务截止时间 (可选)</label>
+            <input type="date" className="w-full bg-white border border-indigo-100 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:text-white" value={selectedDeadline} onChange={e => setSelectedDeadline(e.target.value)} />
+          </div>
+        )}
+        {activeTab === 'exams' && (
+          <div className="p-8 bg-purple-50/40 dark:bg-purple-900/10 border-b border-purple-100 dark:border-purple-900/20 shrink-0">
+            <label className="block text-[10px] font-black text-purple-500 uppercase tracking-widest mb-2">试卷截止时间 (可选)</label>
+            <input type="date" className="w-full bg-white border border-purple-100 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-800 dark:text-white" value={selectedExamDeadline} onChange={e => setSelectedExamDeadline(e.target.value)} />
+          </div>
+        )}
                 <div className="p-6 overflow-y-auto no-scrollbar flex-1 space-y-4">
-                    {resources.length === 0 ? <p className="py-12 text-center text-slate-400 italic">没有可分发的资源</p> : resources.map(res => (
-                        <div key={res.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl hover:bg-indigo-50 group">
-                             <div className="flex items-center gap-4">
-                                 <img src={res.coverImage} className="w-14 h-14 rounded-xl object-cover" />
-                                 <p className="font-bold text-slate-800 dark:text-slate-100">{res.title}</p>
-                             </div>
-                             <button onClick={() => onAssign(res.id, selectedDeadline ? new Date(selectedDeadline).getTime() : undefined)} className="px-5 py-2 bg-indigo-600 text-white text-xs font-black rounded-xl opacity-0 group-hover:opacity-100 shadow-md">分发</button>
-                        </div>
-                    ))}
+          {activeTab === 'resources' ? (
+            resources.length === 0 ? (
+              <p className="py-12 text-center text-slate-400 italic">没有可分发的资源</p>
+            ) : (
+              resources.map(res => (
+                <div key={res.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl hover:bg-indigo-50 group">
+                   <div className="flex items-center gap-4">
+                     <img src={res.coverImage} className="w-14 h-14 rounded-xl object-cover" />
+                     <p className="font-bold text-slate-800 dark:text-slate-100">{res.title}</p>
+                   </div>
+                   <button onClick={() => onAssignResource(res.id, selectedDeadline ? new Date(selectedDeadline).getTime() : undefined)} className="px-5 py-2 bg-indigo-600 text-white text-xs font-black rounded-xl opacity-0 group-hover:opacity-100 shadow-md">分发</button>
+                </div>
+              ))
+            )
+          ) : (
+            exams.length === 0 ? (
+              <p className="py-12 text-center text-slate-400 italic">没有可分发的试卷</p>
+            ) : (
+              exams.map(exam => (
+                <div key={exam.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl hover:bg-purple-50/40 dark:hover:bg-purple-900/10 group">
+                   <div className="flex items-center gap-4 min-w-0">
+                     <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shrink-0">
+                       <FileCheck size={22} className="text-white" />
+                     </div>
+                     <div className="min-w-0">
+                       <p className="font-bold text-slate-800 dark:text-slate-100 truncate">{exam.title}</p>
+                       <p className="text-xs text-slate-500">{exam.sections.reduce((acc, s) => acc + s.items.length, 0)} 题</p>
+                     </div>
+                   </div>
+                   <button onClick={() => onAssignExam(exam.id, selectedExamDeadline ? new Date(selectedExamDeadline).getTime() : undefined)} className="px-5 py-2 bg-purple-600 text-white text-xs font-black rounded-xl opacity-0 group-hover:opacity-100 shadow-md">分发</button>
+                </div>
+              ))
+            )
+          )}
                 </div>
             </div>
         </div>

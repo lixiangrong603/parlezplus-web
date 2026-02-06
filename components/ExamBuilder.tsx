@@ -17,11 +17,12 @@ interface ExamProps {
   onClearCart: () => void;
   initialExam?: ExamPaper | null;
   onNavigateToBank: (previewExam?: ExamPaper) => void;
+  autoPrintMode?: ExamPrintMode | null;
 }
 
 const DRAFT_KEY = 'parlezplus_exam_builder_draft';
 
-const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClearCart, initialExam, onNavigateToBank }) => {
+const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClearCart, initialExam, onNavigateToBank, autoPrintMode }) => {
   const [examTitle, setExamTitle] = useState('');
   const [sections, setSections] = useState<ExamSection[]>([]);
   const [questionById, setQuestionById] = useState<Record<string, Question>>({});
@@ -66,6 +67,17 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
     };
     await generateWordDocument(examSnapshot, allQuestions, version);
   };
+
+  // Auto-print when autoPrintMode is set and exam is loaded
+  useEffect(() => {
+    if (autoPrintMode && hasLoaded && sections.length > 0) {
+      // Small delay to ensure DOM is fully rendered
+      const timer = setTimeout(() => {
+        handlePrint(autoPrintMode);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrintMode, hasLoaded, sections.length]);
 
   useEffect(() => {
     if (shouldScroll) {
@@ -774,14 +786,26 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                                       <p className="font-bold mb-1 text-base">{sqIdx + 1}) {sq.text}</p>
                                                   </div>
                                                   
+                                                  {/* Sub-question image */}
+                                                  {sq.imageUrl && (
+                                                      <div className="my-2">
+                                                          <img src={sq.imageUrl} alt="Question" className="max-w-md rounded border" />
+                                                      </div>
+                                                  )}
+                                                  
                                                   {sq.options && sq.options.length > 0 && (
                                                       <div className={`grid gap-x-6 gap-y-1 grid-cols-${getOptionGridColumns(sq.options.map(o => o.text))}`}>
                                                           {sq.options.map((opt, oIdx) => {
                                                               const isCorrect = (String.fromCharCode(65 + oIdx) === sq.correctOptionId) || (opt.id === sq.correctOptionId);
                                                               return (
-                                                                  <div key={oIdx} className="flex gap-2 items-start text-base">
-                                                                      <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
-                                                                      <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
+                                                                  <div key={oIdx} className="flex flex-col gap-1">
+                                                                      <div className="flex gap-2 items-start text-base">
+                                                                          <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
+                                                                          <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
+                                                                      </div>
+                                                                      {opt.imageUrl && (
+                                                                          <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="max-w-xs rounded border ml-6" />
+                                                                      )}
                                                                   </div>
                                                               );
                                                           })}
@@ -849,9 +873,14 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                                       {sq.options.map((opt, oIdx) => {
                                                           const isCorrect = (String.fromCharCode(65 + oIdx) === sq.correctOptionId) || (opt.id === sq.correctOptionId);
                                                           return (
-                                                              <div key={oIdx} className="flex gap-2 items-start text-base">
-                                                                  <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
-                                                                  <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
+                                                              <div key={oIdx} className="flex flex-col gap-1">
+                                                                  <div className="flex gap-2 items-start text-base">
+                                                                      <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
+                                                                      <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
+                                                                  </div>
+                                                                  {opt.imageUrl && (
+                                                                      <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="max-w-xs rounded border ml-6" />
+                                                                  )}
                                                               </div>
                                                           );
                                                       })}
@@ -861,28 +890,36 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                         ))}
                                       </div>
                                   ) : (
-                                      <ExamStemRenderer
-                                        content={{
-                                          stem: q.text,
-                                          correctAnswer: (() => {
-                                            // For blank-in-stem MCQ, pass the actual correct option text
-                                            if (q.options && q.options.length > 0) {
-                                              const byId = q.options.find(o => o.id === q.correctOptionId)?.text;
-                                              if (byId) return byId;
-                                              if (q.correctOptionId && /^[A-Z]$/.test(q.correctOptionId)) {
-                                                const idx = q.correctOptionId.charCodeAt(0) - 65;
-                                                return q.options[idx]?.text || q.correctOptionId;
-                                              }
-                                            }
-                                            // For true fill-in questions (no options), correctOptionId is treated as the answer text
-                                            return q.correctOptionId;
-                                          })(),
-                                          explanation: q.explanation,
-                                          options: q.options?.map(o => o.text),
-                                        }}
-                                        type={q.type}
-                                        showAnswers={showAnswers}
-                                      />
+                                      <>
+                                          <ExamStemRenderer
+                                            content={{
+                                              stem: q.text,
+                                              correctAnswer: (() => {
+                                                // For blank-in-stem MCQ, pass the actual correct option text
+                                                if (q.options && q.options.length > 0) {
+                                                  const byId = q.options.find(o => o.id === q.correctOptionId)?.text;
+                                                  if (byId) return byId;
+                                                  if (q.correctOptionId && /^[A-Z]$/.test(q.correctOptionId)) {
+                                                    const idx = q.correctOptionId.charCodeAt(0) - 65;
+                                                    return q.options[idx]?.text || q.correctOptionId;
+                                                  }
+                                                }
+                                                // For true fill-in questions (no options), correctOptionId is treated as the answer text
+                                                return q.correctOptionId;
+                                              })(),
+                                              explanation: q.explanation,
+                                              options: q.options?.map(o => o.text),
+                                            }}
+                                            type={q.type}
+                                            showAnswers={showAnswers}
+                                          />
+                                          {/* Question image */}
+                                          {q.imageUrl && (
+                                              <div className="my-2">
+                                                <img src={q.imageUrl} alt="Question" className="max-w-[200px] h-auto rounded border" />
+                                              </div>
+                                          )}
+                                      </>
                                   )}
                               </div>
                            </div>
@@ -893,9 +930,14 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                    {q.options.map((opt, oIdx) => {
                                      const isCorrect = (String.fromCharCode(65 + oIdx) === q.correctOptionId) || (opt.id === q.correctOptionId);
                                      return (
-                                         <div key={oIdx} className="flex gap-2 items-start text-sm">
-                                            <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
-                                            <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
+                                         <div key={oIdx} className="flex flex-col gap-1">
+                                            <div className="flex gap-2 items-start text-sm">
+                                                <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
+                                                <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
+                                            </div>
+                                            {opt.imageUrl && (
+                                                <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="max-w-xs rounded border ml-6" />
+                                            )}
                                          </div>
                                      );
                                    })}

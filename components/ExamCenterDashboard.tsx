@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { ExamPaper, User, ExamSection, Question } from '../types';
-import { getExamPapers, deleteExamPaper, getQuestionsByIds } from '../utils/storage';
+import { ExamPaper, User, ExamSection, Question, Classroom } from '../types';
+import { getExamPapers, deleteExamPaper, getQuestionsByIds, updateExamPaper, getClassrooms } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   FileText, Plus, Archive, FolderOpen, Edit3, Trash2, Calendar, CheckCircle, Eye, 
   FileEdit, Copy, Printer, Download, ChevronRight, FileDown, BarChart3, FolderPlus,
-  Folder, ChevronDown, Menu, X, MoreVertical
+  Folder, ChevronDown, Menu, X, MoreVertical, PlayCircle, Send
 } from 'lucide-react';
 import ExamBuilder from './ExamBuilder';
 import { generateWordDocument } from '../utils/wordExport';
 import ExamAnalysisModal from './ExamAnalysisModal';
+import ExamTaker from './ExamTaker';
 
 type SidebarView = 'drafts' | 'library';
 
@@ -28,6 +29,101 @@ interface ExamFolder {
 const DRAFT_KEY = 'parlezplus_exam_builder_draft';
 const FOLDERS_KEY = 'parlezplus_exam_folders';
 
+// Classroom Assignment Modal Component
+const ClassroomAssignmentModal: React.FC<{
+  exam: ExamPaper;
+  teacherId: string;
+  onClose: () => void;
+  onSave: (selectedClassIds: string[]) => void;
+}> = ({ exam, teacherId, onClose, onSave }) => {
+  const classrooms = getClassrooms().filter(c => c.userId === teacherId);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>(exam.assignedClassIds || []);
+
+  const handleToggleClass = (classId: string) => {
+    setSelectedClassIds(prev =>
+      prev.includes(classId) ? prev.filter(id => id !== classId) : [...prev, classId]
+    );
+  };
+
+  const handleSave = () => {
+    onSave(selectedClassIds);
+  };
+
+  if (classrooms.length === 0) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border dark:border-slate-800">
+          <div className="p-8 text-center">
+            <div className="w-16 h-16 bg-amber-50 dark:bg-amber-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <FolderOpen size={32} className="text-amber-600" />
+            </div>
+            <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">暂无班级</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">您还没有创建任何班级，请先在班级管理中创建班级。</p>
+            <button onClick={onClose} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all">
+              确定
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border dark:border-slate-800">
+        <div className="p-6 border-b dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">分发试卷</h3>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">{exam.title}</p>
+        </div>
+        
+        <div className="p-6 max-h-[400px] overflow-y-auto">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">选择班级</p>
+          <div className="space-y-2">
+            {classrooms.map(classroom => (
+              <label
+                key={classroom.id}
+                className="flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                style={{
+                  borderColor: selectedClassIds.includes(classroom.id) ? '#6366f1' : 'transparent',
+                  backgroundColor: selectedClassIds.includes(classroom.id) ? 'rgba(99, 102, 241, 0.05)' : ''
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedClassIds.includes(classroom.id)}
+                  onChange={() => handleToggleClass(classroom.id)}
+                  className="w-5 h-5 rounded border-2 border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-500"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{classroom.name}</p>
+                  <p className="text-xs text-slate-500">{classroom.studentCount || 0} 名学生</p>
+                </div>
+                {(exam.assignedClassIds || []).includes(classroom.id) && (
+                  <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg font-bold">已分发</span>
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-6 border-t dark:border-slate-800 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
+            取消
+          </button>
+          <button onClick={handleSave} className="flex-[1.5] py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg transition-all">
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ExamCenterDashboard: React.FC = () => {
   const { user } = useAuth();
   const [sidebarView, setSidebarView] = useState<SidebarView>('library');
@@ -36,6 +132,8 @@ const ExamCenterDashboard: React.FC = () => {
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [editingExam, setEditingExam] = useState<ExamPaper | null>(null);
   const [analysisExam, setAnalysisExam] = useState<ExamPaper | null>(null);
+  const [takingExam, setTakingExam] = useState<ExamPaper | null>(null);
+  const [assigningExam, setAssigningExam] = useState<ExamPaper | null>(null);
   
   // Folder management
   const [folders, setFolders] = useState<ExamFolder[]>([]);
@@ -207,10 +305,41 @@ const ExamCenterDashboard: React.FC = () => {
     setAnalysisExam(exam);
   };
 
+  const handleStartExam = (exam: ExamPaper) => {
+    setTakingExam(exam);
+  };
+
+  const handleAssignExam = (exam: ExamPaper) => {
+    setAssigningExam(exam);
+  };
+
+  const handleSaveAssignment = (selectedClassIds: string[]) => {
+    if (assigningExam) {
+      const prevDeadlines = assigningExam.assignedClassDeadlines || {};
+      const nextDeadlines: Record<string, number> = {};
+      selectedClassIds.forEach((id) => {
+        const v = prevDeadlines[id];
+        if (typeof v === 'number') nextDeadlines[id] = v;
+      });
+      updateExamPaper({
+        ...assigningExam,
+        assignedClassIds: selectedClassIds,
+        assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
+      });
+      setAssigningExam(null);
+      loadExamPapers();
+    }
+  };
+
   // Filter exams by selected folder
   const filteredExams = selectedFolderId === null
     ? examPapers.filter(e => !e.folderId)
     : examPapers.filter(e => e.folderId === selectedFolderId);
+
+  // If taking exam, show ExamTaker fullscreen
+  if (takingExam && user) {
+    return <ExamTaker exam={takingExam} user={user} onExit={() => setTakingExam(null)} />;
+  }
 
   // If editing, show ExamBuilder fullscreen
   if (showExamBuilder && user) {
@@ -441,6 +570,20 @@ const ExamCenterDashboard: React.FC = () => {
                     {/* Action Buttons */}
                     <div className="flex items-center gap-1.5 justify-end">
                       <button
+                        onClick={() => handleAssignExam(exam)}
+                        className="p-1.5 hover:bg-emerald-600 hover:text-white text-slate-500 dark:text-slate-400 rounded transition-all"
+                        title="分发到班级"
+                      >
+                        <Send size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleStartExam(exam)}
+                        className="p-1.5 hover:bg-green-600 hover:text-white text-slate-500 dark:text-slate-400 rounded transition-all"
+                        title="线上测试"
+                      >
+                        <PlayCircle size={14} />
+                      </button>
+                      <button
                         onClick={() => handleEditExam(exam)}
                         className="p-1.5 hover:bg-indigo-600 hover:text-white text-slate-500 dark:text-slate-400 rounded transition-all"
                         title="编辑"
@@ -462,27 +605,35 @@ const ExamCenterDashboard: React.FC = () => {
                         <Copy size={14} />
                       </button>
                       <button
-                        onClick={() => handleExportWord(exam, 'STUDENT')}
-                        className="p-1.5 hover:bg-indigo-600 hover:text-white text-slate-500 dark:text-slate-400 rounded transition-all"
-                        title="导出学生版"
-                      >
-                        <FileDown size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleExportWord(exam, 'TEACHER')}
-                        className="p-1.5 hover:bg-amber-600 hover:text-white text-slate-500 dark:text-slate-400 rounded transition-all"
-                        title="导出教师版"
-                      >
-                        <Download size={14} />
-                      </button>
-                      <button
                         onClick={() => handleDeleteExam(exam.id)}
                         className="p-1.5 hover:bg-red-600 hover:text-white text-slate-500 dark:text-slate-400 rounded transition-all"
                         title="删除"
                       >
                         <Trash2 size={14} />
                       </button>
-                      
+                      {/* Word Export Dropdown */}
+                      <div className="relative group/export">
+                        <button
+                          className="p-1.5 hover:bg-indigo-600 hover:text-white text-slate-500 dark:text-slate-400 rounded transition-all"
+                          title="导出Word"
+                        >
+                          <FileDown size={14} />
+                        </button>
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all z-50">
+                          <button
+                            onClick={() => handleExportWord(exam, 'STUDENT')}
+                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+                          >
+                            导出学生版
+                          </button>
+                          <button
+                            onClick={() => handleExportWord(exam, 'TEACHER')}
+                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+                          >
+                            导出教师版
+                          </button>
+                        </div>
+                      </div>
                       {/* Move to Folder Dropdown */}
                       <div className="relative group/folder">
                         <button
@@ -589,6 +740,16 @@ const ExamCenterDashboard: React.FC = () => {
           exam={analysisExam}
           user={user}
           onClose={() => setAnalysisExam(null)}
+        />
+      )}
+
+      {/* Assignment Modal */}
+      {assigningExam && user && (
+        <ClassroomAssignmentModal
+          exam={assigningExam}
+          teacherId={user.id}
+          onClose={() => setAssigningExam(null)}
+          onSave={handleSaveAssignment}
         />
       )}
     </div>

@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
-import { MediaResource, Classroom, Submission } from '../types';
+import { MediaResource, Classroom, Submission, ExamPaper, User } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Key, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck } from 'lucide-react';
-import { getClassroomById, getClassrooms, getSubmissions } from '../utils/storage';
+import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Key, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck, FileText } from 'lucide-react';
+import { getClassroomById, getClassrooms, getSubmissions, getExamPapers } from '../utils/storage';
 import { generateRandomCoverArt } from '../utils/mediaUtils';
 import { ThemeContext } from '../App';
+import ExamTaker from './ExamTaker';
 
 // Icons used in StudentDashboard
 const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
@@ -28,6 +29,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   const [isClassSwitcherOpen, setIsClassSwitcherOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<'all' | 'incomplete'>('incomplete'); 
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [assignedExams, setAssignedExams] = useState<ExamPaper[]>([]);
+  const [takingExam, setTakingExam] = useState<ExamPaper | null>(null);
   
   const classSwitcherRef = useRef<HTMLDivElement>(null);
 
@@ -35,8 +38,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     if (user) {
         setAllClassrooms(getClassrooms());
         setSubmissions(getSubmissions());
+        loadAssignedExams();
     }
   }, [user]);
+
+  const loadAssignedExams = () => {
+    if (!user?.classId) return;
+    const allExams = getExamPapers();
+    const assigned = allExams.filter(exam => 
+      exam.assignedClassIds && exam.assignedClassIds.includes(user.classId!)
+    );
+    setAssignedExams(assigned);
+  };
 
   useEffect(() => {
     if (user?.classId && !activeClass) {
@@ -98,6 +111,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   const getFallbackCover = (id: string) => {
     return generateRandomCoverArt(id);
   };
+
+  // Handle exam taking
+  if (takingExam && user) {
+    return <ExamTaker exam={takingExam} user={user} onExit={() => setTakingExam(null)} />;
+  }
 
   return (
     <div className="h-[100dvh] w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center relative overflow-hidden transition-colors duration-300">
@@ -225,8 +243,91 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {displayedResources.map((resource) => {
+            <>
+              {/* Assigned Exams Section */}
+              {assignedExams.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <FileText size={20} className="text-indigo-600" />
+                    试卷任务
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {assignedExams.map((exam) => (
+                      (() => {
+                        const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
+                        const isOverdue = !!deadline && Date.now() > deadline;
+                        return (
+                      <div
+                        key={exam.id}
+                        className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] hover:shadow-xl border border-slate-100 dark:border-slate-800 group relative flex flex-col"
+                        onClick={() => setTakingExam(exam)}
+                      >
+                        <div className="relative h-48 bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden shrink-0 rounded-t-[2rem]">
+                          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30"></div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <FileText size={64} className="text-white/20" />
+                          </div>
+                          <div className="absolute top-4 left-4">
+                            <div className="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg">
+                              试卷
+                            </div>
+                          </div>
+                          {deadline && (
+                            <div className="absolute top-4 right-4">
+                              <div className={`backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 ${isOverdue ? 'bg-red-600/80' : 'bg-black/30'}`}>
+                                <Clock size={12} /> {new Date(deadline).toLocaleDateString()}
+                              </div>
+                            </div>
+                          )}
+                          <div className="absolute bottom-4 left-4 right-4">
+                            <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 drop-shadow-md">
+                              {exam.title}
+                            </h3>
+                          </div>
+                        </div>
+                        <div className="p-5 flex-1 flex flex-col justify-between">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                              <FileText size={12} className="text-indigo-400" />
+                              {exam.sections.length} 个部分
+                            </div>
+                            <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md">
+                              <ChevronRight size={14} />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">满分</span>
+                              <span className="text-lg font-black text-indigo-600 leading-none">{exam.totalScore}</span>
+                            </div>
+                            {isOverdue ? (
+                              <div className="text-[10px] font-bold text-red-500 flex items-center gap-1">
+                                <AlertCircle size={12} /> 已逾期
+                              </div>
+                            ) : (
+                              <div className="text-[10px] font-bold text-emerald-500">
+                                点击开始
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                        );
+                      })()
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Resources Section */}
+              {displayedResources.length > 0 && (
+                <>
+                  <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <BookOpen size={20} className="text-indigo-600" />
+                    跟读任务
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {displayedResources.map((resource) => {
                  const isOverdue = resource.deadline && Date.now() > resource.deadline;
                  const submission = submissions.find(s => s.resourceId === resource.id && s.studentId === user?.id);
                  const status = submission?.status; // 'pending_review' | 'graded' | undefined
@@ -321,6 +422,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                  );
               })}
             </div>
+                  </>
+              )}
+            </>
           )}
 
           <div className="text-center pt-8 pb-12 border-t border-slate-100 dark:border-slate-800">
