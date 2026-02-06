@@ -14,6 +14,22 @@ export function estimateTextUnits(text: string): number {
   return units;
 }
 
+function normalizeOptionText(raw: string): string {
+  const text = (raw ?? '').toString();
+  // Treat common HTML breaks as new lines for layout decisions.
+  const withBreaks = text.replace(/<br\s*\/?\s*>/gi, '\n');
+  // Strip other HTML tags (options are usually plain text, but keep this resilient).
+  const withoutTags = withBreaks.replace(/<[^>]+>/g, '');
+  return withoutTags.replace(/\r\n?/g, '\n').trim();
+}
+
+function hasAnyWideChars(text: string): boolean {
+  for (const ch of text || '') {
+    if (isWideChar(ch)) return true;
+  }
+  return false;
+}
+
 /**
  * Decide how to lay out 4 options:
  * - 4 columns: one row
@@ -23,11 +39,16 @@ export function estimateTextUnits(text: string): number {
  * Uses a simple visual-length heuristic (CJK counted wider).
  */
 export function getOptionGridColumns(optionTexts: string[]): OptionLayoutColumns {
-  const texts = (optionTexts || []).map(t => (t ?? '').trim());
+  const texts = (optionTexts || []).map(normalizeOptionText);
   if (texts.length === 0) return 4;
 
-  // If any option is multi-line, give it full width.
-  if (texts.some(t => t.includes('\n'))) return 1;
+  const anyExplicitMultiline = texts.some(t => t.includes('\n'));
+  const anyWide = texts.some(hasAnyWideChars);
+
+  // If there are explicit line breaks and we have 4 options, prefer 2 columns (two rows)
+  // instead of stacking everything (better matches the UX request).
+  if (texts.length === 4 && anyExplicitMultiline) return 2;
+  if (anyExplicitMultiline) return 1;
 
   const units = texts.map(estimateTextUnits);
   const maxUnits = Math.max(...units);
@@ -35,7 +56,11 @@ export function getOptionGridColumns(optionTexts: string[]): OptionLayoutColumns
 
   // Thresholds tuned for typical card/editor widths.
   // 4-col only when everything is short.
-  if (maxUnits <= 18 && totalUnits <= 72) return 4;
+  // Latin text often wraps earlier in 4 columns because the prefix "A." consumes width;
+  // use a stricter threshold when there are no wide/CJK chars.
+  const fourColMaxUnits = anyWide ? 18 : 14;
+  const fourColTotalUnits = fourColMaxUnits * 4;
+  if (maxUnits <= fourColMaxUnits && totalUnits <= fourColTotalUnits) return 4;
 
   // 2-col for medium length.
   if (maxUnits <= 42 && totalUnits <= 168) return 2;

@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { User, Question, ExamPaper, ExamSection, QuestionType } from '../types';
+import { User, Question, ExamPaper, ExamSection, ExamItem, QuestionType } from '../types';
 import { getQuestionsByIds, saveExamPaper, updateExamPaper } from '../utils/storage';
 import QuestionSelector from '../components/QuestionSelector';
 import ExamStemRenderer from '../components/ExamStemRenderer';
 import { getOptionGridColumns } from '../utils/optionLayout';
-import { Save, ChevronUp, ChevronDown, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, Eye, EyeOff, ArrowUpCircle, ArrowDownCircle, BarChart3, X, ArrowDownUp } from 'lucide-react';
+import { Save, ChevronUp, ChevronDown, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, Eye, EyeOff, ArrowUpCircle, ArrowDownCircle, BarChart3, X, ArrowDownUp, Printer, FileDown } from 'lucide-react';
 import ExamAnalysisModal from '../components/ExamAnalysisModal';
 import SectionSortModal, { SortCriterion } from '../components/SectionSortModal';
-import { AnalysisData, calculateExamAnalysis } from '../services/examAnalysis';
+import { runExamPrint, ExamPrintMode } from '../utils/examPrint';
+import { generateWordDocument } from '../utils/wordExport';
 
 interface ExamProps {
   user: User;
@@ -34,12 +35,37 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
   const [showAnswers, setShowAnswers] = useState(false);
 
   const [analysisExam, setAnalysisExam] = useState<ExamPaper | null>(null);
-  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
-  const [expandedAnalysisPoint, setExpandedAnalysisPoint] = useState<string | null>(null);
   const [sortModalSectionIdx, setSortModalSectionIdx] = useState<number | null>(null);
   const [editingSectionTotalIdx, setEditingSectionTotalIdx] = useState<number | null>(null);
   const [editingSectionTotalValue, setEditingSectionTotalValue] = useState<string>('');
   const [shouldScroll, setShouldScroll] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
+  // Print / Export handlers
+  const handlePrint = (mode: ExamPrintMode) => {
+    runExamPrint({
+      mode,
+      setShowAnswers,
+      onCloseMenu: () => setExportMenuOpen(false),
+      title: examTitle || 'Exam',
+    });
+  };
+
+  const handleExportWord = async (version: 'STUDENT' | 'TEACHER') => {
+    setExportMenuOpen(false);
+    const qIds = Array.from(new Set(sections.flatMap(s => s.items.map(i => i.questionId))));
+    await ensureQuestionsLoaded(qIds);
+    const allQuestions = Object.values(questionByIdRef.current);
+    const examSnapshot: ExamPaper = {
+      id: initialExam?.id ?? 'draft',
+      title: (examTitle || '').trim() || 'Untitled Exam',
+      sections,
+      totalScore: getTotalScore(),
+      teacherId: user.id,
+      createdAt: Date.now(),
+    };
+    await generateWordDocument(examSnapshot, allQuestions, version);
+  };
 
   useEffect(() => {
     if (shouldScroll) {
@@ -108,7 +134,7 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
           const subCount = q.subQuestions.length;
           return { total: subCount, subPoints: new Array(subCount).fill(1) };
       }
-      if (q.type === 'cloze-test' && q.subQuestions) {
+      if ((q.type === 'cloze-test' || q.type === 'compound-fill') && q.subQuestions) {
           const subCount = q.subQuestions.length;
           return { total: subCount, subPoints: new Array(subCount).fill(1) };
       }
@@ -143,22 +169,16 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
   useEffect(() => {
     const ids = new Set<string>();
     cart.forEach(id => ids.add(id));
-    sections.forEach(sec => sec.items.forEach(it => ids.add(it.questionId)));
+    sections.forEach(sec => sec.items.forEach(it => {
+      if (it.type !== 'consigne' && it.questionId) {
+        ids.add(it.questionId);
+      }
+    }));
     if (ids.size === 0) return;
     ensureQuestionsLoaded(Array.from(ids));
   }, [cart, sections]);
 
-  const getTotalScore = () => sections.reduce((acc, sec) => acc + sec.items.reduce((sAcc, item) => sAcc + item.points, 0), 0);
-
-  useEffect(() => {
-    if (!analysisExam) {
-      setAnalysisData(null);
-      return;
-    }
-    const allQuestions = Object.values(questionById);
-    calculateExamAnalysis({ exam: analysisExam, user, allQuestions }).then(setAnalysisData);
-    setExpandedAnalysisPoint(null);
-  }, [analysisExam, questionById, user]);
+  const getTotalScore = () => sections.reduce((acc, sec) => acc + sec.items.filter(item => item.type !== 'consigne').reduce((sAcc, item) => sAcc + item.points, 0), 0);
 
   const openAnalysis = () => {
     (async () => {
@@ -266,9 +286,13 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
         const section = prevSections[sortModalSectionIdx];
         if (!section) return prevSections;
 
-        const itemsWithMeta = section.items.map(item => ({
+        // Separate consignes from questions
+        const consigneItems = section.items.filter(item => item.type === 'consigne');
+        const questionItems = section.items.filter(item => item.type !== 'consigne');
+
+        const itemsWithMeta = questionItems.map(item => ({
             item,
-            q: questionById[item.questionId],
+            q: questionById[item.questionId!],
             rand: Math.random()
         }));
 
@@ -299,10 +323,30 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
             return 0;
         });
 
-        const newItems = itemsWithMeta.map(x => x.item);
+        // Merge sorted questions back with consignes at their original positions
+        const sortedQuestions = itemsWithMeta.map(x => x.item);
+        const mergedItems: ExamItem[] = [];
+        let qIndex = 0;
+        
+        section.items.forEach((originalItem, idx) => {
+            if (originalItem.type === 'consigne') {
+                mergedItems.push(originalItem);
+            } else {
+                if (qIndex < sortedQuestions.length) {
+                    mergedItems.push(sortedQuestions[qIndex]);
+                    qIndex++;
+                }
+            }
+        });
+        
+        // Add any remaining sorted questions
+        while (qIndex < sortedQuestions.length) {
+            mergedItems.push(sortedQuestions[qIndex]);
+            qIndex++;
+        }
         
         const newSections = [...prevSections];
-        newSections[sortModalSectionIdx] = { ...section, items: newItems };
+        newSections[sortModalSectionIdx] = { ...section, items: mergedItems };
         return newSections;
     });
 
@@ -439,17 +483,13 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-950">
-      <div className="max-w-4xl mx-auto py-6 pb-20 relative print-exam">
+    <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-950 print:h-auto print:overflow-visible print:bg-white">
+      <div className="max-w-4xl mx-auto py-6 pb-20 relative print-exam print:py-0 print:pb-0 print:max-w-none">
       {analysisExam && (
         <ExamAnalysisModal
           exam={analysisExam}
-          analysisData={analysisData}
-          allQuestions={Object.values(questionById)}
-          expandedPointId={expandedAnalysisPoint}
-          setExpandedPointId={setExpandedAnalysisPoint}
+          user={user}
           onClose={() => setAnalysisExam(null)}
-          t={(key) => key}
         />
       )}
       {sortModalSectionIdx !== null && (
@@ -509,6 +549,50 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                 <span className="hidden sm:inline">{showAnswers ? '隐藏答案' : '查看答案'}</span>
             </button>
 
+            {/* Print / Export Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                className="px-3 sm:px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl flex items-center gap-2 text-sm font-bold hover:bg-slate-50 shadow-sm transition-all"
+                title="打印/导出"
+              >
+                <Printer className="w-4 h-4" />
+                <span className="hidden sm:inline">导出</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {exportMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">打印</div>
+                  <button
+                    onClick={() => handlePrint('STUDENT')}
+                    className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" /> 学生版
+                  </button>
+                  <button
+                    onClick={() => handlePrint('TEACHER')}
+                    className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" /> 教师版 (含答案)
+                  </button>
+                  <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Word 导出</div>
+                  <button
+                    onClick={() => handleExportWord('STUDENT')}
+                    className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                  >
+                    <FileDown className="w-4 h-4" /> 学生版 (.docx)
+                  </button>
+                  <button
+                    onClick={() => handleExportWord('TEACHER')}
+                    className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                  >
+                    <FileDown className="w-4 h-4" /> 教师版 (.docx)
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button onClick={handleSaveExam} className="flex-1 sm:flex-none justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center gap-2 text-sm font-bold shadow-lg transition-all active:scale-95">
               <Save className="w-4 h-4" /> 
               <span className="inline">保存试卷</span> 
@@ -542,7 +626,7 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
             return (
             <div
               key={section.id}
-              className={`group/section relative border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 hover:border-blue-200 dark:hover:border-blue-700 rounded-xl p-3 sm:p-6 transition-all shadow-sm print-allow-break ${sIdx > 0 ? 'print-page-break' : ''}`}
+              className={`group/section relative border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 hover:border-blue-200 dark:hover:border-blue-700 rounded-xl p-3 sm:p-6 transition-all shadow-sm`}
             >
               <div className="flex gap-1 items-center justify-end mb-3 sm:mb-0 sm:absolute sm:right-4 sm:top-4 print:hidden opacity-100 sm:opacity-0 sm:group-hover/section:opacity-100 transition-opacity bg-slate-50 sm:bg-white/90 shadow-sm sm:shadow-md p-1 rounded-lg border border-slate-200 z-10 w-full sm:w-fit overflow-x-auto">
                  <button onClick={() => moveSection(sIdx, 'up')} disabled={sIdx===0} className="p-2 sm:p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-20 hover:bg-blue-50 rounded"><ArrowUp className="w-4 h-4 sm:w-3.5 sm:h-3.5"/></button>
@@ -573,42 +657,103 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                  <button onClick={() => deleteSection(sIdx)} className="p-2 sm:p-1.5 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></button>
               </div>
 
-              <div className="mb-2 print-avoid-break">
+              <div className="mb-2">
                  <div className="flex justify-between items-center">
                     <input className="w-full font-bold text-lg border-none p-0 focus:ring-0 bg-transparent dark:text-white" value={section.title} onChange={(e) => updateSection(sIdx, 'title', e.target.value)} />
-                    <span className="text-sm font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap hidden sm:block">/ {sectionTotal} pts</span>
+                    <span className="text-sm font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap hidden sm:block print:block">/ {sectionTotal} pts</span>
                  </div>
-                 <input className="w-full text-slate-500 dark:text-slate-400 italic border-none p-0 focus:ring-0 bg-transparent text-sm mt-1" value={section.instructions} onChange={(e) => updateSection(sIdx, 'instructions', e.target.value)} />
+                 {section.instructions && (
+                   <div className="group/instruction relative -mb-1">
+                     <input 
+                       className="w-full text-slate-500 dark:text-slate-400 italic border-none p-0 focus:ring-0 bg-transparent text-sm" 
+                       value={section.instructions} 
+                       onChange={(e) => updateSection(sIdx, 'instructions', e.target.value)}
+                       onBlur={(e) => {
+                         // Auto-delete if empty
+                         if (!e.target.value.trim()) {
+                           updateSection(sIdx, 'instructions', '');
+                         }
+                       }}
+                       placeholder="添加说明文字..."
+                     />
+                     <button
+                       onClick={() => updateSection(sIdx, 'instructions', '')}
+                       className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/instruction:opacity-100 transition-opacity p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded print:hidden"
+                       title="删除说明"
+                     >
+                       <Trash2 className="w-3 h-3" />
+                     </button>
+                   </div>
+                 )}
               </div>
 
-              <div className="space-y-4 pl-0 sm:pl-2">
+              <div className="space-y-2 pl-0 sm:pl-2">
                 {section.items.map((item, qIdx) => {
-                  const q = questionById[item.questionId];
+                  // Handle consigne items
+                  if (item.type === 'consigne') {
+                    return (
+                      <div key={`consigne-${qIdx}`} className="group/consigne relative -my-1">
+                        <input
+                          value={item.consigneText || ''}
+                          onChange={(e) => {
+                            const newSections = [...sections];
+                            newSections[sIdx].items[qIdx] = { ...item, consigneText: e.target.value };
+                            setSections(newSections);
+                          }}
+                          placeholder="说明文字 (consigne)..."
+                          className="w-full text-slate-500 dark:text-slate-400 italic border-none p-0 focus:ring-0 bg-transparent text-sm"
+                        />
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/consigne:opacity-100 transition-opacity flex gap-1 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm rounded px-1">
+                          <button onClick={() => deleteItem(sIdx, qIdx)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded transition-colors" title="删除说明"><Trash2 className="w-3 h-3"/></button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const q = questionById[item.questionId!];
                   if (!q) return null;
 
                   const isReadingSet = q.type === 'reading-comprehension';
-                  const isCloze = q.type === 'cloze-test';
+                  const isCloze = q.type === 'cloze-test' || q.type === 'compound-fill';
                   
-                  const showNumber = section.items.length > 1;
+                  // Calculate actual question number (excluding consignes)
+                  const questionNumber = section.items.slice(0, qIdx).filter(i => i.type !== 'consigne').length + 1;
+                  const showNumber = section.items.filter(i => i.type !== 'consigne').length > 1;
 
                   const itemContainerClassName = isReadingSet
-                    ? 'group/item flex flex-col sm:flex-row items-start gap-2 sm:gap-3 relative py-1 print-allow-break break-words max-w-full'
-                    : 'group/item flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-3 break-inside-avoid print-avoid-break relative py-1 break-words max-w-full';
+                    ? 'group/item flex flex-col sm:flex-row items-start gap-2 sm:gap-3 relative py-1 break-words max-w-full'
+                    : 'group/item flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-3 relative py-1 break-words max-w-full';
 
                   return (
                     <div key={`${item.questionId}-${qIdx}`} className={itemContainerClassName}>
-                       {showNumber && <span className="font-bold text-base min-w-[22px] mt-0.5">{qIdx + 1}.</span>}
+                       {/* Add Consigne Button */}
+                       <button
+                         onClick={() => {
+                           const newSections = [...sections];
+                           newSections[sIdx].items.splice(qIdx, 0, {
+                             type: 'consigne',
+                             consigneText: '',
+                             points: 0
+                           });
+                           setSections(newSections);
+                         }}
+                         className="absolute -left-6 top-0 p-1 opacity-0 group-hover/item:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-all print:hidden"
+                         title="在此题前插入说明文字"
+                       >
+                         <Plus className="w-3.5 h-3.5" />
+                       </button>
+                       {showNumber && <span className="font-bold text-base min-w-[22px] mt-0.5">{questionNumber}.</span>}
                        
                        <div className="flex-1 min-w-0 max-w-full">
                            <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
                               <div className="w-full min-w-0">
                                   {isReadingSet ? (
                                       <div className="mb-2 w-full overflow-hidden">
-                                        <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded mb-3 text-justify whitespace-pre-wrap leading-normal font-serif text-base dark:text-slate-300 print-allow-break max-w-full overflow-x-auto">
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded mb-3 text-justify whitespace-pre-wrap leading-normal font-serif text-base dark:text-slate-300 max-w-full overflow-x-auto">
                                               <ExamStemRenderer content={{ readingPassage: q.readingPassage }} type={q.type} showAnswers={showAnswers} />
                                           </div>
                                           {q.subQuestions?.map((sq, sqIdx) => (
-                                          <div key={sqIdx} className="mb-2 pl-2 group/sub relative print-avoid-break">
+                                          <div key={sqIdx} className="mb-2 pl-2 group/sub relative">
                                                   <div className="flex items-center justify-end gap-2 mt-2 sm:mt-0 sm:absolute sm:-right-3 sm:top-0 print:hidden opacity-100 sm:opacity-0 sm:group-hover/sub:opacity-100 transition-opacity bg-white border rounded shadow-sm p-0.5 z-20 w-fit ml-auto sm:ml-0">
                                                       <div className="flex flex-col">
                                                           <button onClick={() => reorderSubQuestion(q, sqIdx, 'up')} className="text-slate-400 hover:text-blue-500 disabled:opacity-30" disabled={sqIdx===0}><ArrowUpCircle className="w-3 h-3"/></button>
@@ -646,7 +791,10 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                                   {(!sq.options || sq.options.length === 0) && (
                                                        showAnswers ? (
                                                           <div className="mt-1 p-2 bg-indigo-50 border border-indigo-100 rounded text-sm text-indigo-900 font-medium">
-                                                              <span className="font-bold mr-1">R:</span> {sq.correctOptionId}
+                                                            <span className="font-bold mr-1">R:</span> {(
+                                                             (q.type === 'compound-fill' && sq.options?.[0]?.text) ||
+                                                             sq.correctOptionId
+                                                            )}
                                                           </div>
                                                        ) : (
                                                           <div className="w-full h-12 border-b border-slate-200 border-dashed mt-1"></div>
@@ -657,19 +805,31 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                       </div>
                                   ) : isCloze ? (
                                       <div className="w-full overflow-hidden">
-                                        <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded mb-3 text-justify whitespace-pre-wrap leading-normal font-serif text-base dark:text-slate-300 print-allow-break max-w-full overflow-x-auto">
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded mb-3 text-justify whitespace-pre-wrap leading-normal font-serif text-base dark:text-slate-300 max-w-full overflow-x-auto">
                                             {(() => {
                                               const text = q.readingPassage || q.text || '';
-                                              // Replace HTML gap spans with plain text format: (n) __________
-                                              const processed = text.replace(
-                                                /<span[^>]*data-gap="(\d+)"[^>]*>.*?<\/span>/gi,
-                                                (_, gapNum) => `(${gapNum}) ${'_'.repeat(15)}`
-                                              );
-                                              return processed;
+                                              // Replace HTML gap spans
+                                              if (showAnswers && q.type === 'compound-fill' && q.subQuestions) {
+                                                // For compound-fill with answers: show red answers
+                                                let result = text;
+                                                q.subQuestions.forEach((sq, idx) => {
+                                                  const answer = sq.options?.[0]?.text || sq.correctOptionId || '';
+                                                  const pattern = new RegExp(`<span[^>]*data-gap="${idx + 1}"[^>]*>.*?</span>`, 'gi');
+                                                  result = result.replace(pattern, `<span class="font-bold text-red-600">(${idx + 1}) ${answer}</span>`);
+                                                });
+                                                return <span dangerouslySetInnerHTML={{ __html: result }} />;
+                                              } else {
+                                                // Replace HTML gap spans with plain text format: (n) __________
+                                                const processed = text.replace(
+                                                  /<span[^>]*data-gap="(\d+)"[^>]*>.*?<\/span>/gi,
+                                                  (_, gapNum) => `(${gapNum}) ${'_'.repeat(15)}`
+                                                );
+                                                return processed;
+                                              }
                                             })()}
                                         </div>
-                                        {q.subQuestions?.map((sq, sqIdx) => (
-                                          <div key={sqIdx} className="mb-2 pl-2 group/sub relative print-avoid-break">
+                                        {q.type === 'cloze-test' && q.subQuestions?.map((sq, sqIdx) => (
+                                          <div key={sqIdx} className="mb-2 pl-2 group/sub relative">
                                               <div className="flex items-center justify-end gap-2 mt-2 sm:mt-0 sm:absolute sm:-right-3 sm:top-0 print:hidden opacity-100 sm:opacity-0 sm:group-hover/sub:opacity-100 transition-opacity bg-white dark:bg-slate-800 border rounded shadow-sm p-0.5 z-20 w-fit ml-auto sm:ml-0">
                                                   <input 
                                                     type="number" 
@@ -701,24 +861,50 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                         ))}
                                       </div>
                                   ) : (
-                                      <ExamStemRenderer content={{ stem: q.text, correctAnswer: q.correctOptionId, explanation: q.explanation, options: q.options?.map(o => o.text) }} type={q.type} showAnswers={showAnswers} />
+                                      <ExamStemRenderer
+                                        content={{
+                                          stem: q.text,
+                                          correctAnswer: (() => {
+                                            // For blank-in-stem MCQ, pass the actual correct option text
+                                            if (q.options && q.options.length > 0) {
+                                              const byId = q.options.find(o => o.id === q.correctOptionId)?.text;
+                                              if (byId) return byId;
+                                              if (q.correctOptionId && /^[A-Z]$/.test(q.correctOptionId)) {
+                                                const idx = q.correctOptionId.charCodeAt(0) - 65;
+                                                return q.options[idx]?.text || q.correctOptionId;
+                                              }
+                                            }
+                                            // For true fill-in questions (no options), correctOptionId is treated as the answer text
+                                            return q.correctOptionId;
+                                          })(),
+                                          explanation: q.explanation,
+                                          options: q.options?.map(o => o.text),
+                                        }}
+                                        type={q.type}
+                                        showAnswers={showAnswers}
+                                      />
                                   )}
                               </div>
-                              {!isReadingSet && <div className="print:block hidden text-right text-[10px] italic font-bold text-slate-400 ml-4 shrink-0">({item.points} pts)</div>}
                            </div>
                            
-                           {!isReadingSet && !isCloze && q.type === 'multiple-choice' && (
-                              <div className={`grid gap-x-6 gap-y-1.5 grid-cols-${getOptionGridColumns(q.options?.map(o => o.text) || [])}`}>
-                                 {q.options?.map((opt, oIdx) => {
-                                   const isCorrect = (String.fromCharCode(65 + oIdx) === q.correctOptionId) || (opt.id === q.correctOptionId);
-                                   return (
-                                       <div key={oIdx} className="flex gap-2 items-start text-sm">
-                                          <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
-                                          <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
-                                       </div>
-                                   );
-                                 })}
-                              </div>
+                           {!isReadingSet && !isCloze && (!q.type || q.type === 'multiple-choice') && (
+                              q.options && q.options.length > 0 ? (
+                                <div className={`grid gap-x-6 gap-y-1.5 grid-cols-${getOptionGridColumns(q.options.map(o => o.text))}`}>
+                                   {q.options.map((opt, oIdx) => {
+                                     const isCorrect = (String.fromCharCode(65 + oIdx) === q.correctOptionId) || (opt.id === q.correctOptionId);
+                                     return (
+                                         <div key={oIdx} className="flex gap-2 items-start text-sm">
+                                            <span className={`font-bold ${showAnswers && isCorrect ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{String.fromCharCode(65 + oIdx)}.</span>
+                                            <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
+                                         </div>
+                                     );
+                                   })}
+                                </div>
+                              ) : (
+                                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-sm text-amber-700 dark:text-amber-300">
+                                  ⚠️ 该题目缺少选项数据，请在题库中编辑此题目
+                                </div>
+                              )
                            )}
                        </div>
                        

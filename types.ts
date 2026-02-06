@@ -201,9 +201,11 @@ export interface SegmentAnalysisResult {
 
 // --- Exam Paper Types ---
 export interface ExamItem {
-  questionId: string;
+  questionId?: string; // Optional for consignes
   points: number;
   subPoints?: number[]; // For reading comprehension/cloze with sub-questions
+  type?: 'question' | 'consigne'; // 'question' (default) or 'consigne' (text instruction)
+  consigneText?: string; // Text content for consigne items
 }
 
 export interface ExamSection {
@@ -221,4 +223,5 @@ export interface ExamPaper {
   teacherId: string;
   createdAt: number;
   sharedWith?: string[]; // Class IDs or student IDs
+  folderId?: string; // Optional: Folder organization
 }

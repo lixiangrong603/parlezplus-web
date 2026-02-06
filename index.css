@@ -1,0 +1,193 @@
+/* Base styles */
+
+/* Print styles for exam printing */
+@media print {
+  /* Reset page-breaking restrictions - CRITICAL for multi-page print */
+  html, body {
+    height: auto !important;
+    width: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: white !important;
+  }
+
+  /* Make root container expand fully */
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide everything outside the exam */
+  body > *:not(#root) {
+    display: none !important;
+  }
+
+  /* Ensure the print-exam container is positioned correctly */
+  .print-exam {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide elements marked with print:hidden (Tailwind style) */
+  .print\:hidden,
+  [class*="print:hidden"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Override h-full and overflow classes for printing */
+  .h-full {
+    height: auto !important;
+  }
+
+  .overflow-y-auto,
+  .overflow-hidden,
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* Remove shadows and decorative borders for printing */
+  .shadow-xl,
+  .shadow-lg,
+  .shadow-md,
+  .shadow-sm,
+  .shadow {
+    box-shadow: none !important;
+  }
+
+  /* Page break controls - now just for manual control if needed */
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  /* Natural flow - allow content to break anywhere */
+  .print-avoid-break {
+    /* Disabled - allow natural page breaks */
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  .print-allow-break {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  /* Ensure all content flows naturally without forced breaks */
+  * {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    orphans: 2;
+    widows: 2;
+  }
+
+  /* Force light mode styling when printing */
+  .print-force-light,
+  .print-force-light *,
+  .dark {
+    background-color: white !important;
+  }
+
+  .print-force-light .dark\:bg-slate-900,
+  .print-force-light .dark\:bg-slate-800,
+  .print-force-light .dark\:bg-slate-950,
+  .dark .bg-slate-900,
+  .dark .bg-slate-800,
+  .dark .bg-slate-950 {
+    background-color: white !important;
+  }
+
+  .print-force-light .dark\:text-white,
+  .print-force-light .dark\:text-slate-100,
+  .print-force-light .dark\:text-slate-200,
+  .print-force-light .dark\:text-slate-300,
+  .dark .text-white,
+  .dark .text-slate-100 {
+    color: #1e293b !important;
+  }
+
+  /* Ensure proper background colors */
+  .bg-slate-50,
+  .bg-slate-100,
+  .bg-white {
+    background-color: white !important;
+  }
+
+  /* Remove rounded corners for cleaner print */
+  .rounded-xl,
+  .rounded-lg,
+  .rounded-2xl {
+    border-radius: 4px !important;
+  }
+
+  /* Hide header navigation, buttons, modals, and other UI elements */
+  header:not(.print-exam *),
+  nav:not(.print-exam *),
+  .fixed,
+  [role="dialog"],
+  [role="menu"],
+  aside {
+    display: none !important;
+  }
+
+  /* Show specific print-visible elements */
+  .print\:block {
+    display: block !important;
+  }
+
+  /* Adjust font sizes for print */
+  .print-exam {
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Keep borders subtle for structure */
+  .border {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* A4 page settings */
+  @page {
+    size: A4;
+    margin: 12mm 15mm 12mm 15mm;
+  }
+
+  /* Ensure text doesn't get cut off */
+  .print-exam * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* Print the exam paper nicely */
+  .print-exam .bg-white {
+    background: white !important;
+    border: none !important;
+  }
+
+  /* Ensure the exam content fills the page width */
+  .print-exam > div {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* Hide scrollbars in print */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+
+/* Screen-only styles that should not appear in print */
+@media screen {
+  .print\:block {
+    display: none;
+  }
+}
