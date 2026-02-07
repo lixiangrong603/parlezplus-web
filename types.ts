@@ -264,4 +264,11 @@ export interface ExamSession {
   score?: number;
   totalScore: number;
   isSubmitted: boolean;
+  // Grading fields
+  teacherFeedback?: string; // 教师评语
+  manualScore?: number; // 手动调整后的最终分数
+  itemScores?: Record<string, number>; // questionId -> manual score (for subjective questions)
+  gradedBy?: string; // 批改教师ID
+  gradedAt?: number; // 批改时间戳
+  status?: 'pending' | 'graded'; // 批改状态
 }

@@ -296,7 +296,7 @@ const QuestionList: React.FC<QuestionListProps> = ({ questions, onEdit, onDelete
                 <div className="mb-2">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider mb-1">文章片段</div>
                   <div 
-                    className="text-sm text-slate-600 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800 mb-2 text-justify prose-sm max-w-none"
+                    className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800 mb-2 text-justify prose-sm max-w-none"
                     dangerouslySetInnerHTML={{ __html: renderGapPlaceholders(q.readingPassage) || "<span class='text-slate-400'>无文章内容</span>" }}
                   />
                 </div>

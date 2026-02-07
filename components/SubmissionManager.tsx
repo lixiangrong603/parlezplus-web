@@ -10,6 +10,7 @@ import { getResources, getClassroomById, getSubmissions, submitAssignment } from
 import { dataURLtoBlob } from '../utils/audioUtils';
 import { useJobs } from '../contexts/JobContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useModal } from '../contexts/ModalContext';
 import { CURRENT_USER_ID } from '../constants';
 import MediaPlayer from './MediaPlayer';
 
@@ -226,8 +227,8 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
       const geminiKey = localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`) || "";
       
       if (!azureKey || !azureRegion || !geminiKey) {
-          if(!azureKey) alert("未配置 Azure Speech Key");
-          else if(!geminiKey) alert("未配置 Gemini API Key");
+          if(!azureKey) void modal.alert({ message: '未配置 Azure Speech Key' });
+          else if(!geminiKey) void modal.alert({ message: '未配置 Gemini API Key' });
           setIsBatching(false);
           return;
       }

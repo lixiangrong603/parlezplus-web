@@ -4,6 +4,7 @@ import { getBankQuestions, getResources, getSyllabusCourses, getChannels } from 
 import { Search, Filter, X, CheckSquare, Square, FileText, Layers, Video, BookOpen, FolderOpen, ChevronDown, Puzzle, BookA, AlignLeft, Calendar } from 'lucide-react';
 import UnitTreeSelector from './UnitTreeSelector';
 import { getOptionGridColumns } from '../utils/optionLayout';
+import { useModal } from '../contexts/ModalContext';
 
 // 扩展的Question类型，包含来源信息和资源扩展属性
 type ExtendedQuestion = Question & {
@@ -23,6 +24,7 @@ interface QuestionSelectorProps {
 }
 
 const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, onCancel, excludeIds = [] }) => {
+  const modal = useModal();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'bank' | 'resources'>('bank');
@@ -262,7 +264,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
 
   const handleConfirm = () => {
     if (selectedIds.length === 0) {
-      alert('请至少选择一道题目');
+      void modal.alert({ message: '请至少选择一道题目' });
       return;
     }
     onConfirm(selectedIds);

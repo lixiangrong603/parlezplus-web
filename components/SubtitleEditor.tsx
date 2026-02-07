@@ -10,6 +10,7 @@ import { useJobs } from '../contexts/JobContext';
 import { CURRENT_USER_ID, DEFAULT_COVERS } from '../constants';
 import ResourceTagger from './ResourceTagger';
 import QuizEditor from './QuizEditor';
+import { useModal } from '../contexts/ModalContext';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -205,13 +206,13 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
     if (type === 'azure') {
        const key = localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_key`);
        const region = localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_region`);
-       if (!key || !region) { alert('请先在设置中配置 Azure Speech Key 和 Region'); return; }
-       if (!resource.videoUrl) { alert('没有找到视频/音频源'); return; }
+       if (!key || !region) { await modal.alert({ message: '请先在设置中配置 Azure Speech Key 和 Region' }); return; }
+       if (!resource.videoUrl) { await modal.alert({ message: '没有找到视频/音频源' }); return; }
        startAzureJob(resource, key, region);
     } else if (type === 'gemini') {
        const key = localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`);
-       if (!key) { alert('请先在设置中配置 Gemini API Key'); return; }
-       if (segments.length === 0) { alert("请先进行 Azure 转写以获取原文字幕。"); return; }
+       if (!key) { await modal.alert({ message: '请先在设置中配置 Gemini API Key' }); return; }
+       if (segments.length === 0) { await modal.alert({ message: '请先进行 Azure 转写以获取原文字幕。' }); return; }
        startGeminiJob(resource.id, segments, key);
     }
   };
@@ -606,7 +607,7 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                   onChange={setQuestions}
                   fullText={fullText}
                   geminiKey={localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`) || ''}
-                  onOpenSettings={() => alert("请先在设置中配置 Gemini API Key")}
+                  onOpenSettings={() => void modal.alert({ message: '请先在设置中配置 Gemini API Key' })}
                   resourceId={resource.id}
               />
           </div>

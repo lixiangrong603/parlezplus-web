@@ -17,6 +17,7 @@ import { CURRENT_USER_ID } from '../constants';
 import { parseSubtitleJson } from '../utils/textAnalysis';
 import { extractVideoFrame, generateRandomCoverArt } from '../utils/mediaUtils';
 import SubtitleEditor from './SubtitleEditor';
+import { useModal } from '../contexts/ModalContext';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -116,12 +117,16 @@ import { useAuth } from '../contexts/AuthContext';
 
 const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit: (r: MediaResource) => void, onCreateWithFiles: (resources: MediaResource[]) => void, onBack: () => void, onPreview: (r: MediaResource) => void }) => {
   const { user } = useAuth();
+  const modal = useModal();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string>('default');
   const [resources, setResources] = useState<MediaResource[]>([]);
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
+
+  const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [editingChannelName, setEditingChannelName] = useState('');
   
   const [publishingResource, setPublishingResource] = useState<MediaResource | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -136,6 +141,38 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
   }, [user]);
 
   const activeResources = resources.filter(r => r.channelId === activeChannelId);
+
+  const beginRenameChannel = (id: string, currentName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChannelId(id);
+    setEditingChannelName(currentName);
+  };
+
+  const cancelRenameChannel = () => {
+    setEditingChannelId(null);
+    setEditingChannelName('');
+  };
+
+  const commitRenameChannel = async (id: string) => {
+    if (!user) return;
+    const channel = channels.find(c => c.id === id);
+    if (!channel) return;
+
+    const nextName = editingChannelName.trim();
+    if (!nextName) {
+      await modal.alert({ message: '频道名称不能为空' });
+      return;
+    }
+
+    if (nextName === channel.name) {
+      cancelRenameChannel();
+      return;
+    }
+
+    saveChannel({ ...channel, name: nextName }, user.id);
+    setChannels(getChannels(user.id));
+    cancelRenameChannel();
+  };
 
   const handleAddChannel = () => {
     if (!newChannelName || !user) return;
@@ -200,14 +237,51 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
               <div className="flex items-center justify-between gap-2">
                  <div className="flex items-center gap-3 min-w-0">
                     <Folder size={16} className={activeChannelId === c.id ? "text-indigo-200" : "text-slate-400"} />
-                    <span className="text-sm font-bold truncate">{c.name}</span>
+                    {editingChannelId === c.id ? (
+                      <input
+                        autoFocus
+                        value={editingChannelName}
+                        onChange={(e) => setEditingChannelName(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitRenameChannel(c.id);
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelRenameChannel();
+                          }
+                        }}
+                        onBlur={() => commitRenameChannel(c.id)}
+                        className={`text-sm font-bold truncate w-full bg-white/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-500 ${activeChannelId === c.id ? 'text-slate-800' : 'text-slate-800 dark:text-slate-100'}`}
+                      />
+                    ) : (
+                      <span
+                        className="text-sm font-bold truncate"
+                        onDoubleClick={(e) => beginRenameChannel(c.id, c.name, e)}
+                        title="双击重命名"
+                      >
+                        {c.name}
+                      </span>
+                    )}
                  </div>
-                 <button 
-                    onClick={(e) => handleDeleteChannel(c.id, e)}
-                    className={`p-1.5 rounded-lg transition opacity-0 group-hover:opacity-100 ${activeChannelId === c.id ? 'hover:bg-red-500 text-white' : 'hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-500 dark:text-slate-400 hover:text-red-500'}`}
-                 >
-                    <Trash2 size={14} />
-                 </button>
+                 <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                   <button 
+                      onClick={(e) => beginRenameChannel(c.id, c.name, e)}
+                      className={`p-1.5 rounded-lg mr-1 ${activeChannelId === c.id ? 'hover:bg-indigo-500 text-indigo-200 hover:text-white' : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-slate-400 hover:text-indigo-600'}`}
+                      title="重命名"
+                   >
+                      <Edit3 size={14} />
+                   </button>
+                   <button 
+                      onClick={(e) => handleDeleteChannel(c.id, e)}
+                      className={`p-1.5 rounded-lg ${activeChannelId === c.id ? 'hover:bg-red-500 text-white' : 'hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-500 dark:text-slate-400 hover:text-red-500'}`}
+                      title="删除频道"
+                   >
+                      <Trash2 size={14} />
+                   </button>
+                 </div>
               </div>
             </div>
           ))}

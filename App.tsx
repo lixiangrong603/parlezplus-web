@@ -9,6 +9,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import PracticeStudio from './components/PracticeStudio';
 import { getResources } from './utils/storage';
+import { ModalProvider, useModal } from './contexts/ModalContext';
 
 // Theme Context
 interface ThemeContextType {
@@ -20,6 +21,7 @@ export const ThemeContext = createContext<ThemeContextType>({ isDarkMode: false,
 function AppContent() {
   const { user, isLoading } = useAuth();
   const { isDarkMode } = useContext(ThemeContext);
+  const modal = useModal();
   const [selectedResource, setSelectedResource] = useState<MediaResource | null>(null);
   const [resources, setResources] = useState<MediaResource[]>([]);
 
@@ -74,7 +76,7 @@ function AppContent() {
         <StudentDashboard 
           resources={resources} 
           onSelectResource={(resource) => setSelectedResource(resource)} 
-          onEnterTeacherMode={() => alert("您的账号暂无教师权限")}
+          onEnterTeacherMode={() => modal.alert({ message: "您的账号暂无教师权限" })}
         />
       ) : (
         <PracticeStudio 
@@ -99,9 +101,11 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <ModalProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ModalProvider>
     </ThemeContext.Provider>
   );
 }

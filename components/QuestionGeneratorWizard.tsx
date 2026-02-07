@@ -5,6 +5,7 @@ import { Sparkles, BrainCircuit, CheckCircle, ArrowRight, Loader2, Save, X, Rota
 import { useJobs } from '../contexts/JobContext';
 import { CURRENT_USER_ID } from '../constants';
 import QuestionEditor from './QuestionEditor';
+import { useModal } from '../contexts/ModalContext';
 
 interface QuestionGeneratorWizardProps {
     knowledgePoints: KnowledgePoint[];
@@ -17,6 +18,7 @@ interface QuestionGeneratorWizardProps {
 const QuestionGeneratorWizard: React.FC<QuestionGeneratorWizardProps> = ({ 
     knowledgePoints: initialKnowledgePoints, onClose, onSave, initialJobId, onJobStarted 
 }) => {
+    const modal = useModal();
     const { startSyllabusQuizGeneration, jobs, clearJob } = useJobs();
     
     const [localKnowledgePoints, setLocalKnowledgePoints] = useState<KnowledgePoint[]>(initialKnowledgePoints);
@@ -73,7 +75,7 @@ const QuestionGeneratorWizard: React.FC<QuestionGeneratorWizardProps> = ({
 
         const apiKey = localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`);
         if (!apiKey) {
-            alert("请先在教师设置中配置 Gemini API Key");
+            void modal.alert({ message: '请先在教师设置中配置 Gemini API Key' });
             return;
         }
 

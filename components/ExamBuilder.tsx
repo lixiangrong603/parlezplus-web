@@ -9,6 +9,7 @@ import ExamAnalysisModal from '../components/ExamAnalysisModal';
 import SectionSortModal, { SortCriterion } from '../components/SectionSortModal';
 import { runExamPrint, ExamPrintMode } from '../utils/examPrint';
 import { generateWordDocument } from '../utils/wordExport';
+import { useModal } from '../contexts/ModalContext';
 
 interface ExamProps {
   user: User;
@@ -23,6 +24,7 @@ interface ExamProps {
 const DRAFT_KEY = 'parlezplus_exam_builder_draft';
 
 const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClearCart, initialExam, onNavigateToBank, autoPrintMode }) => {
+  const modal = useModal();
   const [examTitle, setExamTitle] = useState('');
   const [sections, setSections] = useState<ExamSection[]>([]);
   const [questionById, setQuestionById] = useState<Record<string, Question>>({});
@@ -209,11 +211,17 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
     })();
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     const message = initialExam
       ? '放弃修改并返回？'
       : '放弃草稿并返回？';
-    if (!confirm(message)) return;
+    const ok = await modal.confirm({
+      title: '确认',
+      message,
+      type: 'danger',
+      confirmText: '放弃'
+    });
+    if (!ok) return;
 
     setAnalysisExam(null);
 
@@ -229,7 +237,7 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
 
   const handleSaveExam = async () => {
     if (!examTitle.trim() || getTotalScore() === 0) { 
-      alert('请输入试卷标题并设置分值'); 
+      await modal.alert({ message: '请输入试卷标题并设置分值' });
       return; 
     }
     const examData = { title: examTitle, sections: sections, totalScore: getTotalScore(), teacherId: user.id };
@@ -244,7 +252,7 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
       onClearCart();
     }
     
-    alert('保存成功');
+    await modal.alert({ message: '保存成功' });
     onNavigateToBank(savedExam);
   };
 
@@ -286,8 +294,14 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
     setSections(prev => prev.map((sec, idx) => (idx === index ? { ...sec, [field]: value } as ExamSection : sec)));
   };
   
-  const deleteSection = (index: number) => {
-    if (!confirm('确认删除？')) return;
+  const deleteSection = async (index: number) => {
+    const ok = await modal.confirm({
+      title: '确认删除',
+      message: '确认删除？',
+      type: 'danger',
+      confirmText: '删除'
+    });
+    if (!ok) return;
     setSections(prev => prev.filter((_, idx) => idx !== index));
   };
 
@@ -391,7 +405,7 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
   const applySectionTotal = (index: number) => {
     const parsed = Number.parseFloat(editingSectionTotalValue);
     if (isNaN(parsed) || parsed < 0) { 
-      alert('无效的总分值'); 
+      void modal.alert({ message: '无效的总分值' });
       return; 
     }
     distributePointsAcrossItems(index, parsed);
@@ -486,12 +500,17 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
       setQuestionById(prev => ({ ...prev, [q.id]: updatedQ }));
   };
 
-  const clearDraft = () => {
-    if (confirm('确认清空草稿？')) {
-      setExamTitle('');
-      setSections([]);
-      localStorage.removeItem(DRAFT_KEY);
-    }
+  const clearDraft = async () => {
+    const ok = await modal.confirm({
+      title: '确认清空',
+      message: '确认清空草稿？',
+      type: 'danger',
+      confirmText: '清空'
+    });
+    if (!ok) return;
+    setExamTitle('');
+    setSections([]);
+    localStorage.removeItem(DRAFT_KEY);
   };
 
   return (

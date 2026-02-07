@@ -10,10 +10,12 @@ import { useAuth } from '../contexts/AuthContext';
 import QuestionGeneratorWizard from './QuestionGeneratorWizard';
 import QuestionEditor from './QuestionEditor';
 import QuestionList from './QuestionList';
+import { useModal } from '../contexts/ModalContext';
 
 const QuestionBankDashboard: React.FC = () => {
   const { jobs, clearJob } = useJobs();
   const { user } = useAuth();
+    const modal = useModal();
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const [courses, setCourses] = useState<SyllabusCourse[]>([]);
@@ -92,11 +94,16 @@ const QuestionBankDashboard: React.FC = () => {
       // This allows continuous editing. The "Finish" button handles closing.
   };
 
-  const handleDeleteExistingQuestion = (id: string) => {
-      if(confirm('确定要删除这道题吗？')) {
-          deleteBankQuestion(id);
-          setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
-      }
+  const handleDeleteExistingQuestion = async (id: string) => {
+      const ok = await modal.confirm({
+          title: '确认删除',
+          message: '确定要删除这道题吗？',
+          type: 'danger',
+          confirmText: '删除'
+      });
+      if (!ok) return;
+      deleteBankQuestion(id);
+      setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
   };
 
   const handleCancelEdit = () => {

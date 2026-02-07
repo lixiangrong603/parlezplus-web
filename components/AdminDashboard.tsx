@@ -8,10 +8,12 @@ import {
 import { User, UserRole } from '../types';
 import { getUsers, saveUser, deleteUser, toggleBlockUser } from '../utils/storage';
 import { ThemeContext } from '../App';
+import { useModal } from '../contexts/ModalContext';
 
 export const AdminDashboard: React.FC = () => {
   const { user: currentUser, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
+  const modal = useModal();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -36,16 +38,27 @@ export const AdminDashboard: React.FC = () => {
     setNewUser({ username: '', name: '', role: 'student' });
   };
 
-  const handleDelete = (id: string) => {
-    if (id === currentUser?.id) return alert("不能删除当前登录账号");
-    if (confirm('确定要彻底删除该用户及其所有关联数据吗？')) {
-      deleteUser(id);
-      setUsers(getUsers());
+  const handleDelete = async (id: string) => {
+    if (id === currentUser?.id) {
+      await modal.alert({ message: '不能删除当前登录账号' });
+      return;
     }
+    const ok = await modal.confirm({
+      title: '确认删除',
+      message: '确定要彻底删除该用户及其所有关联数据吗？',
+      type: 'danger',
+      confirmText: '删除'
+    });
+    if (!ok) return;
+    deleteUser(id);
+    setUsers(getUsers());
   };
 
-  const handleToggleBlock = (id: string) => {
-    if (id === currentUser?.id) return alert("不能锁定当前登录账号");
+  const handleToggleBlock = async (id: string) => {
+    if (id === currentUser?.id) {
+      await modal.alert({ message: '不能锁定当前登录账号' });
+      return;
+    }
     toggleBlockUser(id);
     setUsers(getUsers());
   };

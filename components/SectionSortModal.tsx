@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { useModal } from '../contexts/ModalContext';
 
 export type SortCriterion = {
   type: 'TYPE' | 'DIFFICULTY' | 'RANDOM';
@@ -12,6 +13,7 @@ interface SectionSortModalProps {
 }
 
 const SectionSortModal: React.FC<SectionSortModalProps> = ({ onClose, onApply }) => {
+  const modal = useModal();
   const [criteria, setCriteria] = useState<SortCriterion[]>([
     { type: 'TYPE', order: 'ASC' }
   ]);
@@ -40,7 +42,7 @@ const SectionSortModal: React.FC<SectionSortModalProps> = ({ onClose, onApply })
 
   const handleApply = () => {
     if (criteria.length === 0) {
-      alert('请至少添加一个排序条件');
+      void modal.alert({ message: '请至少添加一个排序条件' });
       return;
     }
     onApply(criteria);

@@ -11,6 +11,7 @@ import ExamBuilder from './ExamBuilder';
 import { generateWordDocument } from '../utils/wordExport';
 import ExamAnalysisModal from './ExamAnalysisModal';
 import ExamTaker from './ExamTaker';
+import { useModal } from '../contexts/ModalContext';
 
 type SidebarView = 'drafts' | 'library';
 
@@ -126,6 +127,7 @@ const ClassroomAssignmentModal: React.FC<{
 
 const ExamCenterDashboard: React.FC = () => {
   const { user } = useAuth();
+  const modal = useModal();
   const [sidebarView, setSidebarView] = useState<SidebarView>('library');
   const [examPapers, setExamPapers] = useState<ExamPaper[]>([]);
   const [draft, setDraft] = useState<DraftData | null>(null);
@@ -193,27 +195,33 @@ const ExamCenterDashboard: React.FC = () => {
     setEditingFolderName(currentName);
   };
 
-  const handleDeleteFolder = (folderId: string) => {
-    if (confirm('确认删除该文件夹？文件夹内的试卷将移至未分类。')) {
-      saveFolders(folders.filter(f => f.id !== folderId));
-      if (selectedFolderId === folderId) {
-        setSelectedFolderId(null);
-      }
-      // Remove folderId from all exams
-      const updatedPapers = examPapers.map(exam => ({
-        ...exam,
-        folderId: exam.folderId === folderId ? undefined : exam.folderId
-      }));
-      updatedPapers.forEach(exam => {
-        const allPapers = getExamPapers(user?.id);
-        const index = allPapers.findIndex(p => p.id === exam.id);
-        if (index !== -1) {
-          allPapers[index] = exam;
-          localStorage.setItem('parlezplus_exam_papers', JSON.stringify(allPapers));
-        }
-      });
-      loadExamPapers();
+  const handleDeleteFolder = async (folderId: string) => {
+    const ok = await modal.confirm({
+      title: '确认删除',
+      message: '确认删除该文件夹？文件夹内的试卷将移至未分类。',
+      type: 'danger',
+      confirmText: '删除'
+    });
+    if (!ok) return;
+
+    saveFolders(folders.filter(f => f.id !== folderId));
+    if (selectedFolderId === folderId) {
+      setSelectedFolderId(null);
     }
+    // Remove folderId from all exams
+    const updatedPapers = examPapers.map(exam => ({
+      ...exam,
+      folderId: exam.folderId === folderId ? undefined : exam.folderId
+    }));
+    updatedPapers.forEach(exam => {
+      const allPapers = getExamPapers(user?.id);
+      const index = allPapers.findIndex(p => p.id === exam.id);
+      if (index !== -1) {
+        allPapers[index] = exam;
+        localStorage.setItem('parlezplus_exam_papers', JSON.stringify(allPapers));
+      }
+    });
+    loadExamPapers();
   };
 
   const handleMoveToFolder = (examId: string, folderId: string | null) => {
@@ -255,11 +263,16 @@ const ExamCenterDashboard: React.FC = () => {
     setShowExamBuilder(true);
   };
 
-  const handleDeleteExam = (examId: string) => {
-    if (confirm('确认删除该试卷？此操作不可撤销。')) {
-      deleteExamPaper(examId);
-      loadExamPapers();
-    }
+  const handleDeleteExam = async (examId: string) => {
+    const ok = await modal.confirm({
+      title: '确认删除',
+      message: '确认删除该试卷？此操作不可撤销。',
+      type: 'danger',
+      confirmText: '删除'
+    });
+    if (!ok) return;
+    deleteExamPaper(examId);
+    loadExamPapers();
   };
 
   const handleNavigateBack = () => {
@@ -274,11 +287,16 @@ const ExamCenterDashboard: React.FC = () => {
     setShowExamBuilder(true);
   };
 
-  const handleDeleteDraft = () => {
-    if (confirm('确认删除草稿？此操作不可撤销。')) {
-      localStorage.removeItem(DRAFT_KEY);
-      setDraft(null);
-    }
+  const handleDeleteDraft = async () => {
+    const ok = await modal.confirm({
+      title: '确认删除',
+      message: '确认删除草稿？此操作不可撤销。',
+      type: 'danger',
+      confirmText: '删除'
+    });
+    if (!ok) return;
+    localStorage.removeItem(DRAFT_KEY);
+    setDraft(null);
   };
 
   const handleDuplicateExam = (exam: ExamPaper) => {

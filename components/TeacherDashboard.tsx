@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Classroom, Student, Submission, MediaResource, User, ExamPaper } from '../types';
 import { 
-  getClassrooms, saveClassroom, deleteClassroom, saveUser, getUsers, getUserById, getResources, saveResource, getExamPapers, updateExamPaper
+  getClassrooms, saveClassroom, deleteClassroom, saveUser, getUsers, getUserById, getResources, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass
 } from '../utils/storage';
 import { MOCK_RESOURCES, CURRENT_USER_ID } from '../constants'; 
 import { ResourceManagement } from './ResourceManagement';
@@ -21,6 +21,7 @@ import QuestionBankDashboard from './QuestionBankDashboard';
 import ExamCenterDashboard from './ExamCenterDashboard';
 import { ClassSidebar } from './ClassSidebar';
 import { StudentRoster } from './StudentRoster';
+import ExamGradingManager from './ExamGradingManager';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -100,6 +101,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
   const [showSettings, setShowSettings] = useState(false);
   const [previewResource, setPreviewResource] = useState<MediaResource | null>(null);
   const [gradingTaskId, setGradingTaskId] = useState<string | null>(null);
+  const [gradingExam, setGradingExam] = useState<{ examId: string; classId: string } | null>(null);
 
   if (previewResource) {
     return (
@@ -169,12 +171,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
               classId={selectedClassId!}
               onBack={() => setGradingTaskId(null)} 
             />
+          ) : gradingExam ? (
+            <ExamGradingManager
+              examId={gradingExam.examId}
+              classId={gradingExam.classId}
+              onBack={() => setGradingExam(null)}
+            />
           ) : (
             <ClassManager 
               teacherId={user?.id || ''}
               selectedClassId={selectedClassId} 
               onSelectClass={setSelectedClassId} 
               onOpenGradingTask={(tid) => setGradingTaskId(tid)}
+              onOpenGradingExam={(examId, classId) => setGradingExam({ examId, classId })}
             />
           )
         ) : activeTab === 'resources' ? (
@@ -195,12 +204,14 @@ const ClassManager = ({
   teacherId,
   selectedClassId, 
   onSelectClass, 
-  onOpenGradingTask
+  onOpenGradingTask,
+  onOpenGradingExam
 }: { 
   teacherId: string,
   selectedClassId: string | null, 
   onSelectClass: (id: string | null) => void,
-  onOpenGradingTask: (taskId: string) => void
+  onOpenGradingTask: (taskId: string) => void,
+  onOpenGradingExam: (examId: string, classId: string) => void
 }) => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [showAddClass, setShowAddClass] = useState(false);
@@ -208,7 +219,12 @@ const ClassManager = ({
   const [confirmState, setConfirmState] = useState<{isOpen: boolean, classId: string} | null>(null);
 
   useEffect(() => {
-    setClassrooms(getClassrooms(teacherId));
+    const classes = getClassrooms(teacherId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    setClassrooms(classes);
+    // Default to first class if none selected
+    if (classes.length > 0 && !selectedClassId) {
+      onSelectClass(classes[0].id);
+    }
   }, [teacherId]);
 
   const handleAddClass = () => {
@@ -260,7 +276,8 @@ const ClassManager = ({
           classId={selectedClassId} 
           teacherId={teacherId}
           onBack={() => onSelectClass(null)} 
-          onOpenGradingTask={onOpenGradingTask} 
+          onOpenGradingTask={onOpenGradingTask}
+          onOpenGradingExam={onOpenGradingExam}
           onRefreshClassrooms={() => setClassrooms(getClassrooms(teacherId))}
         />
       ) : (
@@ -300,12 +317,14 @@ const ClassDetailView = ({
   teacherId,
   onBack, 
   onOpenGradingTask,
+  onOpenGradingExam,
   onRefreshClassrooms
 }: { 
   classId: string, 
   teacherId: string,
   onBack: () => void,
   onOpenGradingTask: (taskId: string) => void,
+  onOpenGradingExam: (examId: string, classId: string) => void,
   onRefreshClassrooms?: () => void 
 }) => {
   const [classroom, setClassroom] = useState<Classroom | null>(null);
@@ -664,7 +683,8 @@ const ClassDetailView = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {assignedExams.map(exam => {
-                        const submitted = 0; // Mock data for now
+                        const sessions = getExamSessionsByExamAndClass(exam.id, classId);
+                        const submitted = sessions.filter(s => s.isSubmitted).length;
                         const total = classroom.students.length;
                         const deadline = exam.assignedClassDeadlines?.[classId];
                         return (
@@ -702,13 +722,22 @@ const ClassDetailView = ({
                               </button>
                             </td>
                             <td className="px-6 py-4 text-right align-middle">
-                              <button 
-                                onClick={() => handleWithdrawExam(exam.id)} 
-                                className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                                title="撤回试卷"
-                              >
-                                <MinusCircle size={18} />
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button 
+                                  onClick={() => onOpenGradingExam(exam.id, classId)}
+                                  className="px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                  title="批改试卷"
+                                >
+                                  批改
+                                </button>
+                                <button 
+                                  onClick={() => handleWithdrawExam(exam.id)} 
+                                  className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                  title="撤回试卷"
+                                >
+                                  <MinusCircle size={18} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );

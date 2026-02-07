@@ -218,7 +218,15 @@ export const saveStudentProgress = (data: StudentPracticeData) => {
     localStorage.setItem(STORAGE_KEYS.STUDENT_DATA, JSON.stringify(allData));
   } catch (e) {
     console.error("Storage full, cannot save recording", e);
-    alert("本地存储空间已满，无法保存更多录音。在真实环境中，这将上传至云端服务器。");
+    window.dispatchEvent(
+      new CustomEvent('parlezplus:alert', {
+        detail: {
+          title: '存储空间不足',
+          message: '本地存储空间已满，无法保存更多录音。在真实环境中，这将上传至云端服务器。',
+          type: 'info'
+        }
+      })
+    );
   }
 };
 
@@ -586,5 +594,28 @@ export const saveExamSession = (session: ExamSession) => {
 export const deleteExamSession = (id: string) => {
   const sessions = getExamSessions();
   const filtered = sessions.filter(s => s.id !== id);
+  localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(filtered));
+};
+
+// Get exam sessions by exam paper and class
+export const getExamSessionsByExamAndClass = (examId: string, classId: string): ExamSession[] => {
+  const allSessions = getExamSessions();
+  const classroom = getClassroomById(classId);
+  if (!classroom) return [];
+  
+  const studentUserIds = new Set(classroom.students.map(s => s.userId).filter((id): id is string => !!id));
+  return allSessions.filter(s => s.examPaperId === examId && studentUserIds.has(s.studentId));
+};
+
+// Update exam session (alias for saveExamSession for clarity)
+export const updateExamSession = (session: ExamSession) => {
+  saveExamSession(session);
+};
+
+// Delete exam sessions by exam and student IDs (for "return to redo" feature)
+export const deleteExamSessionsByExam = (examId: string, studentIds: string[]) => {
+  const sessions = getExamSessions();
+  const studentIdSet = new Set(studentIds);
+  const filtered = sessions.filter(s => !(s.examPaperId === examId && studentIdSet.has(s.studentId)));
   localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(filtered));
 };

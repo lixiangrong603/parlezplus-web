@@ -4,6 +4,7 @@ import { saveExamSession, getExamSessionById, getQuestionsWithResourceInfo, getR
 import { getOptionGridColumns } from '../utils/optionLayout';
 import MediaPlayer from './MediaPlayer';
 import { ThemeContext } from '../App';
+import { useModal } from '../contexts/ModalContext';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, XCircle, 
   Clock, PlayCircle, AlertCircle, BookOpen, 
@@ -37,6 +38,7 @@ const formatDuration = (ms: number) => {
 
 const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
+  const modal = useModal();
   const [viewMode, setViewMode] = useState<ViewMode>('start');
   const [loadingProgress, setLoadingProgress] = useState<LoadingProgress>({ total: 0, loaded: 0, failed: [] });
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
@@ -382,7 +384,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     }
 
     if (lockedSectionIds.has(target.id)) {
-      alert('该部分已结束，不能返回。');
+      void modal.alert({ message: '该部分已结束，不能返回。' });
       return false;
     }
 
@@ -394,12 +396,12 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
       const curRemaining = Math.max(0, curDuration * 1000 - Math.max(0, elapsedTime - curStart));
 
       if (curRemaining <= 0) {
-        alert('本部分时间已到，将自动进入下一部分。');
+        void modal.alert({ message: '本部分时间已到，将自动进入下一部分。' });
         return false;
       }
 
       if (!isSectionCompleted(current)) {
-        alert('请在规定时间内完成本部分所有题目后再跳转。');
+        void modal.alert({ message: '请在规定时间内完成本部分所有题目后再跳转。' });
         return false;
       }
 
@@ -603,11 +605,17 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   };
 
   // Handle submit
-  const submitExam = (skipConfirm: boolean) => {
+  const submitExam = async (skipConfirm: boolean) => {
     if (isSubmitted) return;
 
     if (!skipConfirm) {
-      if (!confirm(`您已完成 ${answeredCount}/${totalQuestions} 道题，确认提交？`)) return;
+      const ok = await modal.confirm({
+        title: '确认提交',
+        message: `您已完成 ${answeredCount}/${totalQuestions} 道题，确认提交？`,
+        type: 'danger',
+        confirmText: '提交'
+      });
+      if (!ok) return;
     }
 
     const { earnedScore, totalScore } = calculateScore();
@@ -634,7 +642,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     setViewMode('result');
   };
 
-  const handleSubmit = () => submitExam(false);
+  const handleSubmit = () => void submitExam(false);
 
   // Auto submit when duration is exceeded
   useEffect(() => {
@@ -644,7 +652,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
 
     if (elapsedTime >= durationSec * 1000 && !autoSubmitTriggeredRef.current) {
       autoSubmitTriggeredRef.current = true;
-      submitExam(true);
+      void submitExam(true);
     }
   }, [elapsedTime, examTakerSettings.durationSec, isSubmitted, viewMode]);
 
@@ -1646,8 +1654,8 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                     </span>
                   )}
                   {isSubmitted && subQ.explanation && (
-                    <div className="mt-1 ml-6 text-xs text-indigo-500 italic">
-                      <span className="font-bold">解析: </span>{subQ.explanation}
+                    <div className="mt-2 ml-6 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-xs text-indigo-900 dark:text-indigo-200">
+                      <span className="font-bold text-[10px]">解析：</span> {subQ.explanation}
                     </div>
                   )}
                 </div>
@@ -1656,9 +1664,9 @@ const RenderSection: React.FC<RenderSectionProps> = ({
           </div>
         )}
         {isSubmitted && question.explanation && (
-          <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-900/10 border-l-4 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200 rounded-r-lg">
-            <span className="font-bold text-xs block mb-1">【试题解析】</span>
-            <div className="leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
+          <div className="mt-4 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+            <span className="font-bold text-xs">解析：</span>
+            <div className="mt-1 leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
           </div>
         )}
       </div>
@@ -1807,18 +1815,23 @@ const RenderSection: React.FC<RenderSectionProps> = ({
           </div>
         </div>
         {isSubmitted && question.explanation && (
-          <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-900/10 border-l-4 border-emerald-400 text-sm text-emerald-900 dark:text-emerald-200 rounded-r-lg">
-            <span className="font-bold text-xs block mb-1">【试题解析】</span>
-            <div className="leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
+          <div className="mt-4 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+            <span className="font-bold text-xs">解析：</span>
+            <div className="mt-1 leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
           </div>
         )}
         {isSubmitted && subQs.some(sq => !!sq.explanation) && (
-          <div className="mt-2 space-y-1 ml-4">
-             {subQs.map((sq, idx) => sq.explanation ? (
-               <div key={sq.id} className="text-xs text-slate-500 italic">
-                 <span className="font-bold text-emerald-600 dark:text-emerald-400">({startNum + idx}) 解析: </span>{sq.explanation}
-               </div>
-             ) : null)}
+          <div className="mt-2 space-y-2 ml-4">
+            {subQs.map((sq, idx) =>
+              sq.explanation ? (
+                <div
+                  key={sq.id}
+                  className="p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-xs text-indigo-900 dark:text-indigo-200"
+                >
+                  <span className="font-bold text-[10px]">({startNum + idx}) 解析：</span> {sq.explanation}
+                </div>
+              ) : null
+            )}
           </div>
         )}
       </div>
@@ -1987,7 +2000,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                       className={`font-bold shrink-0 ${serifFont} ${
                         isSubmitted && isThisCorrect
                           ? 'text-emerald-600 dark:text-emerald-400'
-                          : isSubmitted && isSelected && !isThisCorrect
+                          : isSubmitted && (isSelected || !userAnswer) && !isThisCorrect
                             ? 'text-red-600 dark:text-red-400'
                             : isSelected
                               ? 'text-indigo-600 dark:text-amber-300'
@@ -2000,7 +2013,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                       className={`${optionClass} ${serifFont} ${
                         isSubmitted && isThisCorrect
                           ? 'text-emerald-700 dark:text-emerald-300 font-bold'
-                          : isSubmitted && isSelected && !isThisCorrect
+                          : isSubmitted && (isSelected || !userAnswer) && !isThisCorrect
                             ? 'text-red-700 dark:text-red-300'
                             : isSelected
                               ? 'text-indigo-700 dark:text-amber-200 font-medium'

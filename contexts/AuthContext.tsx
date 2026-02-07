@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 import { getUsers } from '../utils/storage';
+import { useModal } from './ModalContext';
 
 interface AuthContextType {
   user: User | null;
@@ -14,6 +15,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // [FIX] 使用 React.FC 并明确定义 children 属性，解决 TSX 中使用该组件时提示 children 缺失的编译错误
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const modal = useModal();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -40,7 +42,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (foundUser) {
       if (foundUser.isBlocked) {
-        alert("账号已被锁定，请联系管理员。");
+        await modal.alert({ message: '账号已被锁定，请联系管理员。' });
         return false;
       }
 
