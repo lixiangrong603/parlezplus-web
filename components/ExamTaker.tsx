@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
-import { ExamPaper, Question, ExamSection, ExamItem, User, ExamSession, MediaResource, RecorderState, ExamTakerSettings, ExamTakerResourcePlaybackSettings } from '../types';
-import { saveExamSession, getExamSessionById, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper } from '../utils/storage';
+import { ExamPaper, Question, ExamSection, ExamItem, User, ExamSession, MediaResource, RecorderState, ExamTakerSettings, ExamTakerResourcePlaybackSettings, SyllabusCourse } from '../types';
+import { saveExamSession, getExamSessionById, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper, getSyllabusCourses } from '../utils/storage';
 import { getOptionGridColumns } from '../utils/optionLayout';
 import MediaPlayer from './MediaPlayer';
 import { ThemeContext } from '../App';
@@ -51,6 +51,9 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [markedQuestionIds, setMarkedQuestionIds] = useState<Set<string>>(new Set());
+  
+  // Load syllabuses for knowledge points
+  const syllabuses = useMemo(() => getSyllabusCourses(), []);
 
   // Auto-close sidebar on mobile
   useEffect(() => {
@@ -1066,6 +1069,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
                 setCurrentResourceIndex={setCurrentResourceIndex}
                 markedQuestionIds={markedQuestionIds}
                 toggleQuestionMark={toggleQuestionMark}
+                syllabuses={syllabuses}
               />
             )}
           </div>
@@ -1349,6 +1353,7 @@ interface RenderSectionProps {
   setCurrentResourceIndex: React.Dispatch<React.SetStateAction<number>>;
   markedQuestionIds: Set<string>;
   toggleQuestionMark: (questionId: string) => void;
+  syllabuses: SyllabusCourse[];
 }
 
 const RenderSection: React.FC<RenderSectionProps> = ({
@@ -1374,7 +1379,8 @@ const RenderSection: React.FC<RenderSectionProps> = ({
   currentResourceIndex,
   setCurrentResourceIndex,
   markedQuestionIds,
-  toggleQuestionMark
+  toggleQuestionMark,
+  syllabuses
 }) => {
   const questionClass = textSizeLevel === 0 ? 'text-base' : textSizeLevel === 1 ? 'text-lg' : 'text-xl';
   const optionClass = textSizeLevel === 0 ? 'text-sm' : textSizeLevel === 1 ? 'text-base' : 'text-lg';
@@ -1552,6 +1558,71 @@ const RenderSection: React.FC<RenderSectionProps> = ({
     };
   };
 
+  // Get knowledge point names by IDs
+  const getKnowledgePointNames = (pointIds?: string[]): string[] => {
+    if (!pointIds || pointIds.length === 0) return [];
+    
+    const names: string[] = [];
+    syllabuses.forEach(syllabus => {
+      syllabus.units.forEach(unit => {
+        unit.knowledgePoints.forEach(kp => {
+          if (pointIds.includes(kp.id)) {
+            names.push(kp.name);
+          }
+        });
+      });
+    });
+    return names;
+  };
+
+  const renderQuestionTags = (q: Question) => {
+    // Only show tags when viewing results (submitted)
+    if (!isSubmitted) return null;
+
+    // Get Resource Tags
+    const resourceId = questionResourceMap[q.id];
+    const resource = resourceId ? resourcesMap[resourceId] : undefined;
+    
+    // Combine all tags
+    const questionLevel = q.level || resource?.level;
+    const grammarTags = resource?.grammarTags || [];
+    const vocabTags = resource?.vocabTags || [];
+    // If q.tags exists use it, otherwise empty
+    const questionTags = q.tags || []; 
+
+    // Get Knowledge Points from IDs
+    const knowledgePointNames = getKnowledgePointNames(q.knowledgePointIds);
+    // Combine with single knowledgePointName if exists
+    if (q.knowledgePointName && !knowledgePointNames.includes(q.knowledgePointName)) {
+      knowledgePointNames.push(q.knowledgePointName);
+    }
+    
+    // Combine unique other tags
+    const otherTags = Array.from(new Set([...grammarTags, ...vocabTags, ...questionTags]));
+
+    if (!questionLevel && knowledgePointNames.length === 0 && otherTags.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        {questionLevel && (
+          <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            {questionLevel}
+          </span>
+        )}
+        {knowledgePointNames.map((kpName, idx) => (
+          <span key={`kp-${idx}`} className="px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
+            {kpName}
+          </span>
+        ))}
+        {otherTags.map((tag, idx) => (
+          <span key={`tag-${idx}`} className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+            {tag}
+          </span>
+        ))}
+      </div>
+    );
+  };
+  
   // Filter items based on current resource
   const filteredItems = section.items.filter((item, itemIdx) => {
     // Consigne需要根据它下面的第一个非consigne题目来判断是否显示
@@ -1610,9 +1681,24 @@ const RenderSection: React.FC<RenderSectionProps> = ({
       return renderReadingComprehension(question, item);
     }
 
-    // Handle Simple Questions (Multiple Choice, Fill-in-the-Blank)
     const qNum = ++questionNumber;
-    return renderSimpleQuestion(question, qNum, item.points);
+    
+    // Only show tags if it's a simple question (not sub-question of cloze/reading),
+    // OR if we decide to show them for simple questions. 
+    // Here we are inside renderQuestion, which handles simple questions directly or delegates.
+    // For simple questions, we should render tags.
+    const isSimpleQuestion = !question.subQuestions || question.subQuestions.length === 0;
+    
+    // We already handled complex types above, so if we are here, it SHOULD be simple.
+    // But verify to be safe and avoid TS errors.
+    const tagsElement = isSimpleQuestion ? renderQuestionTags(question) : null;
+
+    return (
+      <div key={question.id}>
+        {tagsElement}
+        {renderSimpleQuestion(question, qNum, item.points)}
+      </div>
+    );
   };
 
   const renderClozeTest = (question: Question) => {
@@ -1629,6 +1715,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
         }}
         className="mb-4"
       >
+        {renderQuestionTags(question)}
         <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
           <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
             {renderClozePassage(question, startNum)}
@@ -1807,6 +1894,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
         }}
         className="mb-4"
       >
+        {renderQuestionTags(question)}
         <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">
           <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
             {parts.map((part, idx) => 
@@ -1842,6 +1930,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
     const isMultimediaLayout = !!currentResourceId;
     return (
       <div className="mb-4">
+        {renderQuestionTags(question)}
         <div className={isMultimediaLayout ? 'space-y-6' : 'grid grid-cols-1 lg:grid-cols-2 gap-6'}>
           {/* Left: Reading Passage (or Top in multimedia) */}
           <div className={isMultimediaLayout ? 'w-full' : 'lg:border-r border-slate-200 dark:border-slate-700 lg:pr-6 border-b lg:border-b-0 pb-6 lg:pb-0'}>
