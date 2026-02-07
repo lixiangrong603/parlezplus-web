@@ -38,27 +38,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     if (user) {
         setAllClassrooms(getClassrooms());
         setSubmissions(getSubmissions());
-        loadAssignedExams();
     }
   }, [user]);
 
-  const loadAssignedExams = () => {
-    if (!user?.classId) return;
-    const allExams = getExamPapers();
-    const assigned = allExams.filter(exam => 
-      exam.assignedClassIds && exam.assignedClassIds.includes(user.classId!)
-    );
-    setAssignedExams(assigned);
-  };
-
+  // [FIX] 监控 activeClass 变化，动态加载分配给该班级的考试
   useEffect(() => {
-    if (user?.classId && !activeClass) {
-      const assignedClass = getClassroomById(user.classId);
-      if (assignedClass) {
-        setActiveClass(assignedClass);
-      }
+    if (activeClass) {
+        const allExams = getExamPapers();
+        const assigned = allExams.filter(exam => 
+          exam.assignedClassIds && exam.assignedClassIds.includes(activeClass.id)
+        );
+        setAssignedExams(assigned);
+    } else if (user?.classId) {
+        // 初始加载：如果没有 activeClass 但用户有 classId，先设置它
+        const assignedClass = getClassroomById(user.classId);
+        if (assignedClass) {
+            setActiveClass(assignedClass);
+        }
     }
-  }, [user, activeClass]);
+  }, [user?.classId, activeClass?.id]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -275,7 +273,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                           {deadline && (
                             <div className="absolute top-4 right-4">
                               <div className={`backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 ${isOverdue ? 'bg-red-600/80' : 'bg-black/30'}`}>
-                                <Clock size={12} /> {new Date(deadline).toLocaleDateString()}
+                                <Clock size={12} /> {new Date(deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                               </div>
                             </div>
                           )}
@@ -403,7 +401,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                               <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">截止时间</span>
                               <span className={`text-[10px] font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
                                  <Clock size={10} />
-                                 {resource.deadline ? new Date(resource.deadline).toLocaleDateString() : '无限制'}
+                                 {resource.deadline ? new Date(resource.deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '无限制'}
                               </span>
                            </div>
                            {status === 'graded' && submission?.aiScore ? (

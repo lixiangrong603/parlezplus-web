@@ -35,7 +35,9 @@ function AppContent() {
   // Reload resources whenever user role is resolved or we return to dashboard
   useEffect(() => {
     if (!isLoading && user) {
-      setResources(getResources(user.id));
+      // 教师只加载自己的资源，学生加载全部（以便在子组件中根据班级过滤）
+      const fetchId = user.role === 'teacher' ? user.id : undefined;
+      setResources(getResources(fetchId));
     }
   }, [isLoading, user, selectedResource]);
 

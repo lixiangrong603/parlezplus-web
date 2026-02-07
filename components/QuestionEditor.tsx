@@ -515,17 +515,17 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
                 )}
 
                 {/* Explanation */}
-                {!isComplexContainer && (
-                    <div className="pt-2 border-t border-slate-50 dark:border-slate-800">
-                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">答案解析</label>
-                        <AutoResizeTextarea 
-                            value={question.explanation || ''}
-                            onChange={e => updateField('explanation', e.target.value)}
-                            className="w-full bg-indigo-50/30 dark:bg-indigo-900/10 border border-transparent focus:border-indigo-200 dark:focus:border-indigo-800 rounded-xl p-3 text-xs text-indigo-900 dark:text-indigo-200 outline-none transition-colors"
-                            placeholder="输入解析，帮助学生理解..."
-                        />
-                    </div>
-                )}
+                <div className="pt-2 border-t border-slate-50 dark:border-slate-800">
+                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+                        {isComplexContainer ? '整体解析' : '答案解析'}
+                    </label>
+                    <AutoResizeTextarea 
+                        value={question.explanation || ''}
+                        onChange={e => updateField('explanation', e.target.value)}
+                        className="w-full bg-indigo-50/30 dark:bg-indigo-900/10 border border-transparent focus:border-indigo-200 dark:focus:border-indigo-800 rounded-xl p-3 text-xs text-indigo-900 dark:text-indigo-200 outline-none transition-colors"
+                        placeholder={isComplexContainer ? "输入整体解析，帮助学生理解这篇文章..." : "输入解析，帮助学生理解..."}
+                    />
+                </div>
             </div>
         </div>
     );

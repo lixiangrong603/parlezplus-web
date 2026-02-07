@@ -180,31 +180,38 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
 
   return (
     <div className="flex h-full overflow-hidden bg-white dark:bg-slate-900">
-      <div className="w-64 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 flex flex-col border-r border-slate-200 dark:border-slate-800 shrink-0 transition-colors">
-        <div className="flex-1 overflow-y-auto p-4 space-y-1 no-scrollbar">
-          <div className="flex justify-between items-center px-2 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">资源频道</span>
-            <button onClick={() => setShowAddChannel(true)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-400 transition-colors">
-              <Plus size={14} />
+      <div className="w-64 bg-slate-50 dark:bg-slate-950 flex flex-col border-r border-slate-200 dark:border-slate-800 shrink-0 transition-colors">
+        <div className="h-16 px-4 border-b border-slate-200 dark:border-slate-800 shrink-0 flex items-center justify-between">
+            <h2 className="text-sm font-black text-slate-800 dark:text-slate-100">资源频道</h2>
+            <button 
+                onClick={() => setShowAddChannel(true)} 
+                className="p-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 transition-all shadow-sm"
+            >
+              <Plus size={18} />
             </button>
-          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          <div className="space-y-1 p-2">
           {channels.map(c => (
-            <div key={c.id} className="group/item relative">
-              <button 
+            <div key={c.id} 
                 onClick={() => setActiveChannelId(c.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeChannelId === c.id ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'}`}
-              >
-                <Folder size={16} />
-                <span className="truncate pr-6">{c.name}</span>
-              </button>
-              <button 
-                onClick={(e) => handleDeleteChannel(c.id, e)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-opacity"
-              >
-                <Trash2 size={12} />
-              </button>
+                className={`group p-3 rounded-xl cursor-pointer transition-all ${activeChannelId === c.id ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-white dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300'}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                 <div className="flex items-center gap-3 min-w-0">
+                    <Folder size={16} className={activeChannelId === c.id ? "text-indigo-200" : "text-slate-400"} />
+                    <span className="text-sm font-bold truncate">{c.name}</span>
+                 </div>
+                 <button 
+                    onClick={(e) => handleDeleteChannel(c.id, e)}
+                    className={`p-1.5 rounded-lg transition opacity-0 group-hover:opacity-100 ${activeChannelId === c.id ? 'hover:bg-red-500 text-white' : 'hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-500 dark:text-slate-400 hover:text-red-500'}`}
+                 >
+                    <Trash2 size={14} />
+                 </button>
+              </div>
             </div>
           ))}
+          </div>
         </div>
       </div>
 

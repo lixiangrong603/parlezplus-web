@@ -19,6 +19,8 @@ import { ThemeContext } from '../App';
 import SubmissionManager from './SubmissionManager';
 import QuestionBankDashboard from './QuestionBankDashboard';
 import ExamCenterDashboard from './ExamCenterDashboard';
+import { ClassSidebar } from './ClassSidebar';
+import { StudentRoster } from './StudentRoster';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -218,8 +220,16 @@ const ClassManager = ({
     setShowAddClass(false);
   };
 
-  const handleDeleteClass = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleEditClass = (id: string, newName: string) => {
+    const cls = classrooms.find(c => c.id === id);
+    if (cls) {
+      cls.name = newName;
+      saveClassroom(cls);
+      setClassrooms(getClassrooms(teacherId));
+    }
+  };
+
+  const handleDeleteClass = (id: string) => {
     setConfirmState({ isOpen: true, classId: id });
   };
 
@@ -232,66 +242,56 @@ const ClassManager = ({
     setConfirmState(null);
   };
 
-  if (!selectedClassId) {
-    return (
-      <div className="h-full overflow-y-auto p-8 bg-slate-50/50 dark:bg-slate-950/50 no-scrollbar">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100">我的班级</h2>
-            <button onClick={() => setShowAddClass(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-indigo-700 transition">
-              <Plus size={18} /> 新建班级
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {classrooms.map(cls => (
-              <div key={cls.id} onClick={() => onSelectClass(cls.id)} className="group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all cursor-pointer relative">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                    <Users size={24} />
-                  </div>
-                  <button onClick={(e) => handleDeleteClass(cls.id, e)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">{cls.name}</h3>
-                <div className="flex items-center gap-4 mt-4">
-                  <div className="text-center">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">学生</p>
-                    <p className="text-lg font-black text-slate-700 dark:text-slate-300">{cls.students.length}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+  return (
+    <div className="h-full flex overflow-hidden bg-slate-50 dark:bg-slate-950">
+      {/* Left Sidebar */}
+      <ClassSidebar
+        classrooms={classrooms}
+        selectedClassId={selectedClassId}
+        onSelectClass={onSelectClass}
+        onCreateClass={() => setShowAddClass(true)}
+        onEditClass={handleEditClass}
+        onDeleteClass={handleDeleteClass}
+      />
+
+      {/* Right Content Area */}
+      {selectedClassId ? (
+        <ClassDetailView 
+          classId={selectedClassId} 
+          teacherId={teacherId}
+          onBack={() => onSelectClass(null)} 
+          onOpenGradingTask={onOpenGradingTask} 
+          onRefreshClassrooms={() => setClassrooms(getClassrooms(teacherId))}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-slate-400">
+          <div className="text-center">
+            <Users size={48} className="mx-auto mb-4 opacity-20" />
+            <p className="text-lg font-bold">请选择一个班级</p>
           </div>
         </div>
-        {showAddClass && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl w-96 animate-fade-in-up border border-transparent dark:border-slate-800">
-              <h3 className="text-lg font-bold mb-4 dark:text-slate-100">新建班级</h3>
-              <input autoFocus className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 mb-6 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors" placeholder="例如：2024 春季口语提高班" value={newClassName} onChange={e => setNewClassName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddClass()} />
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowAddClass(false)} className="px-4 py-2 text-slate-500 dark:text-slate-400 text-sm font-bold">取消</button>
-                <button onClick={handleAddClass} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md">立即创建</button>
-              </div>
+      )}
+
+      {showAddClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl w-96 animate-fade-in-up border border-transparent dark:border-slate-800">
+            <h3 className="text-lg font-bold mb-4 dark:text-slate-100">新建班级</h3>
+            <input autoFocus className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 mb-6 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors" placeholder="例如：2024 春季口语提高班" value={newClassName} onChange={e => setNewClassName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddClass()} />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowAddClass(false)} className="px-4 py-2 text-slate-500 dark:text-slate-400 text-sm font-bold">取消</button>
+              <button onClick={handleAddClass} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md">立即创建</button>
             </div>
           </div>
-        )}
-        <CustomConfirmModal 
-          isOpen={!!confirmState} 
-          onClose={() => setConfirmState(null)} 
-          onConfirm={executeDeleteClass}
-          title="删除班级"
-          message="确定要删除这个班级吗？所有学生进度和作业关联将被清空，此操作不可恢复。"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <ClassDetailView 
-      classId={selectedClassId} 
-      teacherId={teacherId}
-      onBack={() => onSelectClass(null)} 
-      onOpenGradingTask={onOpenGradingTask} 
-    />
+        </div>
+      )}
+      <CustomConfirmModal 
+        isOpen={!!confirmState} 
+        onClose={() => setConfirmState(null)} 
+        onConfirm={executeDeleteClass}
+        title="删除班级"
+        message="确定要删除这个班级吗？所有学生进度和作业关联将被清空，此操作不可恢复。"
+      />
+    </div>
   );
 };
 
@@ -299,12 +299,14 @@ const ClassDetailView = ({
   classId, 
   teacherId,
   onBack, 
-  onOpenGradingTask
+  onOpenGradingTask,
+  onRefreshClassrooms
 }: { 
   classId: string, 
   teacherId: string,
   onBack: () => void,
-  onOpenGradingTask: (taskId: string) => void 
+  onOpenGradingTask: (taskId: string) => void,
+  onRefreshClassrooms?: () => void 
 }) => {
   const [classroom, setClassroom] = useState<Classroom | null>(null);
   const [assignedResources, setAssignedResources] = useState<MediaResource[]>([]);
@@ -312,10 +314,11 @@ const ClassDetailView = ({
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
-  const [isRosterCollapsed, setIsRosterCollapsed] = useState(true);
   const [newStudentData, setNewStudentData] = useState({ name: '', username: '' });
   const [editingDeadlineResource, setEditingDeadlineResource] = useState<MediaResource | null>(null);
+  const [editingDeadlineExam, setEditingDeadlineExam] = useState<ExamPaper | null>(null);
   const [newDeadline, setNewDeadline] = useState('');
+  const [activeTab, setActiveTab] = useState<'roster' | 'resources' | 'exams'>('exams');
   
   // 综合确认框状态
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -473,218 +476,271 @@ const ClassDetailView = ({
       saveResource(updated);
       loadData();
       setEditingDeadlineResource(null);
+    } else if (editingDeadlineExam) {
+      const nextDeadlines = { ...(editingDeadlineExam.assignedClassDeadlines || {}) };
+      if (newDeadline) {
+        nextDeadlines[classId] = new Date(newDeadline).getTime();
+      } else {
+        delete nextDeadlines[classId];
+      }
+      
+      const updated = {
+        ...editingDeadlineExam,
+        assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
+      };
+      
+      updateExamPaper(updated);
+      loadData();
+      setEditingDeadlineExam(null);
     }
   };
 
   if (!classroom) return null;
 
   return (
-    <div className="h-full overflow-y-auto p-8 bg-slate-50/50 dark:bg-slate-950/50 no-scrollbar pb-20">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition shadow-sm border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400">
-            <ChevronLeft size={20} />
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
+      {/* Header */}
+      <div className="shrink-0 h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex items-center justify-between">
+        <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">{classroom.name}</h2>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowAddTask(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-md"
+          >
+            <BookmarkPlus size={16} /> 分发新任务
           </button>
-          <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100">{classroom.name}</h2>
+        </div>
+      </div>
+
+      {/* Content Area with Tabs */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Tabs */}
+        <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6">
+          <div className="flex gap-6">
+            <button
+              onClick={() => setActiveTab('exams')}
+              className={`py-3 px-2 text-sm font-bold border-b-2 transition-colors ${
+                activeTab === 'exams'
+                  ? 'text-purple-600 dark:text-purple-400 border-purple-600'
+                  : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <FileCheck size={16} /> 作业任务
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('resources')}
+              className={`py-3 px-2 text-sm font-bold border-b-2 transition-colors ${
+                activeTab === 'resources'
+                  ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600'
+                  : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <History size={16} /> 跟读任务
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('roster')}
+              className={`py-3 px-2 text-sm font-bold border-b-2 transition-colors ${
+                activeTab === 'roster'
+                  ? 'text-blue-600 dark:text-blue-400 border-blue-600'
+                  : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Users size={16} /> 学生名册
+              </span>
+            </button>
+          </div>
         </div>
 
-        {/* Top: Student Roster (Collapsible) */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-all">
-          <div className="p-5 flex justify-between items-center border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
-            <button onClick={() => setIsRosterCollapsed(!isRosterCollapsed)} className="flex items-center gap-3 group">
-              <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 transition-colors">
-                <Users size={20} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  学生名册 ({classroom.students.length})
-                  {isRosterCollapsed ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronUp size={14} className="text-slate-400" />}
-                </h3>
-                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Manage class members</p>
-              </div>
-            </button>
-            <div className="flex gap-2">
-                <button 
-                  onClick={() => setShowBatchImport(true)} 
-                  className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm text-xs font-bold"
-                >
-                  <FileSpreadsheet size={16} /> 批量导入
-                </button>
-                <button onClick={() => setShowAddStudent(true)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-md">
-                  <UserPlus size={18} />
-                </button>
-            </div>
-          </div>
-          {!isRosterCollapsed && (
-            <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 max-h-[400px] overflow-y-auto no-scrollbar animate-fade-in-down">
-              {classroom.students.length === 0 ? (
-                <p className="col-span-full text-center text-xs text-slate-400 py-4 italic">班级暂无学生</p>
+        {/* Content Scrollable Area */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-6">
+          {activeTab === 'roster' ? (
+             <StudentRoster
+                classId={classId}
+                students={classroom.students}
+                onAddStudent={() => setShowAddStudent(true)}
+                onBatchImport={() => setShowBatchImport(true)}
+                onResetPassword={handleResetPassword}
+                onRemoveStudent={handleRemoveStudent}
+                isExpanded={true}
+                onToggleExpanded={() => {}}
+              />
+          ) : activeTab === 'resources' ? (
+            <div>
+              {assignedResources.length === 0 ? (
+                <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+                  <Send size={48} className="mb-2 opacity-10" />
+                  <p className="text-sm font-bold">班级暂无分发任务</p>
+                </div>
               ) : (
-                classroom.students.map(student => (
-                  <div key={student.id} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 relative group transition-all hover:shadow-md">
-                    <img src={student.avatar} className="w-12 h-12 rounded-full border-2 border-white dark:border-slate-700 shadow-sm" />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate w-full text-center">{student.name}</span>
-                    
-                    <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                            onClick={() => handleResetPassword(student.id)} 
-                            className="p-1.5 bg-white dark:bg-slate-700 rounded-lg text-slate-400 hover:text-amber-500 shadow-sm transition-colors border dark:border-slate-600"
-                            title="重置密码"
-                        >
-                            <RotateCcw size={12} />
-                        </button>
-                        <button 
-                            onClick={() => handleRemoveStudent(student.id)} 
-                            className="p-1.5 bg-white dark:bg-slate-700 rounded-lg text-slate-400 hover:text-red-500 shadow-sm transition-colors border dark:border-slate-600"
-                            title="移出班级"
-                        >
-                            <UserMinus size={12} />
-                        </button>
-                    </div>
-                  </div>
-                ))
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800">
+                      <tr>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400">任务内容</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">完成进度</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">截止日期</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {assignedResources.map(res => {
+                        const submitted = MOCK_SUBMISSIONS.filter(s => s.resourceId === res.id).length;
+                        const total = classroom.students.length;
+                        return (
+                          <tr key={res.id} className="group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors">
+                            <td className="px-6 py-4 align-middle">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <img src={res.coverImage} className="w-12 h-12 rounded-xl object-cover shrink-0 shadow-sm" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{res.title}</p>
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded font-bold">{res.level}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center align-middle">
+                              <span className="text-xs font-black text-slate-700 dark:text-slate-300">{submitted}/{total}</span>
+                            </td>
+                            <td className="px-6 py-4 text-center align-middle">
+                              <button 
+                                onClick={() => { 
+                                  setEditingDeadlineResource(res); 
+                                  setNewDeadline(res.deadline ? new Date(res.deadline).toLocaleString('sv').replace(' ', 'T').slice(0, 16) : ''); 
+                                }} 
+                                className="text-xs text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 group/date transition-colors justify-center mx-auto"
+                              >
+                                <Clock size={12} className={res.deadline && Date.now() > res.deadline ? "text-red-500" : ""} />
+                                <span className={res.deadline && Date.now() > res.deadline ? "text-red-500 font-bold" : ""}>
+                                  {res.deadline ? new Date(res.deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '无限制'}
+                                </span>
+                                <Edit2 size={10} className="opacity-0 group-hover/date:opacity-100 transition-opacity" />
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 text-right align-middle">
+                              <div className="flex items-center justify-end gap-1">
+                                <button 
+                                  onClick={() => onOpenGradingTask(res.id)} 
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-[10px] font-black hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition-all shadow-sm"
+                                >
+                                  <FileCheck size={14} /> 批改
+                                </button>
+                                <button 
+                                  onClick={() => handleWithdrawTask(res.id)} 
+                                  className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <MinusCircle size={18} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              {assignedExams.length === 0 ? (
+                <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+                  <FileCheck size={48} className="mb-2 opacity-10" />
+                  <p className="text-sm font-bold">班级暂无分发的试卷</p>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800">
+                      <tr>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400">作业内容</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">完成进度</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">截止日期</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {assignedExams.map(exam => {
+                        const submitted = 0; // Mock data for now
+                        const total = classroom.students.length;
+                        const deadline = exam.assignedClassDeadlines?.[classId];
+                        return (
+                          <tr key={exam.id} className="group hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors">
+                            <td className="px-6 py-4 align-middle">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                                  <FileCheck size={20} className="text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{exam.title}</p>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                                    共 {exam.sections.reduce((acc, s) => acc + s.items.length, 0)} 题 · 
+                                    总分 {exam.totalScore} 分
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center align-middle">
+                              <span className="text-xs font-black text-slate-700 dark:text-slate-300">{submitted}/{total}</span>
+                            </td>
+                            <td className="px-6 py-4 text-center align-middle">
+                              <button 
+                                onClick={() => { 
+                                  setEditingDeadlineExam(exam); 
+                                  setNewDeadline(deadline ? new Date(deadline).toLocaleString('sv').replace(' ', 'T').slice(0, 16) : ''); 
+                                }}
+                                className="text-xs text-slate-500 hover:text-purple-600 dark:hover:text-purple-400 flex items-center gap-1 group/date transition-colors justify-center mx-auto"
+                              >
+                                <Clock size={12} className={deadline && Date.now() > deadline ? "text-red-500" : ""} />
+                                <span className={deadline && Date.now() > deadline ? "text-red-500 font-bold" : ""}>
+                                  {deadline ? new Date(deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '无限制'}
+                                </span>
+                                <Edit2 size={10} className="opacity-0 group-hover/date:opacity-100 transition-opacity" />
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 text-right align-middle">
+                              <button 
+                                onClick={() => handleWithdrawExam(exam.id)} 
+                                className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                title="撤回试卷"
+                              >
+                                <MinusCircle size={18} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}
         </div>
-
-        {/* Middle: Task List */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-center px-2">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <History size={18} className="text-indigo-600" /> 已分发任务
-            </h2>
-            <button onClick={() => setShowAddTask(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition">
-              <BookmarkPlus size={14} /> 分发新任务
-            </button>
-          </div>
-          
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-colors">
-            {assignedResources.length === 0 ? (
-              <div className="py-20 flex flex-col items-center justify-center text-slate-400">
-                <Send size={48} className="mb-2 opacity-10" />
-                <p className="text-sm font-bold">班级暂无分发任务</p>
-              </div>
-            ) : (
-              <table className="w-full text-left border-collapse table-fixed">
-                <thead className="bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800">
-                  <tr>
-                    <th className="w-[40%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">任务内容</th>
-                    <th className="w-[20%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase text-center">完成进度</th>
-                    <th className="w-[20%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase text-center">截止日期</th>
-                    <th className="w-[20%] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {assignedResources.map(res => {
-                    const submitted = MOCK_SUBMISSIONS.filter(s => s.resourceId === res.id).length;
-                    const total = classroom.students.length;
-                    return (
-                      <tr key={res.id} className="group hover:bg-indigo-50/30 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <img src={res.coverImage} className="w-12 h-12 rounded-xl object-cover shrink-0 shadow-sm" />
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{res.title}</p>
-                              <span className="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-500 rounded font-bold">{res.level}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="text-xs font-black text-slate-700 dark:text-slate-300">{submitted}/{total}</span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="flex justify-center">
-                            <button onClick={() => { setEditingDeadlineResource(res); setNewDeadline(res.deadline ? new Date(res.deadline).toISOString().split('T')[0] : ''); }} className="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1 group/date transition-colors">
-                                <Clock size={12} className={res.deadline && Date.now() > res.deadline ? "text-red-500" : ""} />
-                                <span className={res.deadline && Date.now() > res.deadline ? "text-red-500 font-bold" : ""}>
-                                {res.deadline ? new Date(res.deadline).toLocaleDateString() : '无限制'}
-                                </span>
-                                <Edit2 size={10} className="opacity-0 group-hover/date:opacity-100 transition-opacity" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => onOpenGradingTask(res.id)} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black hover:bg-emerald-600 hover:text-white transition-all shadow-sm">
-                              <FileCheck size={14} /> 批改
-                            </button>
-                            <button onClick={() => handleWithdrawTask(res.id)} className="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><MinusCircle size={18} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-
-        {/* Exam Papers Section */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-center px-2">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <FileCheck size={18} className="text-purple-600" /> 已分发试卷
-            </h2>
-          </div>
-          
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-colors">
-            {assignedExams.length === 0 ? (
-              <div className="py-12 flex flex-col items-center justify-center text-slate-400">
-                <FileCheck size={48} className="mb-2 opacity-10" />
-                <p className="text-sm font-bold">班级暂无分发的试卷</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {assignedExams.map(exam => (
-                  <div key={exam.id} className="p-4 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
-                        <FileCheck size={20} className="text-white" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{exam.title}</p>
-                        <p className="text-xs text-slate-500">
-                          共 {exam.sections.reduce((acc, s) => acc + s.items.length, 0)} 题 · 
-                          总分 {exam.sections.reduce((acc, s) => {
-                            const subPoints = s.items.flatMap(item => item.subPoints || []);
-                            return acc + (subPoints.length > 0
-                              ? subPoints.reduce((a, b) => a + b, 0)
-                              : s.items.reduce((a, item) => a + item.points, 0));
-                          }, 0)} 分
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                          <Clock size={12} className={exam.assignedClassDeadlines?.[classId] && Date.now() > exam.assignedClassDeadlines?.[classId] ? 'text-red-500' : ''} />
-                          <span className={exam.assignedClassDeadlines?.[classId] && Date.now() > exam.assignedClassDeadlines?.[classId] ? 'text-red-500 font-bold' : ''}>
-                            {exam.assignedClassDeadlines?.[classId] ? new Date(exam.assignedClassDeadlines[classId]).toLocaleDateString() : '无限制'}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => handleWithdrawExam(exam.id)} 
-                      className="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                      title="撤回试卷"
-                    >
-                      <MinusCircle size={18} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Deadlines Update Modal */}
-      {editingDeadlineResource && (
+      {(editingDeadlineResource || editingDeadlineExam) && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl w-80 animate-fade-in-up border dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4 dark:text-slate-100">修改截止日期</h3>
-            <input type="date" className="w-full p-2.5 border rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 dark:text-white" value={newDeadline} onChange={e => setNewDeadline(e.target.value)} />
+            <h3 className="text-lg font-bold mb-2 dark:text-slate-100">修改截止日期</h3>
+            <p className="text-sm text-slate-500 mb-4 truncate font-medium">
+              {(editingDeadlineResource?.title || editingDeadlineExam?.title)}
+            </p>
+            <input type="datetime-local" className="w-full p-2.5 border rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 dark:text-white" value={newDeadline} onChange={e => setNewDeadline(e.target.value)} />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setEditingDeadlineResource(null)} className="px-4 py-2 text-slate-500 text-sm font-bold">取消</button>
+              <button 
+                onClick={() => {
+                  setEditingDeadlineResource(null);
+                  setEditingDeadlineExam(null);
+                }} 
+                className="px-4 py-2 text-slate-500 text-sm font-bold"
+              >
+                取消
+              </button>
               <button onClick={() => { setNewDeadline(''); }} className="px-4 py-2 text-red-500 text-sm font-bold hover:bg-red-50 rounded-xl">清除日期</button>
               <button onClick={handleUpdateDeadline} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold">保存</button>
             </div>
@@ -933,13 +989,13 @@ const AddTaskModal = ({
         {activeTab === 'resources' && (
           <div className="p-8 bg-indigo-50/30 border-b border-indigo-100 shrink-0">
             <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">任务截止时间 (可选)</label>
-            <input type="date" className="w-full bg-white border border-indigo-100 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:text-white" value={selectedDeadline} onChange={e => setSelectedDeadline(e.target.value)} />
+            <input type="datetime-local" className="w-full bg-white border border-indigo-100 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:text-white" value={selectedDeadline} onChange={e => setSelectedDeadline(e.target.value)} />
           </div>
         )}
         {activeTab === 'exams' && (
           <div className="p-8 bg-purple-50/40 dark:bg-purple-900/10 border-b border-purple-100 dark:border-purple-900/20 shrink-0">
             <label className="block text-[10px] font-black text-purple-500 uppercase tracking-widest mb-2">试卷截止时间 (可选)</label>
-            <input type="date" className="w-full bg-white border border-purple-100 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-800 dark:text-white" value={selectedExamDeadline} onChange={e => setSelectedExamDeadline(e.target.value)} />
+            <input type="datetime-local" className="w-full bg-white border border-purple-100 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-800 dark:text-white" value={selectedExamDeadline} onChange={e => setSelectedExamDeadline(e.target.value)} />
           </div>
         )}
                 <div className="p-6 overflow-y-auto no-scrollbar flex-1 space-y-4">
@@ -969,7 +1025,9 @@ const AddTaskModal = ({
                      </div>
                      <div className="min-w-0">
                        <p className="font-bold text-slate-800 dark:text-slate-100 truncate">{exam.title}</p>
-                       <p className="text-xs text-slate-500">{exam.sections.reduce((acc, s) => acc + s.items.length, 0)} 题</p>
+                       <p className="text-xs text-slate-500">
+                         {exam.sections.reduce((acc, s) => acc + s.items.length, 0)} 题 · {exam.totalScore} 分
+                       </p>
                      </div>
                    </div>
                    <button onClick={() => onAssignExam(exam.id, selectedExamDeadline ? new Date(selectedExamDeadline).getTime() : undefined)} className="px-5 py-2 bg-purple-600 text-white text-xs font-black rounded-xl opacity-0 group-hover:opacity-100 shadow-md">分发</button>

@@ -18,9 +18,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('parlezplus_session');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    const session = localStorage.getItem('parlezplus_session');
+    if (session) {
+      const sessionUser = JSON.parse(session);
+      // [FIX] 每次刷新时，从全局用户列表中获取最新的用户信息（如 classId）
+      const users = getUsers();
+      const latestUser = users.find(u => u.id === sessionUser.id);
+      if (latestUser) {
+        setUser(latestUser);
+        localStorage.setItem('parlezplus_session', JSON.stringify(latestUser));
+      } else {
+        setUser(sessionUser);
+      }
     }
     setIsLoading(false);
   }, []);

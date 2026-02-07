@@ -261,7 +261,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 w-80 shrink-0 transition-colors">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 transition-colors">
+      <div className="h-16 px-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 transition-colors">
         <h3 className="font-black text-slate-700 dark:text-slate-200 flex items-center gap-2">
           <Book size={18} className="text-indigo-600" /> 教学大纲
         </h3>

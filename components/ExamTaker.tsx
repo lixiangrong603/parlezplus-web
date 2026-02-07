@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { ExamPaper, Question, ExamSection, ExamItem, User, ExamSession, MediaResource, RecorderState, ExamTakerSettings, ExamTakerResourcePlaybackSettings } from '../types';
-import { getQuestionsByIds, saveExamSession, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper } from '../utils/storage';
+import { saveExamSession, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper } from '../utils/storage';
 import { getOptionGridColumns } from '../utils/optionLayout';
 import MediaPlayer from './MediaPlayer';
 import { ThemeContext } from '../App';
 import { 
-  ChevronLeft, ChevronRight, List, CheckCircle, XCircle, 
-  Clock, Loader, PlayCircle, AlertCircle, HelpCircle, BookOpen, 
-  Keyboard, Puzzle, FileText, Menu, X, ChevronDown, ChevronUp, ArrowLeft, Star, Sun, Moon
+  ChevronLeft, ChevronRight, CheckCircle, XCircle, 
+  Clock, PlayCircle, AlertCircle, BookOpen, 
+  FileText, Menu, X, ChevronDown, ChevronUp, ArrowLeft, Star, Sun, Moon
 } from 'lucide-react';
 
 interface ExamTakerProps {
@@ -23,6 +23,18 @@ interface LoadingProgress {
 }
 
 type ViewMode = 'start' | 'exam' | 'result';
+
+const formatDuration = (ms: number) => {
+  const seconds = Math.floor(Math.max(0, ms) / 1000);
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) {
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
 const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
   const [viewMode, setViewMode] = useState<ViewMode>('start');
@@ -92,15 +104,6 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
       return () => clearInterval(interval);
     }
   }, [viewMode, isSubmitted, startTime]);
-
-  // Format time as HH:MM:SS
-  const formatTime = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
 
   // Load all resources and questions
   const loadExamResources = async () => {
@@ -831,7 +834,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
               {hasExamDuration && (
                 <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400" title="剩余时间">
                   <Clock size={16} />
-                  {formatTime(remainingTimeMs)}
+                  {formatDuration(remainingTimeMs)}
                 </div>
               )}
             <button
@@ -1208,13 +1211,6 @@ const RenderSection: React.FC<RenderSectionProps> = ({
   // Add serif font for all text
   const serifFont = 'font-serif';
 
-  const formatCountdown = (ms: number) => {
-    const totalSec = Math.max(0, Math.ceil(ms / 1000));
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
   const sectionTotalScore = section.items.reduce((sum, item) => {
     if (item.type === 'consigne') return sum;
     // If has subPoints, use only subPoints (for complex questions); otherwise use item.points
@@ -1430,38 +1426,36 @@ const RenderSection: React.FC<RenderSectionProps> = ({
   };
 
   const renderClozeTest = (question: Question) => {
-    // Register refs for all subquestions
-    question.subQuestions?.forEach(subQ => {
-      if (!questionRefs.current[subQ.id]) {
-        questionRefs.current[subQ.id] = null;
-      }
-    });
+    const startNum = questionNumber + 1;
+    const subQs = question.subQuestions || [];
+    questionNumber += subQs.length;
 
     return (
       <div 
         ref={(el) => {
-          if (question.subQuestions?.[0]) {
-            questionRefs.current[question.subQuestions[0].id] = el;
-          }
+          subQs.forEach(sq => {
+            questionRefs.current[sq.id] = el;
+          });
         }}
         className="mb-4"
       >
         <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
           <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
-            {renderClozePassage(question)}
+            {renderClozePassage(question, startNum)}
           </div>
         </div>
         {isSubmitted && (
           <div className="ml-4 grid grid-cols-1 md:grid-cols-2 gap-2">
-            {question.subQuestions?.map((subQ, idx) => {
+            {subQs.map((subQ, idx) => {
               const isCorrect = checkAnswer(subQ, answers[subQ.id]);
               const correctOpt = subQ.options.find(o => o.id === subQ.correctOptionId);
               const userOpt = subQ.options.find(o => o.id === answers[subQ.id]);
+              const displayNum = startNum + idx;
               
               return (
                 <div key={subQ.id} className="text-sm">
-                  <span className="font-bold mr-2">({idx + 1})</span>
-                  <span className={isCorrect ? 'text-emerald-600' : 'text-red-600'}>
+                  <span className="font-bold mr-2">({displayNum})</span>
+                  <span className={isCorrect ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
                     {correctOpt?.text}
                   </span>
                   {!isCorrect && userOpt && (
@@ -1469,16 +1463,27 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                       (您选: {userOpt.text})
                     </span>
                   )}
+                  {isSubmitted && subQ.explanation && (
+                    <div className="mt-1 ml-6 text-xs text-indigo-500 italic">
+                      <span className="font-bold">解析: </span>{subQ.explanation}
+                    </div>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+        {isSubmitted && question.explanation && (
+          <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-900/10 border-l-4 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200 rounded-r-lg">
+            <span className="font-bold text-xs block mb-1">【试题解析】</span>
+            <div className="leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
           </div>
         )}
       </div>
     );
   };
 
-  const renderClozePassage = (question: Question) => {
+  const renderClozePassage = (question: Question, startNum: number) => {
     const passage = question.readingPassage || '';
     const parts: (string | JSX.Element)[] = [];
     
@@ -1499,10 +1504,11 @@ const RenderSection: React.FC<RenderSectionProps> = ({
       if (subQ) {
         const userAnswer = answers[subQ.id] || '';
         const isCorrect = isSubmitted && checkAnswer(subQ, userAnswer);
+        const displayNum = startNum + gapNum - 1;
 
         parts.push(
           <span key={`gap-${gapNum}`} className="inline-block mx-1">
-            <span className="font-bold text-xs text-purple-400 mr-1">({gapNum})</span>
+            <span className="font-bold text-xs text-purple-400 mr-1">({displayNum})</span>
             <select
               value={userAnswer}
               onChange={(e) => onAnswer(subQ.id, e.target.value)}
@@ -1538,12 +1544,9 @@ const RenderSection: React.FC<RenderSectionProps> = ({
   };
 
   const renderCompoundFill = (question: Question) => {
-    // Register refs for all subquestions
-    question.subQuestions?.forEach(subQ => {
-      if (!questionRefs.current[subQ.id]) {
-        questionRefs.current[subQ.id] = null;
-      }
-    });
+    const startNum = questionNumber + 1;
+    const subQs = question.subQuestions || [];
+    questionNumber += subQs.length;
 
     const passage = question.readingPassage || '';
     const parts: (string | JSX.Element)[] = [];
@@ -1558,16 +1561,17 @@ const RenderSection: React.FC<RenderSectionProps> = ({
       }
 
       const gapNum = parseInt(match[1], 10);
-      const subQ = question.subQuestions?.[gapNum - 1];
+      const subQ = subQs[gapNum - 1];
 
       if (subQ) {
         const userAnswer = answers[subQ.id] || '';
         const isCorrect = isSubmitted && checkAnswer(subQ, userAnswer);
         const correctAns = subQ.options[0]?.text;
+        const displayNum = startNum + gapNum - 1;
 
         parts.push(
           <span key={`gap-${gapNum}`} className="inline-block mx-1">
-            <span className="font-bold text-xs text-emerald-400 mr-1">({gapNum})</span>
+            <span className="font-bold text-xs text-emerald-400 mr-1">({displayNum})</span>
             <input
               type="text"
               value={userAnswer}
@@ -1600,9 +1604,9 @@ const RenderSection: React.FC<RenderSectionProps> = ({
     return (
       <div 
         ref={(el) => {
-          if (question.subQuestions?.[0]) {
-            questionRefs.current[question.subQuestions[0].id] = el;
-          }
+          subQs.forEach(sq => {
+            questionRefs.current[sq.id] = el;
+          });
         }}
         className="mb-4"
       >
@@ -1613,24 +1617,40 @@ const RenderSection: React.FC<RenderSectionProps> = ({
             )}
           </div>
         </div>
+        {isSubmitted && question.explanation && (
+          <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-900/10 border-l-4 border-emerald-400 text-sm text-emerald-900 dark:text-emerald-200 rounded-r-lg">
+            <span className="font-bold text-xs block mb-1">【试题解析】</span>
+            <div className="leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
+          </div>
+        )}
+        {isSubmitted && subQs.some(sq => !!sq.explanation) && (
+          <div className="mt-2 space-y-1 ml-4">
+             {subQs.map((sq, idx) => sq.explanation ? (
+               <div key={sq.id} className="text-xs text-slate-500 italic">
+                 <span className="font-bold text-emerald-600 dark:text-emerald-400">({startNum + idx}) 解析: </span>{sq.explanation}
+               </div>
+             ) : null)}
+          </div>
+        )}
       </div>
     );
   };
 
   const renderReadingComprehension = (question: Question, item: ExamItem) => {
+    const isMultimediaLayout = !!currentResourceId;
     return (
       <div className="mb-4">
-        <div className="grid grid-cols-2 gap-6">
-          {/* Left: Reading Passage */}
-          <div className="border-r border-slate-200 dark:border-slate-700 pr-6">
-            <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">
+        <div className={isMultimediaLayout ? 'space-y-6' : 'grid grid-cols-2 gap-6'}>
+          {/* Left: Reading Passage (or Top in multimedia) */}
+          <div className={isMultimediaLayout ? 'w-full' : 'border-r border-slate-200 dark:border-slate-700 pr-6'}>
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
               <div
-                className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200 prose max-w-none`}
+                className={`${passageClass} ${serifFont} leading-relaxed text-slate-700 dark:text-slate-200 prose max-w-none`}
                 dangerouslySetInnerHTML={{ __html: question.readingPassage || '' }}
               />
             </div>
           </div>
-          {/* Right: Sub Questions */}
+          {/* Right: Sub Questions (or Bottom in multimedia) */}
           <div className="space-y-4">
             {question.subQuestions?.map((subQ, idx) => {
               const qNum = ++questionNumber;
@@ -1639,6 +1659,12 @@ const RenderSection: React.FC<RenderSectionProps> = ({
             })}
           </div>
         </div>
+        {isSubmitted && question.explanation && (
+          <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-900/10 border-l-4 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200 rounded-r-lg">
+            <span className="font-bold text-xs block mb-1">【试题解析】</span>
+            <div className="leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1842,7 +1868,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
             ) : (
               typeof sectionDurationSec === 'number' && sectionDurationSec > 0 && (
                 <div className="px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/10 text-amber-800 dark:text-amber-200 text-sm font-black">
-                  剩余 {formatCountdown(sectionRemainingMs || 0)}
+                  剩余 {formatDuration(sectionRemainingMs || 0)}
                 </div>
               )
             )}
@@ -2017,6 +2043,34 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                       }
                 }
               />
+
+              {isSubmitted && resourcesMap[currentResourceId].transcript && (
+                <div className="mt-8 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
+                  <h4 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 mb-4 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <FileText size={16} className="text-indigo-600" />
+                    录音/视频原文 (Transcription)
+                  </h4>
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {resourcesMap[currentResourceId].transcript.map((seg, idx) => (
+                      <div key={idx} className="group flex gap-3 items-start">
+                        <span className="text-[10px] font-mono text-slate-400 mt-1 shrink-0 bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                          {formatDuration(seg.startTime * 1000)}
+                        </span>
+                        <div className="flex-1 space-y-1">
+                          <div className={`text-sm leading-relaxed ${serifFont} text-slate-700 dark:text-slate-200 font-medium`}>
+                            {seg.text}
+                          </div>
+                          {seg.translation && (
+                            <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 group-hover:line-clamp-none transition-all">
+                              {seg.translation}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             {/* Right: Questions */}
             <div className="space-y-4 overflow-y-auto max-h-[600px]">
