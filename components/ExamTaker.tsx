@@ -46,9 +46,22 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentResourceIndex, setCurrentResourceIndex] = useState(0); // For navigating between media resources
   const [textSizeLevel, setTextSizeLevel] = useState<0 | 1 | 2>(0);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [markedQuestionIds, setMarkedQuestionIds] = useState<Set<string>>(new Set());
+
+  // Auto-close sidebar on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+    // Only set on mount if strictly needed, but better to let user control it after mount.
+    // just init state is enough.
+  }, []);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [startTime, setStartTime] = useState<number>(0);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
@@ -545,36 +558,36 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
       : 0;
 
     return (
-      <div className="h-full w-full bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center">
-        <div className="max-w-2xl w-full mx-auto p-8">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-8 border border-slate-200 dark:border-slate-700">
+      <div className="h-full w-full bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center p-4">
+        <div className="max-w-2xl w-full mx-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] md:rounded-3xl shadow-2xl p-6 md:p-8 border border-slate-200 dark:border-slate-700">
             {/* Header */}
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <FileText size={40} className="text-indigo-600 dark:text-indigo-400" />
+            <div className="text-center mb-6 md:mb-8">
+              <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 md:w-10 md:h-10 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <h1 className="text-3xl font-black text-slate-800 dark:text-white mb-2">{exam.title}</h1>
-              <p className="text-slate-500 dark:text-slate-400">在线测试</p>
+              <h1 className="text-xl md:text-3xl font-black text-slate-800 dark:text-white mb-1 md:mb-2">{exam.title}</h1>
+              <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">在线测试</p>
             </div>
 
             {/* Exam Info */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 text-center">
-                <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mb-1">{exam.sections.length}</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">部分</div>
+            <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4 md:mb-6">
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 md:p-4 text-center">
+                <div className="text-lg md:text-2xl font-black text-indigo-600 dark:text-indigo-400 mb-0.5 md:mb-1">{exam.sections.length}</div>
+                <div className="text-[10px] md:text-xs text-slate-600 dark:text-slate-400 font-bold uppercase tracking-tighter md:tracking-normal">部分</div>
               </div>
-              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 text-center">
-                <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mb-1">{totalQuestions}</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">题目</div>
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 md:p-4 text-center">
+                <div className="text-lg md:text-2xl font-black text-purple-600 dark:text-purple-400 mb-0.5 md:mb-1">{totalQuestions}</div>
+                <div className="text-[10px] md:text-xs text-slate-600 dark:text-slate-400 font-bold uppercase tracking-tighter md:tracking-normal">题目</div>
               </div>
-              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 text-center">
-                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mb-1">{exam.totalScore}</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">满分</div>
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 md:p-4 text-center">
+                <div className="text-lg md:text-2xl font-black text-emerald-600 dark:text-emerald-400 mb-0.5 md:mb-1">{exam.totalScore}</div>
+                <div className="text-[10px] md:text-xs text-slate-600 dark:text-slate-400 font-bold uppercase tracking-tighter md:tracking-normal">满分</div>
               </div>
             </div>
 
             {/* Instructions */}
-            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-4 mb-6">
+            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-4 mb-6 hidden md:block">
               <h3 className="font-bold text-amber-900 dark:text-amber-200 mb-2 flex items-center gap-2">
                 <AlertCircle size={18} /> 考试说明
               </h3>
@@ -588,23 +601,23 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
 
             {/* Loading Progress */}
             {isLoading ? (
-              <div className="mb-6">
+              <div className="mb-4 md:mb-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                  <span className="text-xs md:text-sm font-medium text-slate-600 dark:text-slate-400">
                     正在加载资源...
                   </span>
-                  <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                  <span className="text-xs md:text-sm font-bold text-indigo-600 dark:text-indigo-400">
                     {loadingProgress.loaded} / {loadingProgress.total}
                   </span>
                 </div>
-                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-2 md:h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
                 {loadingProgress.failed.length > 0 && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                  <p className="text-[10px] md:text-xs text-amber-600 dark:text-amber-400 mt-2 text-center">
                     {loadingProgress.failed.length} 个资源加载失败，但不影响考试
                   </p>
                 )}
@@ -612,7 +625,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
             ) : (
               <button
                 onClick={handleStartExam}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-black text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 md:py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-black text-base md:text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 active:scale-95"
               >
                 <PlayCircle size={24} /> 开始考试
               </button>
@@ -620,7 +633,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
 
             <button
               onClick={onExit}
-              className="w-full mt-3 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-medium transition-all"
+              className="w-full mt-2 md:mt-3 py-2.5 md:py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-sm md:text-base transition-all active:scale-95"
             >
               返回
             </button>
@@ -632,10 +645,18 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
 
   // Render exam page (will be implemented next)
   return (
-    <div className="h-full w-full bg-slate-50 dark:bg-slate-950 flex">
+    <div className="h-full w-full bg-slate-50 dark:bg-slate-950 flex relative overflow-hidden">
+      {/* Mobile Sidebar Backdrop */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-[100] lg:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col shrink-0">
+        <div className="fixed inset-y-0 left-0 z-[110] w-64 lg:static lg:z-auto bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col shrink-0 shadow-2xl lg:shadow-none h-full">
           <div className="p-4 border-b border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between gap-2">
               <button
@@ -737,22 +758,21 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
                               onClick={() => {
                                 if (navClickTimerRef.current) {
                                   window.clearTimeout(navClickTimerRef.current);
+                                  navClickTimerRef.current = null;
+                                  toggleQuestionMark(q.id);
+                                } else {
+                                  navClickTimerRef.current = window.setTimeout(() => {
+                                    navClickTimerRef.current = null;
+                                    const ok = attemptNavigateToSection(secIdx);
+                                    if (ok) {
+                                      window.setTimeout(() => scrollToQuestion(q.id), 50);
+                                    }
+                                  }, 250);
                                 }
-                                navClickTimerRef.current = window.setTimeout(() => {
-                                  const ok = attemptNavigateToSection(secIdx);
-                                  if (ok) {
-                                    window.setTimeout(() => scrollToQuestion(q.id), 50);
-                                  }
-                                }, 200);
                               }}
                               onDoubleClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                if (navClickTimerRef.current) {
-                                  window.clearTimeout(navClickTimerRef.current);
-                                  navClickTimerRef.current = null;
-                                }
-                                toggleQuestionMark(q.id);
                               }}
                               title="双击标记/取消标记"
                               className={`relative aspect-square rounded-md text-xs font-bold transition-all hover:scale-110 ${
@@ -786,23 +806,30 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col">
-        <div className="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="flex-1 flex flex-col min-w-0 h-full relative">
+        <div className="h-14 md:h-16 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-3 md:px-6 flex items-center justify-between gap-2 z-30">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
             {!sidebarOpen && (
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors shrink-0"
                 title="展开导航"
               >
                 <Menu size={18} />
               </button>
             )}
-            <h2 className="text-lg font-black text-slate-800 dark:text-white">{exam.title}</h2>
+            <h2 className="text-base md:text-lg font-black text-slate-800 dark:text-white truncate pr-2">
+              {exam.title}
+              {isSubmitted && (
+                <span className="ml-2 text-emerald-600 dark:text-emerald-400 tabular-nums">
+                  ({calculateScore().earnedScore}/{calculateScore().totalScore})
+                </span>
+              )}
+            </h2>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4 shrink-0">
             {isTeacherView && (
-              <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400">时长</span>
                 <input
                   type="number"
@@ -828,18 +855,18 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
                 </button>
               </div>
             )}
-            <div className="text-sm font-medium text-slate-600 dark:text-slate-400">
+            <div className="hidden md:block text-sm font-medium text-slate-600 dark:text-slate-400">
               已答 <span className="font-bold text-slate-800 dark:text-slate-100">{answeredCount}</span>/{totalQuestions}
             </div>
               {hasExamDuration && (
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400" title="剩余时间">
-                  <Clock size={16} />
+                <div className="flex items-center gap-1 md:gap-2 text-xs md:text-sm font-medium text-slate-600 dark:text-slate-400 shrink-0" title="剩余时间">
+                  <Clock size={14} className="md:w-4 md:h-4" />
                   {formatDuration(remainingTimeMs)}
                 </div>
               )}
             <button
               onClick={toggleTheme}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="hidden md:block p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
               title={isDarkMode ? '切换到亮色模式' : '切换到暗色模式'}
               type="button"
             >
@@ -847,7 +874,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
             </button>
             <button
               onClick={() => setTextSizeLevel((prev) => ((prev + 1) % 3) as 0 | 1 | 2)}
-              className={`p-2 rounded-lg transition-all ${textSizeLevel > 0 ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500'}`}
+              className={`hidden md:block p-2 rounded-lg transition-all ${textSizeLevel > 0 ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500'}`}
               title="调整字号"
             >
               <span
@@ -861,16 +888,16 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
             <button
               onClick={handleSubmit}
               disabled={isSubmitted}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-bold transition-all"
+              className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-bold transition-all shrink-0"
             >
-              {isSubmitted ? '已提交' : '提交答案'}
+              {isSubmitted ? '已提交' : '提交'}
             </button>
           </div>
         </div>
 
         {/* Main content - Current Section */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">
+          <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
             {/* Section Content */}
             {exam.sections[currentSectionIndex] && (
               <RenderSection 
@@ -896,6 +923,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
                 currentResourceIndex={currentResourceIndex}
                 setCurrentResourceIndex={setCurrentResourceIndex}
                 markedQuestionIds={markedQuestionIds}
+                toggleQuestionMark={toggleQuestionMark}
               />
             )}
           </div>
@@ -1178,6 +1206,7 @@ interface RenderSectionProps {
   currentResourceIndex: number;
   setCurrentResourceIndex: React.Dispatch<React.SetStateAction<number>>;
   markedQuestionIds: Set<string>;
+  toggleQuestionMark: (questionId: string) => void;
 }
 
 const RenderSection: React.FC<RenderSectionProps> = ({
@@ -1202,25 +1231,41 @@ const RenderSection: React.FC<RenderSectionProps> = ({
   currentSectionResources,
   currentResourceIndex,
   setCurrentResourceIndex,
-  markedQuestionIds
+  markedQuestionIds,
+  toggleQuestionMark
 }) => {
   const questionClass = textSizeLevel === 0 ? 'text-base' : textSizeLevel === 1 ? 'text-lg' : 'text-xl';
   const optionClass = textSizeLevel === 0 ? 'text-sm' : textSizeLevel === 1 ? 'text-base' : 'text-lg';
   const passageClass = textSizeLevel === 0 ? 'text-base' : textSizeLevel === 1 ? 'text-lg' : 'text-xl';
   
+  const stemClickTimerRef = useRef<Record<string, number>>({});
+
   // Add serif font for all text
   const serifFont = 'font-serif';
 
-  const sectionTotalScore = section.items.reduce((sum, item) => {
-    if (item.type === 'consigne') return sum;
-    // If has subPoints, use only subPoints (for complex questions); otherwise use item.points
-    if (Array.isArray(item.subPoints) && item.subPoints.length > 0) {
-      const subs = item.subPoints.reduce((s, p) => s + (typeof p === 'number' ? p : 0), 0);
-      return sum + subs;
-    }
-    const base = typeof item.points === 'number' ? item.points : 0;
-    return sum + base;
-  }, 0);
+  const sectionScore = useMemo(() => {
+    let earned = 0;
+    let total = 0;
+    section.items.forEach(item => {
+      if (item.type === 'consigne' || !item.questionId) return;
+      const question = allQuestions.find(q => q.id === item.questionId);
+      if (!question) return;
+
+      if (question.subQuestions && question.subQuestions.length > 0) {
+        question.subQuestions.forEach((subQ, idx) => {
+          const pts = item.subPoints?.[idx] || 0;
+          total += pts;
+          if (isSubmitted && checkAnswer(subQ, answers[subQ.id])) earned += pts;
+        });
+      } else {
+        total += item.points || 0;
+        if (isSubmitted && checkAnswer(question, answers[question.id])) earned += item.points || 0;
+      }
+    });
+    return { earned, total };
+  }, [section, allQuestions, answers, isSubmitted, checkAnswer]);
+
+  const sectionTotalScore = sectionScore.total;
 
   const autoPlaybackEnabled = useMemo(() => {
     if (isSubmitted) return false;
@@ -1334,14 +1379,17 @@ const RenderSection: React.FC<RenderSectionProps> = ({
           value={userAnswer || ''}
           onChange={(e) => onAnswer(question.id, e.target.value)}
           disabled={isSubmitted}
-          className={`border-b-2 outline-none px-1 pb-0.5 text-center font-bold bg-transparent min-w-[110px] max-w-[400px] transition-colors ${
+          className={`border-b-2 outline-none px-1 pb-0.5 text-center font-bold bg-transparent min-w-[80px] md:min-w-[110px] max-w-full transition-colors ${
             isSubmitted
               ? isCorrect
                 ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-50/40'
                 : 'border-red-500 text-red-700 dark:text-red-300 bg-red-50/40'
               : 'border-slate-400/70 dark:border-slate-600 focus:border-indigo-500 text-indigo-700 dark:text-indigo-300'
           }`}
-          style={{ width: `${Math.max(110, Math.min(400, (userAnswer || '').length * 12 + 30))}px` }}
+          style={{ 
+            width: `${Math.max(80, Math.min(400, (userAnswer || '').length * 12 + 30))}px`,
+            maxWidth: '100%'
+          }}
           autoComplete="off"
         />
         {isSubmitted && !isCorrect && correctAns && (
@@ -1507,18 +1555,18 @@ const RenderSection: React.FC<RenderSectionProps> = ({
         const displayNum = startNum + gapNum - 1;
 
         parts.push(
-          <span key={`gap-${gapNum}`} className="inline-block mx-1">
-            <span className="font-bold text-xs text-purple-400 mr-1">({displayNum})</span>
+          <span key={`gap-${gapNum}`} className="inline-flex items-center mx-1">
+            <span className="font-bold text-[10px] text-slate-400 mr-1">({displayNum})</span>
             <select
               value={userAnswer}
               onChange={(e) => onAnswer(subQ.id, e.target.value)}
               disabled={isSubmitted}
-              className={`border-b-2 outline-none px-2 py-1 rounded font-bold transition-colors ${
+              className={`border-b-2 outline-none px-2 py-0.5 rounded-t font-bold transition-all ${
                 isSubmitted
                   ? isCorrect
-                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
-                    : 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
-                  : 'border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-800 focus:border-purple-500'
+                    ? 'border-emerald-500 bg-emerald-50/40 text-emerald-700 dark:text-emerald-300'
+                    : 'border-red-500 bg-red-50/40 text-red-700 dark:text-red-300'
+                  : 'border-slate-400/70 dark:border-slate-600 focus:border-indigo-500 bg-white/50 dark:bg-slate-800/50 text-indigo-700 dark:text-indigo-300'
               }`}
             >
               <option value="">--</option>
@@ -1526,6 +1574,11 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                 <option key={opt.id} value={opt.id}>{opt.text}</option>
               ))}
             </select>
+            {isSubmitted && !isCorrect && (
+              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 ml-1 whitespace-nowrap">
+                [{subQ.options.find(o => o.id === subQ.correctOptionId)?.text}]
+              </span>
+            )}
           </span>
         );
       }
@@ -1570,25 +1623,27 @@ const RenderSection: React.FC<RenderSectionProps> = ({
         const displayNum = startNum + gapNum - 1;
 
         parts.push(
-          <span key={`gap-${gapNum}`} className="inline-block mx-1">
-            <span className="font-bold text-xs text-emerald-400 mr-1">({displayNum})</span>
+          <span key={`gap-${gapNum}`} className="inline-flex items-center mx-1">
+            <span className="font-bold text-[10px] text-slate-400 mr-1">({displayNum})</span>
             <input
               type="text"
               value={userAnswer}
               onChange={(e) => onAnswer(subQ.id, e.target.value)}
               disabled={isSubmitted}
-              className={`border-b-2 outline-none px-2 py-1 text-center font-bold bg-transparent min-w-[80px] max-w-[300px] transition-colors ${
+              className={`border-b-2 outline-none px-2 py-0.5 text-center font-bold bg-transparent min-w-[80px] max-w-full md:max-w-[300px] transition-all ${
                 isSubmitted
                   ? isCorrect
-                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50'
-                    : 'border-red-500 text-red-600 dark:text-red-400 bg-red-50/50'
-                  : 'border-emerald-300 dark:border-emerald-700 focus:border-emerald-500 text-indigo-700 dark:text-indigo-300'
+                    ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-50/40'
+                    : 'border-red-500 text-red-700 dark:text-red-300 bg-red-50/40'
+                  : 'border-slate-400/70 dark:border-slate-600 focus:border-indigo-500 text-indigo-700 dark:text-indigo-300'
               }`}
-              style={{ width: `${Math.max(80, Math.min(300, userAnswer.length * 12 + 30))}px` }}
+              style={{ width: `${Math.max(80, Math.min(300, userAnswer.length * 12 + 30))}px`, maxWidth: '100%' }}
               autoComplete="off"
             />
             {isSubmitted && !isCorrect && (
-              <span className="text-xs font-bold text-emerald-500 ml-1">{correctAns}</span>
+              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 ml-1 whitespace-nowrap">
+                [{correctAns}]
+              </span>
             )}
           </span>
         );
@@ -1640,9 +1695,9 @@ const RenderSection: React.FC<RenderSectionProps> = ({
     const isMultimediaLayout = !!currentResourceId;
     return (
       <div className="mb-4">
-        <div className={isMultimediaLayout ? 'space-y-6' : 'grid grid-cols-2 gap-6'}>
+        <div className={isMultimediaLayout ? 'space-y-6' : 'grid grid-cols-1 lg:grid-cols-2 gap-6'}>
           {/* Left: Reading Passage (or Top in multimedia) */}
-          <div className={isMultimediaLayout ? 'w-full' : 'border-r border-slate-200 dark:border-slate-700 pr-6'}>
+          <div className={isMultimediaLayout ? 'w-full' : 'lg:border-r border-slate-200 dark:border-slate-700 lg:pr-6 border-b lg:border-b-0 pb-6 lg:pb-0'}>
             <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
               <div
                 className={`${passageClass} ${serifFont} leading-relaxed text-slate-700 dark:text-slate-200 prose max-w-none`}
@@ -1690,11 +1745,21 @@ const RenderSection: React.FC<RenderSectionProps> = ({
 
     const stemNode = (
       <div
-        className={`flex-1 min-w-0 ${
+        className={`flex-1 min-w-0 cursor-default select-none ${
           isMarked
             ? 'rounded-lg px-2 py-1 bg-red-50/70 dark:bg-red-900/20 ring-1 ring-red-200 dark:ring-red-900/30'
             : ''
         }`}
+        onClick={() => {
+          const now = Date.now();
+          const lastClick = (stemClickTimerRef.current as any)[question.id] || 0;
+          if (now - lastClick < 300) {
+            (stemClickTimerRef.current as any)[question.id] = 0;
+            toggleQuestionMark(question.id);
+          } else {
+            (stemClickTimerRef.current as any)[question.id] = now;
+          }
+        }}
       >
         {stemContent}
       </div>
@@ -1872,8 +1937,14 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                 </div>
               )
             )}
-            <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-black">
-              {sectionTotalScore} 分
+            <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-black tabular-nums">
+              {isSubmitted ? (
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  {sectionScore.earned}/{sectionScore.total}
+                </span>
+              ) : (
+                `${sectionTotalScore} 分`
+              )}
             </div>
           </div>
         </div>
@@ -2027,9 +2098,9 @@ const RenderSection: React.FC<RenderSectionProps> = ({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-6 p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-4 md:p-6">
             {/* Left: Media Player */}
-            <div className="border-r border-slate-200 dark:border-slate-700 pr-6">
+            <div className="lg:border-r border-b lg:border-b-0 border-slate-200 dark:border-slate-700 lg:pr-6 pb-6 lg:pb-0">
               <ExamMediaPlayer
                 resource={resourcesMap[currentResourceId]}
                 playbackSettings={isSubmitted ? undefined : activeResourcePlaybackSettings}

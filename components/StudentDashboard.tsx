@@ -1,16 +1,16 @@
 
 import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
-import { MediaResource, Classroom, Submission, ExamPaper, User } from '../types';
+import { MediaResource, Classroom, Submission, ExamPaper, User, ExamSession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Key, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck, FileText } from 'lucide-react';
-import { getClassroomById, getClassrooms, getSubmissions, getExamPapers } from '../utils/storage';
+import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Key, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck, FileText, LayoutGrid, List } from 'lucide-react';
+import { getClassroomById, getClassrooms, getSubmissions, getExamPapers, getExamSessions } from '../utils/storage';
 import { generateRandomCoverArt } from '../utils/mediaUtils';
 import { ThemeContext } from '../App';
 import ExamTaker from './ExamTaker';
 
 // Icons used in StudentDashboard
 const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
-const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>;
+const CheckCircleIcon = ({ size = 16, className = "" }: { size?: number, className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none" className={className}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>;
 const XIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
 const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></svg>;
 
@@ -28,7 +28,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isClassSwitcherOpen, setIsClassSwitcherOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<'all' | 'incomplete'>('incomplete'); 
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [examSessions, setExamSessions] = useState<ExamSession[]>([]);
   const [assignedExams, setAssignedExams] = useState<ExamPaper[]>([]);
   const [takingExam, setTakingExam] = useState<ExamPaper | null>(null);
   
@@ -38,6 +40,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     if (user) {
         setAllClassrooms(getClassrooms());
         setSubmissions(getSubmissions());
+        setExamSessions(getExamSessions(user.id));
     }
   }, [user]);
 
@@ -119,16 +122,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     <div className="h-[100dvh] w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center relative overflow-hidden transition-colors duration-300">
       
       {/* Universal Header */}
-      <div className="w-full bg-white dark:bg-slate-900 pb-6 pt-10 px-6 shadow-sm border-b border-slate-100 dark:border-slate-800 z-50 flex-shrink-0">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+      <div className="w-full bg-white dark:bg-slate-900 h-14 md:h-16 px-6 shadow-sm border-b border-slate-100 dark:border-slate-800 z-50 flex-shrink-0 flex items-center">
+        <div className="max-w-7xl w-full mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100 dark:shadow-none hidden sm:flex">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100 dark:shadow-none hidden sm:flex">
               <SparklesIcon />
             </div>
             
             <div className="flex flex-col">
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl md:text-2xl font-black text-indigo-900 dark:text-indigo-400 leading-none tracking-tight">ParlezPlus</h1>
+              <div className="flex items-center gap-2 md:gap-3">
+                <h1 className="text-lg md:text-xl font-black text-indigo-900 dark:text-indigo-400 leading-none tracking-tight">ParlezPlus</h1>
                 
                 <div className="relative" ref={classSwitcherRef}>
                   <button 
@@ -153,7 +156,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                           className={`w-full text-left px-4 py-3 text-sm flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors ${activeClass?.id === cls.id ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}
                         >
                           {cls.name}
-                          {activeClass?.id === cls.id && <CheckCircleIcon />}
+                          {activeClass?.id === cls.id && <CheckCircleIcon size={16} />}
                         </button>
                       ))}
                       {allClassrooms.length === 0 && (
@@ -198,24 +201,41 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
       </div>
       
       <div className="w-full flex-1 overflow-y-auto no-scrollbar pb-12">
-        <div className="max-w-7xl mx-auto px-6 pt-6 space-y-8">
+        <div className="max-w-7xl mx-auto px-6 pt-4 md:pt-6 space-y-6 md:space-y-8">
           
-          <div className="flex flex-col md:flex-row md:items-center justify-end gap-4">
-            <div className="flex items-center bg-white dark:bg-slate-900 p-1 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 self-start">
+          <div className="flex items-center justify-between gap-4 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-1">
+               <button 
+                 onClick={() => setViewMode('grid')}
+                 className={`p-1.5 md:p-2 rounded-xl transition-all active:scale-95 ${viewMode === 'grid' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                 title="网格视图"
+               >
+                 <LayoutGrid size={18} className="md:size-[20px]" />
+               </button>
+               <button 
+                 onClick={() => setViewMode('list')}
+                 className={`p-1.5 md:p-2 rounded-xl transition-all active:scale-95 ${viewMode === 'list' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                 title="列表视图"
+               >
+                 <List size={18} className="md:size-[20px]" />
+               </button>
+            </div>
+
+            <div className="flex items-center gap-0.5 md:gap-1 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-xl">
                <button 
                  onClick={() => setFilterTab('incomplete')}
-                 className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filterTab === 'incomplete' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                 className={`px-3 py-1.5 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all active:scale-95 flex items-center gap-1.5 ${filterTab === 'incomplete' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
                >
                  待完成
                  {incompleteCount > 0 && (
-                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${filterTab === 'incomplete' ? 'bg-white text-indigo-600' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
+                   <span className={`text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-bold ${filterTab === 'incomplete' ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
                      {incompleteCount}
                    </span>
                  )}
                </button>
                <button 
                  onClick={() => setFilterTab('all')}
-                 className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${filterTab === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                 className={`px-3 py-1.5 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all active:scale-95 ${filterTab === 'all' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
                >
                  全部任务
                </button>
@@ -233,7 +253,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
           ) : displayedResources.length === 0 ? (
             <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex flex-col items-center">
                <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-full flex items-center justify-center mb-4">
-                 <CheckCircleIcon />
+                 <CheckCircleIcon size={32} />
                </div>
                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">暂无新任务</h3>
                <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">
@@ -249,184 +269,427 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                     <FileText size={20} className="text-indigo-600" />
                     试卷任务
                   </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {assignedExams.map((exam) => (
-                      (() => {
-                        const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
-                        const isOverdue = !!deadline && Date.now() > deadline;
-                        return (
-                      <div
-                        key={exam.id}
-                        className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] hover:shadow-xl border border-slate-100 dark:border-slate-800 group relative flex flex-col"
-                        onClick={() => setTakingExam(exam)}
-                      >
-                        <div className="relative h-48 bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden shrink-0 rounded-t-[2rem]">
-                          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30"></div>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <FileText size={64} className="text-white/20" />
-                          </div>
-                          <div className="absolute top-4 left-4">
-                            <div className="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg">
-                              试卷
+                  
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                      {assignedExams.map((exam) => (
+                        (() => {
+                          const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
+                          const isOverdue = !!deadline && Date.now() > deadline;
+                          const session = examSessions.find(s => s.examPaperId === exam.id && s.studentId === user?.id);
+                          return (
+                        <div
+                          key={exam.id}
+                          className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] active:scale-[0.98] hover:shadow-xl border border-slate-100 dark:border-slate-800 group relative flex flex-col font-sans"
+                          onClick={() => setTakingExam(exam)}
+                        >
+                          <div className="relative h-32 md:h-48 bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden shrink-0 rounded-t-2xl md:rounded-t-[2rem]">
+                            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30"></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <FileText size={48} className="text-white/20 md:size-[64px]" />
                             </div>
-                          </div>
-                          {deadline && (
-                            <div className="absolute top-4 right-4">
-                              <div className={`backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 ${isOverdue ? 'bg-red-600/80' : 'bg-black/30'}`}>
-                                <Clock size={12} /> {new Date(deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                            <div className="absolute top-3 left-3 md:top-4 md:left-4">
+                              <div className="bg-white/20 backdrop-blur-md text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg">
+                                试卷
                               </div>
                             </div>
-                          )}
-                          <div className="absolute bottom-4 left-4 right-4">
-                            <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 drop-shadow-md">
-                              {exam.title}
-                            </h3>
-                          </div>
-                        </div>
-                        <div className="p-5 flex-1 flex flex-col justify-between">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                              <FileText size={12} className="text-indigo-400" />
-                              {exam.sections.length} 个部分
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md">
-                              <ChevronRight size={14} />
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">满分</span>
-                              <span className="text-lg font-black text-indigo-600 leading-none">{exam.totalScore}</span>
-                            </div>
-                            {isOverdue ? (
-                              <div className="text-[10px] font-bold text-red-500 flex items-center gap-1">
-                                <AlertCircle size={12} /> 已逾期
-                              </div>
-                            ) : (
-                              <div className="text-[10px] font-bold text-emerald-500">
-                                点击开始
+                            {deadline && (
+                              <div className="absolute top-3 right-3 md:top-4 md:right-4">
+                                <div className={`backdrop-blur-md text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg flex items-center gap-1 ${isOverdue ? 'bg-red-600/80' : 'bg-black/30'}`}>
+                                  <Clock size={10} className="md:size-[12px]" /> {new Date(deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                </div>
                               </div>
                             )}
+                            <div className="absolute bottom-3 left-3 right-3 md:bottom-4 md:left-4 md:right-4 text-left">
+                              <h3 className="text-white font-bold text-base md:text-lg leading-tight line-clamp-2 drop-shadow-md">
+                                {exam.title}
+                              </h3>
+                            </div>
+                          </div>
+                          <div className="p-3 md:p-5 flex-1 flex flex-col justify-between">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                <FileText size={10} className="text-indigo-400 md:size-[12px]" />
+                                {exam.sections.length} 部分
+                              </div>
+                              <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md">
+                                <ChevronRight size={12} className="md:size-[14px]" />
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-2.5 md:pt-3">
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="text-[8px] md:text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">
+                                  {session ? '得分' : '满分'}
+                                </span>
+                                <span className="text-base md:text-lg font-black text-indigo-600 leading-none">
+                                  {session ? `${session.score}/${session.totalScore}` : exam.totalScore}
+                                </span>
+                              </div>
+                              {isOverdue && !session ? (
+                                <div className="text-[9px] md:text-[10px] font-bold text-red-500 flex items-center gap-1">
+                                  <AlertCircle size={10} className="md:size-[12px]" /> 逾期
+                                </div>
+                              ) : session ? (
+                                <div className="text-[9px] md:text-[10px] font-bold text-indigo-500 flex items-center gap-1">
+                                  <FileCheck size={10} className="md:size-[12px]" /> 已交
+                                </div>
+                              ) : (
+                                <div className="text-[9px] md:text-[10px] font-bold text-emerald-500">
+                                  开始
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
+                          );
+                        })()
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+                      <div className="md:hidden divide-y divide-slate-50 dark:divide-slate-800">
+                        {assignedExams.map((exam) => {
+                          const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
+                          const isOverdue = !!deadline && Date.now() > deadline;
+                          const session = examSessions.find(s => s.examPaperId === exam.id && s.studentId === user?.id);
+                          return (
+                            <div 
+                              key={exam.id}
+                              className="p-3.5 flex items-center gap-3.5 active:bg-slate-50 dark:active:bg-slate-800 active:scale-[0.98] transition-all cursor-pointer"
+                              onClick={() => setTakingExam(exam)}
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center text-white shrink-0">
+                                <FileText size={20} />
+                              </div>
+                              <div className="flex-1 min-w-0 flex flex-col items-start text-left">
+                                <h4 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate w-full">{exam.title}</h4>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className={`text-[9px] font-medium ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+                                    {deadline ? new Date(deadline).toLocaleDateString() : '无期限'}
+                                  </span>
+                                  <span className="text-[9px] font-black text-indigo-600 font-sans">
+                                    {session ? `${session.score}/${session.totalScore}` : `未开始`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                {session ? (
+                                  <FileCheck size={14} className="text-indigo-500" />
+                                ) : isOverdue ? (
+                                  <AlertCircle size={14} className="text-red-500" />
+                                ) : (
+                                  <ChevronRight size={16} className="text-slate-300" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                        );
-                      })()
-                    ))}
-                  </div>
+                      <table className="hidden md:table w-full text-left border-collapse table-fixed">
+                        <thead className="bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800">
+                          <tr>
+                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">试卷名称</th>
+                            <th className="w-24 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">类型</th>
+                            <th className="w-48 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">截止时间</th>
+                            <th className="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">得分</th>
+                            <th className="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">状态</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                          {assignedExams.map((exam) => {
+                            const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
+                            const isOverdue = !!deadline && Date.now() > deadline;
+                            const session = examSessions.find(s => s.examPaperId === exam.id && s.studentId === user?.id);
+                            return (
+                              <tr 
+                                key={exam.id} 
+                                className="group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer"
+                                onClick={() => setTakingExam(exam)}
+                              >
+                                <td className="px-6 py-4 truncate text-left">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center text-white shrink-0">
+                                      <FileText size={20} />
+                                    </div>
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{exam.title}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded uppercase">
+                                    试卷
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <span className={`text-xs font-medium ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                                    {deadline ? new Date(deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '无限制'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-center font-sans tracking-tight">
+                                  <span className="text-sm font-black text-indigo-600">
+                                    {session ? `${session.score}/${session.totalScore}` : `0/${exam.totalScore}`}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  {isOverdue && !session ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">
+                                      <AlertCircle size={12} /> 已逾期
+                                    </span>
+                                  ) : session ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-lg">
+                                      <FileCheck size={12} /> 已提交
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs font-bold text-indigo-600 group-hover:underline text-left">点击开始</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Resources Section */}
               {displayedResources.length > 0 && (
-                <>
+                <div className="mb-8">
                   <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
                     <BookOpen size={20} className="text-indigo-600" />
                     跟读任务
                   </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {displayedResources.map((resource) => {
-                 const isOverdue = resource.deadline && Date.now() > resource.deadline;
-                 const submission = submissions.find(s => s.resourceId === resource.id && s.studentId === user?.id);
-                 const status = submission?.status; // 'pending_review' | 'graded' | undefined
+                  
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                      {displayedResources.map((resource) => {
+                        const isOverdue = resource.deadline && Date.now() > resource.deadline;
+                        const submission = submissions.find(s => s.resourceId === resource.id && s.studentId === user?.id);
+                        const status = submission?.status; // 'pending_review' | 'graded' | undefined
 
-                 return (
-                    <div 
-                      key={resource.id}
-                      className={`bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] hover:shadow-xl border group relative flex flex-col isolate ${resource.isCompleted ? 'border-indigo-50 dark:border-indigo-900/30 opacity-90' : 'border-slate-100 dark:border-slate-800'}`}
-                      onClick={() => onSelectResource(resource)}
-                    >
-                      <div className={`relative h-48 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 rounded-t-[2rem] ${resource.isCompleted ? 'grayscale-[50%]' : ''}`}>
-                         <img 
-                           src={resource.coverImage || getFallbackCover(resource.id)} 
-                           alt={resource.title} 
-                           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                           onError={(e) => {
-                               e.currentTarget.src = getFallbackCover(resource.id);
-                           }} 
-                         />
-                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                         
-                         <div className="absolute top-4 left-4 flex flex-wrap gap-2">
-                           <div className={`text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg backdrop-blur-md ${
-                             resource.level === 'A1' ? 'bg-emerald-500/80' :
-                             resource.level === 'A2' ? 'bg-blue-500/80' :
-                             resource.level === 'B1' ? 'bg-orange-500/80' : 'bg-red-500/80'
-                           }`}>
-                             {resource.level}
-                           </div>
-                           
-                           {/* Status Badges */}
-                           {status === 'graded' ? (
-                               <div className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
-                                   <FileCheck size={12} /> 已批改
-                               </div>
-                           ) : status === 'pending_review' ? (
-                               <div className="bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
-                                   <Clock size={12} /> 批改中
-                               </div>
-                           ) : resource.isCompleted && (
-                             <div className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
-                               <CheckCircleIcon /> 已达标
-                             </div>
-                           )}
+                        return (
+                          <div 
+                            key={resource.id}
+                            className={`bg-white dark:bg-slate-900 rounded-[1.5rem] md:rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] active:scale-[0.98] hover:shadow-xl border group relative flex flex-col isolate ${resource.isCompleted ? 'border-indigo-50 dark:border-indigo-900/30 opacity-90' : 'border-slate-100 dark:border-slate-800'}`}
+                            onClick={() => onSelectResource(resource)}
+                          >
+                            <div className={`relative h-40 md:h-48 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 rounded-t-[1.5rem] md:rounded-t-[2rem] ${resource.isCompleted ? 'grayscale-[50%]' : ''}`}>
+                              <img 
+                                src={resource.coverImage || getFallbackCover(resource.id)} 
+                                alt={resource.title} 
+                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                onError={(e) => {
+                                    e.currentTarget.src = getFallbackCover(resource.id);
+                                }} 
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                              
+                              <div className="absolute top-3 left-3 md:top-4 md:left-4 flex flex-wrap gap-1.5 md:gap-2">
+                                <div className={`text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg shadow-lg backdrop-blur-md ${
+                                  resource.level === 'A1' ? 'bg-emerald-500/80' :
+                                  resource.level === 'A2' ? 'bg-blue-500/80' :
+                                  resource.level === 'B1' ? 'bg-orange-500/80' : 'bg-red-500/80'
+                                }`}>
+                                  {resource.level}
+                                </div>
+                                
+                                {/* Status Badges */}
+                                {status === 'graded' ? (
+                                    <div className="bg-indigo-600 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in text-left">
+                                        <FileCheck size={10} className="md:size-[12px]" /> 已批
+                                    </div>
+                                ) : status === 'pending_review' ? (
+                                    <div className="bg-orange-500 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
+                                        <Clock size={10} className="md:size-[12px]" /> 待阅
+                                    </div>
+                                ) : resource.isCompleted && (
+                                  <div className="bg-emerald-500 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg shadow-lg flex items-center gap-1 animate-fade-in">
+                                    <CheckCircleIcon size={10} className="md:size-[12px]" /> 达标
+                                  </div>
+                                )}
 
-                           {isOverdue && !resource.isCompleted && !status && (
-                               <div className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 animate-pulse">
-                                  <AlertCircle size={12} /> 已逾期
-                               </div>
-                           )}
-                         </div>
+                                {isOverdue && !resource.isCompleted && !status && (
+                                    <div className="bg-red-600 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg shadow-lg flex items-center gap-1 animate-pulse">
+                                      <AlertCircle size={10} className="md:size-[12px]" /> 逾期
+                                    </div>
+                                )}
+                              </div>
 
-                         <div className="absolute bottom-4 left-4 right-4">
-                            <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 drop-shadow-md">
-                              {resource.title}
-                            </h3>
-                         </div>
-                      </div>
+                              <div className="absolute bottom-3 left-3 right-3 md:bottom-4 md:left-4 md:right-4 text-left">
+                                  <h3 className="text-white font-bold text-base md:text-lg leading-tight line-clamp-2 drop-shadow-md">
+                                    {resource.title}
+                                  </h3>
+                              </div>
+                            </div>
 
-                      <div className="p-5 flex-1 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-2">
-                           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                              <BookOpen size={12} className="text-indigo-400" />
-                              {resource.transcript.length} 个段落
-                           </div>
-                           <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md">
-                             <Play size={14} fill="currentColor" />
-                           </div>
-                        </div>
+                            <div className="p-3 md:p-5 flex-1 flex flex-col justify-between">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                    <BookOpen size={10} className="text-indigo-400 md:size-[12px]" />
+                                    {resource.transcript.length} 段落
+                                </div>
+                                <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-md">
+                                  <Play size={12} fill="currentColor" className="md:size-[14px]" />
+                                </div>
+                              </div>
 
-                        <div className="flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
-                           <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">截止时间</span>
-                              <span className={`text-[10px] font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
-                                 <Clock size={10} />
-                                 {resource.deadline ? new Date(resource.deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '无限制'}
-                              </span>
-                           </div>
-                           {status === 'graded' && submission?.aiScore ? (
-                               <div className="flex flex-col items-end">
-                                   <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">得分</span>
-                                   <span className="text-lg font-black text-indigo-600 leading-none">{submission.aiScore.overallScore}</span>
-                               </div>
-                           ) : resource.isCompleted && (
-                             <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500/80">
-                                100% 已学完
-                             </div>
-                           )}
-                        </div>
-                      </div>
+                              <div className="flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-2.5 md:pt-3">
+                                <div className="flex flex-col items-start gap-0.5">
+                                    <span className="text-[8px] md:text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">截止</span>
+                                    <span className={`text-[9px] md:text-[10px] font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                                      <Clock size={8} className="md:size-[10px]" />
+                                      {resource.deadline ? new Date(resource.deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '无限制'}
+                                    </span>
+                                </div>
+                                {status === 'graded' && submission?.aiScore ? (
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-[8px] md:text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">得分</span>
+                                        <span className="text-base md:text-lg font-black text-indigo-600 leading-none font-sans tracking-tight">{submission.aiScore.overallScore}</span>
+                                    </div>
+                                ) : resource.isCompleted && (
+                                  <div className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-emerald-500/80">
+                                    已学完
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                 );
-              })}
-            </div>
-                  </>
+                  ) : (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+                      <div className="md:hidden divide-y divide-slate-50 dark:divide-slate-800">
+                        {displayedResources.map((resource) => {
+                          const isOverdue = resource.deadline && Date.now() > resource.deadline;
+                          const submission = submissions.find(s => s.resourceId === resource.id && s.studentId === user?.id);
+                          const status = submission?.status;
+                          return (
+                            <div 
+                              key={resource.id}
+                              className="p-3.5 flex items-center gap-3.5 active:bg-slate-50 dark:active:bg-slate-800 active:scale-[0.98] transition-all cursor-pointer"
+                              onClick={() => onSelectResource(resource)}
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shrink-0 overflow-hidden">
+                                <img 
+                                  src={resource.coverImage || getFallbackCover(resource.id)} 
+                                  className="w-full h-full object-cover" 
+                                  alt=""
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0 flex flex-col items-start text-left">
+                                <h4 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate w-full">{resource.title}</h4>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded text-white ${
+                                    resource.level === 'A1' ? 'bg-emerald-500' :
+                                    resource.level === 'A2' ? 'bg-blue-500' :
+                                    resource.level === 'B1' ? 'bg-orange-500' : 'bg-red-500'
+                                  }`}>
+                                    {resource.level}
+                                  </span>
+                                  <span className={`text-[9px] font-medium ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+                                    {resource.deadline ? new Date(resource.deadline).toLocaleDateString() : '无期限'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                {status === 'graded' ? (
+                                  <span className="text-[13px] font-black text-indigo-600 font-sans">{submission?.aiScore?.overallScore}</span>
+                                ) : resource.isCompleted ? (
+                                  <CheckCircleIcon size={14} />
+                                ) : (
+                                  <ChevronRight size={16} className="text-slate-300" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <table className="hidden md:table w-full text-left border-collapse table-fixed">
+                        <thead className="bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800">
+                          <tr>
+                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">任务名称</th>
+                            <th className="w-24 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">等级</th>
+                            <th className="w-48 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">截止时间</th>
+                            <th className="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">得分/进度</th>
+                            <th className="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">状态</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                          {displayedResources.map((resource) => {
+                            const isOverdue = resource.deadline && Date.now() > resource.deadline;
+                            const submission = submissions.find(s => s.resourceId === resource.id && s.studentId === user?.id);
+                            const status = submission?.status;
+
+                            return (
+                              <tr 
+                                key={resource.id} 
+                                className="group hover:bg-emerald-50/30 dark:hover:bg-emerald-900/20 transition-colors cursor-pointer"
+                                onClick={() => onSelectResource(resource)}
+                              >
+                                <td className="px-6 py-4 truncate text-left">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center text-white shrink-0 overflow-hidden">
+                                      <img 
+                                        src={resource.coverImage || getFallbackCover(resource.id)} 
+                                        className="w-full h-full object-cover" 
+                                        alt=""
+                                      />
+                                    </div>
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{resource.title}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${
+                                    resource.level === 'A1' ? 'bg-emerald-500' :
+                                    resource.level === 'A2' ? 'bg-blue-500' :
+                                    resource.level === 'B1' ? 'bg-orange-500' : 'bg-red-500'
+                                  }`}>
+                                    {resource.level}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <span className={`text-xs font-medium ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                                    {resource.deadline ? new Date(resource.deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '无限制'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-center font-sans tracking-tight">
+                                  {status === 'graded' && submission?.aiScore ? (
+                                    <span className="text-sm font-black text-indigo-600">{submission.aiScore.overallScore}</span>
+                                  ) : resource.isCompleted ? (
+                                    <span className="text-[10px] font-bold text-emerald-500">100%</span>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <div className="flex flex-col items-end gap-1">
+                                    {status === 'graded' ? (
+                                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-lg">已批改</span>
+                                    ) : status === 'pending_review' ? (
+                                      <span className="text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg">批改中</span>
+                                    ) : resource.isCompleted ? (
+                                      <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg">已达标</span>
+                                    ) : isOverdue ? (
+                                      <span className="text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">已逾期</span>
+                                    ) : (
+                                      <span className="text-xs font-bold text-emerald-600 group-hover:underline">点击开始</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}
 
           <div className="text-center pt-8 pb-12 border-t border-slate-100 dark:border-slate-800">
-             <p className="text-xs text-slate-400 dark:text-slate-500 font-medium italic">更多精彩课程正在录制中，敬请期待...</p>
           </div>
         </div>
       </div>
