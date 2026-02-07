@@ -4,7 +4,7 @@ import {
   Save, BarChart3, Download, RotateCcw, Edit3, Star, BookOpen, FileText
 } from 'lucide-react';
 import { getOptionGridColumns } from '../utils/optionLayout';
-import { ExamSession, ExamPaper, Classroom, Question, MediaResource, ExamSection, ExamItem, User as UserType } from '../types';
+import { ExamSession, ExamPaper, Classroom, Question, MediaResource, ExamSection, ExamItem, User as UserType, SyllabusCourse } from '../types';
 import {
   getExamPaperById,
   getClassroomById,
@@ -12,9 +12,11 @@ import {
   updateExamSession,
   deleteExamSessionsByExam,
   getQuestionsWithResourceInfo,
-  getResources
+  getResources,
+  getSyllabusCourses
 } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
+import ExamStatisticsAnalysis from './ExamStatisticsAnalysis';
 
 interface ExamGradingManagerProps {
   examId: string;
@@ -29,6 +31,9 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   const [sessions, setSessions] = useState<ExamSession[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   
+  // Load syllabuses for knowledge points
+  const syllabuses = useMemo(() => getSyllabusCourses(), []);
+
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const [questionResourceMap, setQuestionResourceMap] = useState<Record<string, string>>({});
   const [resourcesMap, setResourcesMap] = useState<Record<string, MediaResource>>({});
@@ -43,6 +48,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   const [showStatistics, setShowStatistics] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showRedoConfirm, setShowRedoConfirm] = useState(false);
+  const [showOnlyIncorrect, setShowOnlyIncorrect] = useState(false);
   
   // Load initial data
   useEffect(() => {
@@ -507,6 +513,16 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
 
                   {/* Right: Grading Controls */}
                   <div className="flex-1 xl:max-w-2xl bg-slate-50 dark:bg-slate-900/50 rounded-xl p-2 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <button
+                      onClick={() => setShowOnlyIncorrect(!showOnlyIncorrect)}
+                      className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors whitespace-nowrap ${
+                        showOnlyIncorrect
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                          : 'bg-white text-slate-600 dark:bg-slate-950 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      只看错题
+                    </button>
                     <div className="w-24 shrink-0">
                       <div className="relative">
                         <input
@@ -555,7 +571,11 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
                 exam={exam}
                 session={currentSession}
                 allQuestions={allQuestions}
+                resourcesMap={resourcesMap}
+                questionResourceMap={questionResourceMap}
+                syllabuses={syllabuses}
                 checkAnswer={checkAnswer}
+                showOnlyIncorrect={showOnlyIncorrect}
               />
             </div>
           )}
@@ -564,12 +584,13 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
 
       {/* Statistics Modal */}
       {showStatistics && (
-        <StatisticsModal
+        <ExamStatisticsAnalysis
           exam={exam}
-          classroom={classroom}
           sessions={sessions}
           allQuestions={allQuestions}
-          statistics={statistics}
+          questionResourceMap={questionResourceMap}
+          resourcesMap={resourcesMap}
+          students={studentList}
           onClose={() => setShowStatistics(false)}
         />
       )}
@@ -605,14 +626,97 @@ interface ExamAnswerSheetProps {
   exam: ExamPaper;
   session: ExamSession;
   allQuestions: Question[];
+  resourcesMap: Record<string, MediaResource>;
+  questionResourceMap: Record<string, string>;
+  syllabuses: SyllabusCourse[];
   checkAnswer: (q: Question, answer: string) => boolean;
+  showOnlyIncorrect: boolean;
 }
 
-const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQuestions, checkAnswer }) => {
+const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ 
+  exam, 
+  session, 
+  allQuestions, 
+  resourcesMap,
+  questionResourceMap,
+  syllabuses,
+  checkAnswer, 
+  showOnlyIncorrect 
+}) => {
   const serifFont = 'font-serif';
   const questionClass = 'text-lg md:text-xl';
   const optionClass = 'text-base md:text-lg';
   const passageClass = 'text-base md:text-lg';
+  
+  // Helper to determine if a question (or any part of it) is incorrect
+  const isQuestionIncorrect = (q: Question): boolean => {
+    if (q.subQuestions && q.subQuestions.length > 0) {
+      return q.subQuestions.some(sq => !checkAnswer(sq, session.answers[sq.id]));
+    }
+    return !checkAnswer(q, session.answers[q.id]);
+  };
+
+  // Get knowledge point names by IDs
+  const getKnowledgePointNames = (pointIds?: string[]): string[] => {
+    if (!pointIds || pointIds.length === 0) return [];
+    
+    const names: string[] = [];
+    syllabuses.forEach(syllabus => {
+      syllabus.units.forEach(unit => {
+        unit.knowledgePoints.forEach(kp => {
+          if (pointIds.includes(kp.id)) {
+            names.push(kp.name);
+          }
+        });
+      });
+    });
+    return names;
+  };
+
+  const renderQuestionTags = (q: Question) => {
+    // Get Resource Tags
+    const resourceId = questionResourceMap[q.id];
+    const resource = resourceId ? resourcesMap[resourceId] : undefined;
+    
+    // Combine all tags
+    const questionLevel = q.level || resource?.level;
+    const grammarTags = resource?.grammarTags || [];
+    const vocabTags = resource?.vocabTags || [];
+    // If q.tags exists use it, otherwise empty
+    const questionTags = q.tags || []; 
+
+    // Get Knowledge Points from IDs
+    const knowledgePointNames = getKnowledgePointNames(q.knowledgePointIds);
+    // Combine with single knowledgePointName if exists
+    if (q.knowledgePointName && !knowledgePointNames.includes(q.knowledgePointName)) {
+      knowledgePointNames.push(q.knowledgePointName);
+    }
+    
+    // Combine unique other tags
+    const otherTags = Array.from(new Set([...grammarTags, ...vocabTags, ...questionTags]));
+
+    if (!questionLevel && knowledgePointNames.length === 0 && otherTags.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        {questionLevel && (
+          <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            {questionLevel}
+          </span>
+        )}
+        {knowledgePointNames.map((kpName, idx) => (
+          <span key={`kp-${idx}`} className="px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
+            {kpName}
+          </span>
+        ))}
+        {otherTags.map((tag, idx) => (
+          <span key={`tag-${idx}`} className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+            {tag}
+          </span>
+        ))}
+      </div>
+    );
+  };
   
   // Helper to render cloze-test passage with student answers inline
   const renderClozePassageGrading = (question: Question, startNum: number) => {
@@ -761,10 +865,13 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
                 const subQs = question.subQuestions || [];
                 questionNumber += subQs.length;
 
+                if (showOnlyIncorrect && !isQuestionIncorrect(question)) return null;
+
                 const hasSubExplanations = subQs.some(sq => !!sq.explanation);
 
                 return (
                   <div key={item.questionId} className="mb-6">
+                    {renderQuestionTags(question)}
                     <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
                       <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
                         {renderClozePassageGrading(question, startNum)}
@@ -826,10 +933,13 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
                 const subQs = question.subQuestions || [];
                 questionNumber += subQs.length;
 
+                if (showOnlyIncorrect && !isQuestionIncorrect(question)) return null;
+
                 const hasSubExplanations = subQs.some(sq => !!sq.explanation);
 
                 return (
                   <div key={item.questionId} className="mb-6">
+                    {renderQuestionTags(question)}
                     <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
                       <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
                         {renderCompoundFillPassageGrading(question, startNum)}
@@ -868,11 +978,22 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
                 
                 return (
                   <div key={q.id} className="mb-4">
+                    {renderQuestionTags(q)}
                     <div className="flex items-start gap-2">
                       <span className={`font-bold ${questionClass} ${serifFont} min-w-[30px] mt-0.5`}>{qNum}.</span>
                       <div className="flex-1 min-w-0">
                         <div className={`${questionClass} ${serifFont} text-slate-800 dark:text-white mb-3`}
                              dangerouslySetInnerHTML={{ __html: q.text }} />
+
+                        {q.imageUrl && (
+                          <div className="mb-3">
+                            <img 
+                              src={q.imageUrl} 
+                              alt="Question Image" 
+                              className="max-w-full h-auto max-h-[300px] rounded-lg border border-slate-200 dark:border-slate-700 object-contain"
+                            />
+                          </div>
+                        )}
                         
                         {q.type === 'fill-in-the-blank' ? (
                           <div className="space-y-2">
@@ -900,8 +1021,13 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
                           const hasOptionImages = (q.options || []).some(o => !!o.imageUrl);
                           const isUnanswered = !userAnswer;
                           
+                          // Use grid layout even for images to display them in rows
+                          const finalGridClass = hasOptionImages 
+                             ? (optionCols >= 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2') 
+                             : gridColsClass;
+                          
                           return (
-                            <div className={hasOptionImages ? 'space-y-2' : `grid gap-2 ${gridColsClass}`}>
+                            <div className={`grid gap-2 ${finalGridClass}`}>
                               {q.options.map((opt, optIdx) => {
                                 const isSelected = userAnswer === opt.id;
                                 const isThisCorrect = q.correctOptionId === opt.id;
@@ -909,7 +1035,7 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
                                 const showWrongWhenUnanswered = isUnanswered && !isThisCorrect;
                                 
                                 return (
-                                  <div key={opt.id} className={hasOptionImages ? 'block' : 'flex items-start gap-2'}>
+                                  <div key={opt.id} className={`flex items-start gap-2 ${hasOptionImages ? 'flex-col sm:flex-row' : ''}`}>
                                     <div className="flex items-start gap-2">
                                       <span className={`font-bold ${optionClass} ${serifFont} shrink-0 ${
                                         isThisCorrect
@@ -947,7 +1073,7 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
                                     {opt.imageUrl && (
                                       <img
                                         src={opt.imageUrl}
-                                        className="mt-1 ml-6 max-w-[200px] h-auto object-contain rounded border border-slate-200 dark:border-slate-700"
+                                        className="mt-1 sm:ml-2 max-w-[200px] h-auto object-contain rounded border border-slate-200 dark:border-slate-700"
                                         alt=""
                                       />
                                     )}
@@ -973,8 +1099,14 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
               // Handle different question types
               if (question.subQuestions && question.subQuestions.length > 0) {
                 // Reading comprehension or compound questions
+                if (showOnlyIncorrect && !isQuestionIncorrect(question)) {
+                   questionNumber += question.subQuestions.length;
+                   return null;
+                }
+
                 return (
                   <div key={item.questionId} className="mb-6">
+                    {renderQuestionTags(question)}
                     {question.readingPassage && (
                       <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
                         <div className={`${optionClass} ${serifFont} text-slate-700 dark:text-slate-300 leading-relaxed`}
@@ -998,6 +1130,7 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
               } else {
                 // Simple question
                 const qNum = ++questionNumber;
+                if (showOnlyIncorrect && !isQuestionIncorrect(question)) return null;
                 return renderSimpleQuestion(question, qNum);
               }
             })}
@@ -1005,189 +1138,6 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({ exam, session, allQue
           </div>
         );
       })}
-    </div>
-  );
-};
-
-// Statistics Modal Component
-interface StatisticsModalProps {
-  exam: ExamPaper;
-  classroom: Classroom;
-  sessions: ExamSession[];
-  allQuestions: Question[];
-  statistics: any;
-  onClose: () => void;
-}
-
-const StatisticsModal: React.FC<StatisticsModalProps> = ({ 
-  exam, 
-  classroom, 
-  sessions, 
-  allQuestions,
-  statistics, 
-  onClose 
-}) => {
-  // Calculate question-level statistics
-  const questionStats = useMemo(() => {
-    const stats: Record<string, { correct: number; total: number; rate: number }> = {};
-    
-    sessions.forEach(session => {
-      if (!session.isSubmitted) return;
-      
-      Object.entries(session.answers).forEach(([questionId, answer]) => {
-        if (!stats[questionId]) {
-          stats[questionId] = { correct: 0, total: 0, rate: 0 };
-        }
-        
-        const question = allQuestions.find(q => q.id === questionId);
-        if (!question) return;
-        
-        stats[questionId].total++;
-        
-        const isCorrect = question.type === 'fill-in-the-blank'
-          ? answer.trim().toLowerCase() === (question.options[0]?.text || '').trim().toLowerCase()
-          : answer === question.correctOptionId;
-        
-        if (isCorrect) {
-          stats[questionId].correct++;
-        }
-      });
-    });
-    
-    // Calculate rates
-    Object.keys(stats).forEach(qid => {
-      stats[qid].rate = stats[qid].total > 0 ? (stats[qid].correct / stats[qid].total) * 100 : 0;
-    });
-    
-    return stats;
-  }, [sessions, allQuestions]);
-  
-  // Find hardest questions (lowest correct rate)
-  const hardestQuestions = useMemo(() => {
-    return Object.entries(questionStats)
-      .map(([qid, stat]) => ({ questionId: qid, ...stat }))
-      .filter(q => q.total > 0)
-      .sort((a, b) => a.rate - b.rate)
-      .slice(0, 5);
-  }, [questionStats]);
-  
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800 max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
-                <BarChart3 size={24} />
-                统计分析
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">{exam.title} · {classroom.name}</p>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-            >
-              <XCircle size={20} />
-            </button>
-          </div>
-        </div>
-        
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Overall Statistics */}
-          <div>
-            <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-3">整体统计</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">提交率</div>
-                <div className="text-2xl font-black text-slate-800 dark:text-white">
-                  {statistics.submissionRate.toFixed(1)}%
-                </div>
-                <div className="text-xs text-slate-500 mt-1">
-                  {statistics.submittedCount}/{statistics.totalStudents}
-                </div>
-              </div>
-              
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4">
-                <div className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">平均分</div>
-                <div className="text-2xl font-black text-indigo-700 dark:text-indigo-300">
-                  {statistics.avgScore.toFixed(1)}
-                </div>
-              </div>
-              
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4">
-                <div className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">最高分</div>
-                <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
-                  {statistics.maxScore}
-                </div>
-              </div>
-              
-              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4">
-                <div className="text-xs text-amber-600 dark:text-amber-400 mb-1">最低分</div>
-                <div className="text-2xl font-black text-amber-700 dark:text-amber-300">
-                  {statistics.minScore}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Hardest Questions */}
-          <div>
-            <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-3">错题分析 (正确率最低)</h4>
-            {hardestQuestions.length === 0 ? (
-              <div className="text-center py-8 text-slate-400">暂无数据</div>
-            ) : (
-              <div className="space-y-2">
-                {hardestQuestions.map((item, idx) => {
-                  const question = allQuestions.find(q => q.id === item.questionId);
-                  return (
-                    <div key={item.questionId} className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 truncate">
-                            {question?.text?.replace(/<[^>]*>/g, '').substring(0, 60)}...
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            正确 {item.correct}/{item.total} 人
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className={`text-2xl font-black ${
-                            item.rate < 30 ? 'text-red-600' : item.rate < 60 ? 'text-amber-600' : 'text-slate-600'
-                          }`}>
-                            {item.rate.toFixed(0)}%
-                          </div>
-                          <div className="text-xs text-slate-500">正确率</div>
-                        </div>
-                      </div>
-                      {/* Progress bar */}
-                      <div className="mt-3 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all ${
-                            item.rate < 30 ? 'bg-red-500' : item.rate < 60 ? 'bg-amber-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${item.rate}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950">
-          <button
-            onClick={onClose}
-            className="w-full py-3 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white rounded-xl font-bold transition-all"
-          >
-            关闭
-          </button>
-        </div>
-      </div>
     </div>
   );
 };

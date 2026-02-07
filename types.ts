@@ -186,6 +186,7 @@ export interface Classroom {
   name: string;
   studentCount: number;
   students: Student[];
+  createdAt?: number; // Optional timestamp for sorting
 }
 
 export enum RecorderState {

@@ -62,6 +62,7 @@ interface SubmissionManagerProps {
 
 const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, onBack }) => {
   const { user } = useAuth();
+  const modal = useModal();
   const { startBatchEvaluationJob, jobs, clearJob } = useJobs();
   
   const [resource, setResource] = useState<MediaResource | null>(null);
