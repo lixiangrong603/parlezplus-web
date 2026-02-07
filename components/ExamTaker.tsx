@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { ExamPaper, Question, ExamSection, ExamItem, User, ExamSession, MediaResource, RecorderState, ExamTakerSettings, ExamTakerResourcePlaybackSettings } from '../types';
-import { saveExamSession, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper } from '../utils/storage';
+import { saveExamSession, getExamSessionById, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper } from '../utils/storage';
 import { getOptionGridColumns } from '../utils/optionLayout';
 import MediaPlayer from './MediaPlayer';
 import { ThemeContext } from '../App';
@@ -67,6 +67,14 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   const [elapsedTime, setElapsedTime] = useState<number>(0);
 
   const isTeacherView = user.role === 'teacher' || user.role === 'admin';
+
+  // Stable session id: one student + one exam = one session (no retake, overwrite)
+  const sessionId = useMemo(() => `session_${exam.id}_${user.id}`,
+    [exam.id, user.id]
+  );
+
+  const restoreAttemptedRef = useRef(false);
+  const autoSaveTimeoutRef = useRef<number | null>(null);
   const [examTakerSettings, setExamTakerSettings] = useState<ExamTakerSettings>(exam.examTakerSettings || {});
   const autoSubmitTriggeredRef = useRef(false);
   const sectionStartElapsedMsRef = useRef<Record<string, number>>({});
@@ -102,6 +110,35 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
       setExamTakerSettings(fresh.examTakerSettings);
     }
   }, [exam.id]);
+
+  // Auto-restore student's latest session (draft or submitted)
+  useEffect(() => {
+    if (isTeacherView) return;
+    if (restoreAttemptedRef.current) return;
+    restoreAttemptedRef.current = true;
+
+    const existing = getExamSessionById(sessionId);
+    if (!existing) return;
+
+    const restoredAnswers = existing.answers || {};
+    setAnswers(restoredAnswers);
+
+    const restoredElapsed = typeof existing.elapsedTime === 'number' ? existing.elapsedTime : 0;
+    setElapsedTime(restoredElapsed);
+
+    // Resume timer without counting time away from page
+    const resumedStart = Date.now() - Math.max(0, restoredElapsed);
+    setStartTime(resumedStart);
+
+    if (existing.isSubmitted) {
+      setIsSubmitted(true);
+      setViewMode('result');
+    } else {
+      // Draft: jump back into exam automatically
+      setIsSubmitted(false);
+      setViewMode('exam');
+    }
+  }, [isTeacherView, sessionId]);
 
   // Load resources on mount
   useEffect(() => {
@@ -464,8 +501,105 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     setCurrentSectionIndex(0);
     setCurrentResourceIndex(0);
     setElapsedTime(0);
-    setStartTime(Date.now());
+    const now = Date.now();
+    setStartTime(now);
     setViewMode('exam');
+
+    // Create/overwrite draft session immediately for persistence
+    if (!isTeacherView) {
+      const draft: ExamSession = {
+        id: sessionId,
+        examPaperId: exam.id,
+        examTitle: exam.title,
+        studentId: user.id,
+        studentName: user.name,
+        answers: {},
+        startTime: now,
+        elapsedTime: 0,
+        totalScore: exam.totalScore,
+        isSubmitted: false,
+      };
+      saveExamSession(draft);
+    }
+  };
+
+  // Debounced autosave draft on answer changes (students only)
+  useEffect(() => {
+    if (isTeacherView) return;
+    if (viewMode !== 'exam') return;
+    if (isSubmitted) return;
+
+    if (autoSaveTimeoutRef.current) {
+      window.clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+    }
+
+    autoSaveTimeoutRef.current = window.setTimeout(() => {
+      const draft: ExamSession = {
+        id: sessionId,
+        examPaperId: exam.id,
+        examTitle: exam.title,
+        studentId: user.id,
+        studentName: user.name,
+        answers,
+        startTime: startTime || Date.now(),
+        elapsedTime,
+        totalScore: exam.totalScore,
+        isSubmitted: false,
+      };
+      saveExamSession(draft);
+    }, 800);
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        window.clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+    };
+  }, [answers, elapsedTime, exam.id, exam.title, exam.totalScore, isSubmitted, isTeacherView, sessionId, startTime, user.id, user.name, viewMode]);
+
+  // Heartbeat autosave to persist elapsedTime even if answers don't change
+  useEffect(() => {
+    if (isTeacherView) return;
+    if (viewMode !== 'exam') return;
+    if (isSubmitted) return;
+
+    const interval = window.setInterval(() => {
+      const draft: ExamSession = {
+        id: sessionId,
+        examPaperId: exam.id,
+        examTitle: exam.title,
+        studentId: user.id,
+        studentName: user.name,
+        answers,
+        startTime: startTime || Date.now(),
+        elapsedTime,
+        totalScore: exam.totalScore,
+        isSubmitted: false,
+      };
+      saveExamSession(draft);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [answers, elapsedTime, exam.id, exam.title, exam.totalScore, isSubmitted, isTeacherView, sessionId, startTime, user.id, user.name, viewMode]);
+
+  const handleExit = () => {
+    if (!isTeacherView && viewMode === 'exam' && !isSubmitted) {
+      const draft: ExamSession = {
+        id: sessionId,
+        examPaperId: exam.id,
+        examTitle: exam.title,
+        studentId: user.id,
+        studentName: user.name,
+        answers,
+        startTime: startTime || Date.now(),
+        elapsedTime,
+        totalScore: exam.totalScore,
+        isSubmitted: false,
+      };
+      saveExamSession(draft);
+    }
+    onExit();
   };
 
   // Handle submit
@@ -480,7 +614,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     const submitTime = Date.now();
 
     const session: ExamSession = {
-      id: `session_${Date.now()}`,
+      id: sessionId,
       examPaperId: exam.id,
       examTitle: exam.title,
       studentId: user.id,
@@ -632,7 +766,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
             )}
 
             <button
-              onClick={onExit}
+              onClick={handleExit}
               className="w-full mt-2 md:mt-3 py-2.5 md:py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-sm md:text-base transition-all active:scale-95"
             >
               返回
@@ -660,7 +794,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
           <div className="p-4 border-b border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between gap-2">
               <button
-                onClick={onExit}
+                onClick={handleExit}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 title="返回列表"
               >

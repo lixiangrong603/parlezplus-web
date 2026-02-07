@@ -53,12 +53,12 @@ const CustomConfirmModal = ({
           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${type === 'danger' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'}`}>
             {type === 'danger' ? <Trash2 size={32} /> : <AlertCircle size={32} />}
           </div>
-          <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">{title}</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
+          <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2 font-serif">{title}</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-serif">{message}</p>
         </div>
         <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800">
-          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all">{cancelText}</button>
-          <button onClick={() => { onConfirm(); onClose(); }} className={`flex-[1.5] py-3 text-sm font-black text-white rounded-xl shadow-lg transition-all active:scale-95 ${type === 'danger' ? 'bg-red-500 hover:bg-red-600 shadow-red-100 dark:shadow-none' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none'}`}>{confirmText}</button>
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all font-serif">{cancelText}</button>
+          <button onClick={() => { onConfirm(); onClose(); }} className={`flex-[1.5] py-3 text-sm font-black text-white rounded-xl shadow-lg transition-all active:scale-95 font-serif ${type === 'danger' ? 'bg-red-500 hover:bg-red-600 shadow-red-100 dark:shadow-none' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none'}`}>{confirmText}</button>
         </div>
       </div>
     </div>
@@ -251,7 +251,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   
   const [isVocalEnabled, setIsVocalEnabled] = useState(true); 
   const [playbackRate, setPlaybackRate] = useState(1.0); 
-  const [playMode, setPlayMode] = useState<'full' | 'single'>('single'); 
+  const [playMode, setPlayMode] = useState<'full' | 'single'>('full'); 
 
   const [recordedPlaybackRate, setRecordedPlaybackRate] = useState(1.0);
   const [recordingStartTime, setRecordingStartTime] = useState(0);
@@ -269,6 +269,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
           setPlayMode('single'); // Set default to single for cloze
       } else {
           setPracticePhase('shadowing');
+          // Keep full mode for shadowing - will auto-switch to single when recording starts
       }
   };
 
@@ -291,7 +292,6 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   useEffect(() => {
       // Logic for "Click to record" hint - only shown when record button is available (Shadowing phase)
       if (practicePhase === 'shadowing' && Object.keys(segmentRecordings).length === 0 && !userAudioBlob && !submission) {
-          setPlayMode('single');
           setHintMessage("点击录音，开始单句精练");
           const timer = setTimeout(() => setHintMessage(null), 5000);
           return () => clearTimeout(timer);
@@ -549,7 +549,15 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   const startRecording = async (targetSegmentId?: string) => {
     if (isReadOnly) return; 
 
-    if (!targetSegmentId && playMode === 'single' && isSingleCompleted) {
+    // Determine which mode to use for recording
+    let recordingMode = playMode;
+
+    // Auto-switch from full mode to single mode on first recording attempt
+    if (!targetSegmentId && playMode === 'full' && !isSingleCompleted && !userAudioBlob) {
+        recordingMode = 'single';
+        setPlayMode('single');
+    } else if (!targetSegmentId && playMode === 'single' && isSingleCompleted) {
+        recordingMode = 'full';
         setPlayMode('full');
         setHintMessage("进入整篇挑战！");
     }
@@ -568,7 +576,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
       let startTime;
       let segmentToRecord;
 
-      const effectiveMode = (!targetSegmentId && playMode === 'single' && isSingleCompleted) ? 'full' : playMode;
+      const effectiveMode = (!targetSegmentId && recordingMode === 'single' && isSingleCompleted) ? 'full' : recordingMode;
 
       if (targetSegmentId) {
         segmentToRecord = resource.transcript.find(s => s.id === targetSegmentId);
@@ -931,8 +939,8 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
                 <ChevronLeftIcon />
             </button>
             <div className="ml-4 flex flex-col">
-                <span className="font-bold text-shadow md:text-shadow-none text-base leading-tight">{resource.title}</span>
-                <span className="text-[10px] opacity-70 font-bold uppercase tracking-widest hidden md:block">Shadowing Studio</span>
+                <span className="font-bold text-shadow md:text-shadow-none text-base leading-tight font-serif">{resource.title}</span>
+                <span className="text-[10px] opacity-70 font-bold uppercase tracking-widest hidden md:block font-serif">Shadowing Studio</span>
             </div>
           </div>
         </div>
@@ -1011,7 +1019,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
 
             {recorderState === RecorderState.RECORDING && (
                <div className="absolute top-4 right-4 z-30 pointer-events-none">
-                  <div className="bg-red-500/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-xs font-bold animate-pulse shadow-xl flex items-center gap-2">
+                  <div className="bg-red-500/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-xs font-bold animate-pulse shadow-xl flex items-center gap-2 font-serif">
                     <div className="w-2 h-2 bg-white rounded-full"></div> 录音中...
                   </div>
                </div>
@@ -1030,7 +1038,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
 
                 <div className="relative group">
                     {hintMessage && (
-                        <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-indigo-900 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg z-50 whitespace-nowrap animate-fade-in-up flex items-center gap-2 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-[6px] after:border-transparent after:border-t-indigo-900">
+                        <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-indigo-900 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg z-50 whitespace-nowrap animate-fade-in-up flex items-center gap-2 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-[6px] after:border-transparent after:border-t-indigo-900 font-serif">
                             <Info size={14} className="text-indigo-300" />
                             {hintMessage}
                         </div>

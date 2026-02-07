@@ -44,6 +44,40 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     }
   }, [user]);
 
+  // Prefer the stable session id (session_<examId>_<userId>) and otherwise the latest submitted session.
+  const examSessionMap = useMemo(() => {
+    const map = new Map<string, ExamSession>();
+    if (!user) return map;
+
+    const grouped = new Map<string, ExamSession[]>();
+    for (const s of examSessions) {
+      if (s.studentId !== user.id) continue;
+      const list = grouped.get(s.examPaperId) || [];
+      list.push(s);
+      grouped.set(s.examPaperId, list);
+    }
+
+    for (const [examId, list] of grouped.entries()) {
+      const stableId = `session_${examId}_${user.id}`;
+      const stable = list.find(x => x.id === stableId);
+      if (stable) {
+        map.set(examId, stable);
+        continue;
+      }
+
+      const submitted = list.filter(x => x.isSubmitted);
+      const candidates = submitted.length > 0 ? submitted : list;
+      candidates.sort((a, b) => {
+        const aT = (a.submitTime ?? a.startTime ?? 0);
+        const bT = (b.submitTime ?? b.startTime ?? 0);
+        return bT - aT;
+      });
+      map.set(examId, candidates[0]);
+    }
+
+    return map;
+  }, [examSessions, user]);
+
   // [FIX] 监控 activeClass 变化，动态加载分配给该班级的考试
   useEffect(() => {
     if (activeClass) {
@@ -115,15 +149,24 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
 
   // Handle exam taking
   if (takingExam && user) {
-    return <ExamTaker exam={takingExam} user={user} onExit={() => setTakingExam(null)} />;
+    return (
+      <ExamTaker
+        exam={takingExam}
+        user={user}
+        onExit={() => {
+          setTakingExam(null);
+          setExamSessions(getExamSessions(user.id));
+        }}
+      />
+    );
   }
 
   return (
     <div className="h-[100dvh] w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center relative overflow-hidden transition-colors duration-300">
       
       {/* Universal Header */}
-      <div className="w-full bg-white dark:bg-slate-900 h-14 md:h-16 px-6 shadow-sm border-b border-slate-100 dark:border-slate-800 z-50 flex-shrink-0 flex items-center">
-        <div className="max-w-7xl w-full mx-auto flex justify-between items-center">
+      <div className="w-full bg-white dark:bg-slate-900 h-14 md:h-16 shadow-sm border-b border-slate-100 dark:border-slate-800 z-50 flex-shrink-0 flex items-center">
+        <div className="max-w-7xl w-full mx-auto px-6 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100 dark:shadow-none hidden sm:flex">
               <SparklesIcon />
@@ -271,19 +314,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                   </h2>
                   
                   {viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
                       {assignedExams.map((exam) => (
                         (() => {
                           const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
                           const isOverdue = !!deadline && Date.now() > deadline;
-                          const session = examSessions.find(s => s.examPaperId === exam.id && s.studentId === user?.id);
+                          const session = examSessionMap.get(exam.id);
+                          const submittedSession = session?.isSubmitted ? session : undefined;
                           return (
                         <div
                           key={exam.id}
-                          className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] active:scale-[0.98] hover:shadow-xl border border-slate-100 dark:border-slate-800 group relative flex flex-col font-sans"
+                          className="bg-white dark:bg-slate-900 rounded-xl md:rounded-[1.5rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.02] active:scale-[0.98] hover:shadow-md border border-slate-100 dark:border-slate-800 group relative flex flex-col font-sans"
                           onClick={() => setTakingExam(exam)}
                         >
-                          <div className="relative h-32 md:h-48 bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden shrink-0 rounded-t-2xl md:rounded-t-[2rem]">
+                          <div className="relative h-24 md:h-36 bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden shrink-0 rounded-t-xl md:rounded-t-[1.5rem]">
                             <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30"></div>
                             <div className="absolute inset-0 flex items-center justify-center">
                               <FileText size={48} className="text-white/20 md:size-[64px]" />
@@ -306,7 +350,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                               </h3>
                             </div>
                           </div>
-                          <div className="p-3 md:p-5 flex-1 flex flex-col justify-between">
+                          <div className="p-2 md:p-3 flex-1 flex flex-col justify-between">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                                 <FileText size={10} className="text-indigo-400 md:size-[12px]" />
@@ -319,19 +363,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                             <div className="flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-2.5 md:pt-3">
                               <div className="flex flex-col items-start gap-0.5">
                                 <span className="text-[8px] md:text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-tighter">
-                                  {session ? '得分' : '满分'}
+                                  {submittedSession ? '得分' : (session ? '进度' : '满分')}
                                 </span>
                                 <span className="text-base md:text-lg font-black text-indigo-600 leading-none">
-                                  {session ? `${session.score}/${session.totalScore}` : exam.totalScore}
+                                  {submittedSession
+                                    ? `${submittedSession.score}/${submittedSession.totalScore}`
+                                    : (session ? '进行中' : exam.totalScore)}
                                 </span>
                               </div>
                               {isOverdue && !session ? (
                                 <div className="text-[9px] md:text-[10px] font-bold text-red-500 flex items-center gap-1">
                                   <AlertCircle size={10} className="md:size-[12px]" /> 逾期
                                 </div>
-                              ) : session ? (
+                              ) : submittedSession ? (
                                 <div className="text-[9px] md:text-[10px] font-bold text-indigo-500 flex items-center gap-1">
                                   <FileCheck size={10} className="md:size-[12px]" /> 已交
+                                </div>
+                              ) : session ? (
+                                <div className="text-[9px] md:text-[10px] font-bold text-orange-500 flex items-center gap-1">
+                                  <Clock size={10} className="md:size-[12px]" /> 进行中
                                 </div>
                               ) : (
                                 <div className="text-[9px] md:text-[10px] font-bold text-emerald-500">
@@ -351,7 +401,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                         {assignedExams.map((exam) => {
                           const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
                           const isOverdue = !!deadline && Date.now() > deadline;
-                          const session = examSessions.find(s => s.examPaperId === exam.id && s.studentId === user?.id);
+                          const session = examSessionMap.get(exam.id);
+                          const submittedSession = session?.isSubmitted ? session : undefined;
                           return (
                             <div 
                               key={exam.id}
@@ -368,13 +419,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                                     {deadline ? new Date(deadline).toLocaleDateString() : '无期限'}
                                   </span>
                                   <span className="text-[9px] font-black text-indigo-600 font-sans">
-                                    {session ? `${session.score}/${session.totalScore}` : `未开始`}
+                                    {submittedSession
+                                      ? `${submittedSession.score}/${submittedSession.totalScore}`
+                                      : (session ? '进行中' : '未开始')}
                                   </span>
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-1">
-                                {session ? (
+                                {submittedSession ? (
                                   <FileCheck size={14} className="text-indigo-500" />
+                                ) : session ? (
+                                  <Clock size={14} className="text-orange-500" />
                                 ) : isOverdue ? (
                                   <AlertCircle size={14} className="text-red-500" />
                                 ) : (
@@ -399,7 +454,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                           {assignedExams.map((exam) => {
                             const deadline = user?.classId ? exam.assignedClassDeadlines?.[user.classId] : undefined;
                             const isOverdue = !!deadline && Date.now() > deadline;
-                            const session = examSessions.find(s => s.examPaperId === exam.id && s.studentId === user?.id);
+                            const session = examSessionMap.get(exam.id);
+                            const submittedSession = session?.isSubmitted ? session : undefined;
                             return (
                               <tr 
                                 key={exam.id} 
@@ -426,7 +482,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                                 </td>
                                 <td className="px-6 py-4 text-center font-sans tracking-tight">
                                   <span className="text-sm font-black text-indigo-600">
-                                    {session ? `${session.score}/${session.totalScore}` : `0/${exam.totalScore}`}
+                                    {submittedSession
+                                      ? `${submittedSession.score}/${submittedSession.totalScore}`
+                                      : (session ? '进行中' : `0/${exam.totalScore}`)}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-right">
@@ -434,9 +492,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">
                                       <AlertCircle size={12} /> 已逾期
                                     </span>
-                                  ) : session ? (
+                                  ) : submittedSession ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-lg">
                                       <FileCheck size={12} /> 已提交
+                                    </span>
+                                  ) : session ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg">
+                                      <Clock size={12} /> 进行中
                                     </span>
                                   ) : (
                                     <span className="text-xs font-bold text-indigo-600 group-hover:underline text-left">点击开始</span>
@@ -461,7 +523,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                   </h2>
                   
                   {viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
                       {displayedResources.map((resource) => {
                         const isOverdue = resource.deadline && Date.now() > resource.deadline;
                         const submission = submissions.find(s => s.resourceId === resource.id && s.studentId === user?.id);
@@ -473,7 +535,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                             className={`bg-white dark:bg-slate-900 rounded-[1.5rem] md:rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.03] active:scale-[0.98] hover:shadow-xl border group relative flex flex-col isolate ${resource.isCompleted ? 'border-indigo-50 dark:border-indigo-900/30 opacity-90' : 'border-slate-100 dark:border-slate-800'}`}
                             onClick={() => onSelectResource(resource)}
                           >
-                            <div className={`relative h-40 md:h-48 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 rounded-t-[1.5rem] md:rounded-t-[2rem] ${resource.isCompleted ? 'grayscale-[50%]' : ''}`}>
+                            <div className={`relative h-32 md:h-40 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 rounded-t-lg md:rounded-t-[1.5rem] ${resource.isCompleted ? 'grayscale-[50%]' : ''}`}>
                               <img 
                                 src={resource.coverImage || getFallbackCover(resource.id)} 
                                 alt={resource.title} 
@@ -522,7 +584,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                               </div>
                             </div>
 
-                            <div className="p-3 md:p-5 flex-1 flex flex-col justify-between">
+                            <div className="p-2 md:p-3 flex-1 flex flex-col justify-between">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                                     <BookOpen size={10} className="text-indigo-400 md:size-[12px]" />
