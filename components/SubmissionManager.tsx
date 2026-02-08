@@ -8,6 +8,7 @@ import {
 import { Submission, MediaResource, Classroom, Student, RecorderState, AIResponse, WordTiming } from '../types';
 import { getResources, getClassroomById, getSubmissions, submitAssignment } from '../utils/storage';
 import { dataURLtoBlob } from '../utils/audioUtils';
+import { getInitials, getColorFromString } from '../utils/mediaUtils';
 import { useJobs } from '../contexts/JobContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useModal } from '../contexts/ModalContext';
@@ -392,7 +393,16 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
                   disabled={!sub || (isBatching && !isSelected)}
                   className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all ${!sub ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:bg-slate-50 dark:hover:bg-slate-800'} ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-500 shadow-sm' : ''} ${isGradingThis ? 'animate-pulse' : ''}`}
                 >
-                  <img src={student.avatar} className="w-8 h-8 rounded-lg border border-white dark:border-slate-700 shadow-sm object-cover" />
+                  {student.avatar ? (
+                    <img src={student.avatar} className="w-8 h-8 rounded-lg border border-white dark:border-slate-700 shadow-sm object-cover" />
+                  ) : (
+                    <div 
+                      className="w-8 h-8 rounded-lg border border-white dark:border-slate-700 shadow-sm flex items-center justify-center text-white text-[10px] font-black"
+                      style={{ backgroundColor: getColorFromString(student.userId || student.name) }}
+                    >
+                      {getInitials(student.name)}
+                    </div>
+                  )}
                   <div className="text-left flex-1 min-w-0">
                     <p className={`text-[11px] font-black truncate ${isSelected ? 'text-indigo-600' : 'text-slate-700 dark:text-slate-200'}`}>{student.name}</p>
                     <p className="text-[8px] text-slate-400 leading-none">{sub ? sub.submittedAt : '-'}</p>

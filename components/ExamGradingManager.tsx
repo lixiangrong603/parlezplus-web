@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ChevronLeft, User, CheckCircle, XCircle, Clock, AlertCircle,
-  Save, BarChart3, Download, RotateCcw, Edit3, Star, BookOpen, FileText
+  Save, BarChart3, Download, RotateCcw, Edit3, Star, BookOpen, FileText, ChevronDown, ChevronUp
 } from 'lucide-react';
+import ExcelJS from 'exceljs';
 import { getOptionGridColumns } from '../utils/optionLayout';
+import { stripGapBackgroundHighlight } from '../utils/gapHtml';
+import { getInitials, getColorFromString } from '../utils/mediaUtils';
 import { ExamSession, ExamPaper, Classroom, Question, MediaResource, ExamSection, ExamItem, User as UserType, SyllabusCourse } from '../types';
 import {
   getExamPaperById,
@@ -49,6 +52,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   const [showExportModal, setShowExportModal] = useState(false);
   const [showRedoConfirm, setShowRedoConfirm] = useState(false);
   const [showOnlyIncorrect, setShowOnlyIncorrect] = useState(false);
+  const [redoReason, setRedoReason] = useState(''); // 打回原因
   
   // Load initial data
   useEffect(() => {
@@ -208,18 +212,19 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
     setHasChanges(false);
   };
 
-  // Export grades
-  const handleExport = () => {
+  // Export grades with detailed information
+  const handleExport = async () => {
     if (!exam || !classroom) return;
     
-    const csvRows = [
-      ['学号', '姓名', '提交时间', '用时(分钟)', '自动评分', '最终得分', '教师评语']
-    ];
+    // === Sheet 1: 学生信息表 ===
+    const studentInfoData: any[][] = [];
+    studentInfoData.push(['学号', '姓名', '提交时间', '用时(分钟)', '系统评分', '最终得分', '教师评语']);
     
     studentList.forEach(student => {
       const session = student.session;
+      
       if (!session || !session.isSubmitted) {
-        csvRows.push([
+        studentInfoData.push([
           student.id,
           student.name,
           '未提交',
@@ -231,28 +236,306 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
       } else {
         const submitTime = session.submitTime ? new Date(session.submitTime).toLocaleString('zh-CN') : '-';
         const elapsedMin = Math.round(session.elapsedTime / 60000);
-        const autoScore = session.score ?? '-';
-        const finalScore = session.manualScore ?? session.score ?? '-';
-        const feedback = session.teacherFeedback || '-';
+        const systemScore = session.score ?? 0;
+        const manualScore = session.manualScore ?? '';
+        const teacherFeedback = session.teacherFeedback || '';
         
-        csvRows.push([
+        studentInfoData.push([
           student.id,
           student.name,
           submitTime,
-          String(elapsedMin),
-          String(autoScore),
-          String(finalScore),
-          feedback
+          elapsedMin,
+          systemScore,
+          manualScore === '' ? '' : manualScore,
+          teacherFeedback
         ]);
       }
     });
     
-    const csvContent = csvRows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    // === Sheet 2: 答题得分表 ===
+    const scoreData: any[][] = [];
+    
+    // Build question header row
+    const questionHeaders: any[] = ['学生姓名'];
+    
+    interface QuestionMeta {
+      sectionIdx: number;
+      sectionTitle: string;
+      questionNumber: number;
+      item: ExamItem;
+      question: Question;
+      subQuestionIndex?: number;
+    }
+    
+    const questionMetaList: QuestionMeta[] = [];
+    const sectionEndIndices: number[] = [];
+    
+    exam.sections.forEach((section, sectionIdx) => {
+      let questionNumber = 0;
+      
+      section.items.forEach((item) => {
+        if (item.type === 'consigne') return;
+        
+        const question = allQuestions.find(q => q.id === item.questionId);
+        if (!question) return;
+        
+        if (question.type === 'cloze-test' || question.type === 'compound-fill') {
+          const subQs = question.subQuestions || [];
+          subQs.forEach((sq, subIdx) => {
+            questionNumber++;
+            questionMetaList.push({
+              sectionIdx,
+              sectionTitle: section.title,
+              questionNumber,
+              item,
+              question: sq,
+              subQuestionIndex: subIdx
+            });
+            questionHeaders.push(`${section.title}-${questionNumber}`);
+          });
+        } else if (question.subQuestions && question.subQuestions.length > 0) {
+          question.subQuestions.forEach((sq, subIdx) => {
+            questionNumber++;
+            questionMetaList.push({
+              sectionIdx,
+              sectionTitle: section.title,
+              questionNumber,
+              item,
+              question: sq,
+              subQuestionIndex: subIdx
+            });
+            questionHeaders.push(`${section.title}-${questionNumber}`);
+          });
+        } else {
+          questionNumber++;
+          questionMetaList.push({
+            sectionIdx,
+            sectionTitle: section.title,
+            questionNumber,
+            item,
+            question
+          });
+          questionHeaders.push(`${section.title}-${questionNumber}`);
+        }
+      });
+      
+      sectionEndIndices.push(questionMetaList.length - 1);
+      questionHeaders.push(`${section.title}-总分`);
+    });
+    
+    questionHeaders.push('最终得分');
+    scoreData.push(questionHeaders);
+    
+    // Build score rows
+    const submittedStudents = studentList.filter(s => s.session?.isSubmitted);
+    const questionCorrectCounts: number[] = new Array(questionMetaList.length).fill(0);
+    const sectionTotalScores: number[][] = [];
+    const finalScores: number[] = [];
+    
+    studentList.forEach((student) => {
+      const session = student.session;
+      const scoreRow: any[] = [student.name];
+      
+      if (!session || !session.isSubmitted) {
+        questionMetaList.forEach(() => scoreRow.push('-'));
+        exam.sections.forEach(() => scoreRow.push('-'));
+        scoreRow.push('-');
+        finalScores.push(0);
+        sectionTotalScores.push(new Array(exam.sections.length).fill(0));
+      } else {
+        const studentSectionTotals: number[] = new Array(exam.sections.length).fill(0);
+        
+        questionMetaList.forEach((meta, qIdx) => {
+          const { item, question, subQuestionIndex, sectionIdx } = meta;
+          
+          const isCorrect = checkAnswer(question, session.answers[question.id]);
+          let points = 0;
+          
+          if (subQuestionIndex !== undefined) {
+            points = item.subPoints?.[subQuestionIndex] ?? 1;
+          } else {
+            points = item.points || 1;
+          }
+          
+          const earned = isCorrect ? points : 0;
+          studentSectionTotals[sectionIdx] += earned;
+          
+          if (isCorrect) {
+            questionCorrectCounts[qIdx]++;
+          }
+          
+          scoreRow.push(earned);
+          
+          if (sectionEndIndices.includes(qIdx)) {
+            scoreRow.push(studentSectionTotals[sectionIdx]);
+          }
+        });
+        
+        sectionTotalScores.push(studentSectionTotals);
+        
+        const finalScore = session.manualScore ?? session.score ?? 0;
+        finalScores.push(finalScore);
+        scoreRow.push(finalScore);
+      }
+      
+      scoreData.push(scoreRow);
+    });
+    
+    // Add statistics row
+    const statsRow: any[] = ['正确率/平均分'];
+    const submittedCount = submittedStudents.length || 1;
+    
+    questionMetaList.forEach((meta, qIdx) => {
+      const { sectionIdx } = meta;
+      
+      const correctRate = (questionCorrectCounts[qIdx] / submittedCount * 100).toFixed(1) + '%';
+      statsRow.push(correctRate);
+      
+      if (sectionEndIndices.includes(qIdx)) {
+        const sectionAvg = sectionTotalScores
+          .filter((_, idx) => studentList[idx].session?.isSubmitted)
+          .reduce((sum, studentSections) => sum + (studentSections[sectionIdx] || 0), 0) / submittedCount;
+        statsRow.push(parseFloat(sectionAvg.toFixed(1)));
+      }
+    });
+    
+    const finalScoreAvg = finalScores
+      .filter((_, idx) => studentList[idx].session?.isSubmitted)
+      .reduce((sum, score) => sum + score, 0) / submittedCount;
+    statsRow.push(parseFloat(finalScoreAvg.toFixed(1)));
+    
+    scoreData.push(statsRow);
+    
+    // Create Excel workbook with ExcelJS
+    const workbook = new ExcelJS.Workbook();
+    
+    // === Sheet 1: 学生信息表 ===
+    const ws1 = workbook.addWorksheet('学生信息表');
+    
+    // Set column widths for Sheet 1
+    ws1.columns = [
+      { width: 12 },  // 学号
+      { width: 10 },  // 姓名
+      { width: 20 },  // 提交时间
+      { width: 12 },  // 用时
+      { width: 10 },  // 系统评分
+      { width: 10 },  // 最终得分
+      { width: 30 }   // 教师评语
+    ];
+    
+    // Add data to Sheet 1
+    studentInfoData.forEach((row, rowIdx) => {
+      const excelRow = ws1.addRow(row);
+      
+      // Style header row
+      if (rowIdx === 0) {
+        excelRow.eachCell((cell) => {
+          cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } }
+          };
+        });
+      } else {
+        // Style data cells
+        excelRow.eachCell((cell, colNumber) => {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+            bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+            left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+            right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+          };
+          
+          // Highlight unsubmitted rows
+          if (row[2] === '未提交') {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+          }
+        });
+      }
+    });
+    
+    // Freeze first row for Sheet 1
+    ws1.views = [{ state: 'frozen', ySplit: 1 }];
+    
+    // === Sheet 2: 答题得分表 ===
+    const ws2 = workbook.addWorksheet('答题得分表');
+    
+    // Set column widths for Sheet 2 - auto width
+    ws2.columns = questionHeaders.map((header, idx) => ({
+      width: idx === 0 ? 12 : (header.includes('-总分') || header === '最终得分' ? 10 : 8)
+    }));
+    
+    // Add data to Sheet 2
+    scoreData.forEach((row, rowIdx) => {
+      const excelRow = ws2.addRow(row);
+      
+      // Style header row
+      if (rowIdx === 0) {
+        excelRow.eachCell((cell) => {
+          cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } }
+          };
+        });
+      } else if (rowIdx === scoreData.length - 1) {
+        // Style statistics row (last row)
+        excelRow.eachCell((cell, colNumber) => {
+          cell.font = { bold: true, size: 11 };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = {
+            top: { style: 'medium', color: { argb: 'FF000000' } },
+            bottom: { style: 'medium', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } }
+          };
+          
+          // Light blue background for section total and final score columns
+          const header = questionHeaders[colNumber - 1];
+          if (colNumber > 1 && header && (header.includes('-总分') || header === '最终得分')) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F5' } };
+          }
+        });
+      } else {
+        // Style data cells
+        excelRow.eachCell((cell, colNumber) => {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+          };
+          
+          // Highlight section total and final score columns with light blue
+          const header = questionHeaders[colNumber - 1];
+          if (colNumber > 1 && header && (header.includes('-总分') || header === '最终得分')) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F5' } };
+            cell.font = { bold: true };
+          }
+        });
+      }
+    });
+    
+    // Freeze first row for Sheet 2
+    ws2.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
+    
+    // Export Excel file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${exam.title}_${classroom.name}_成绩单_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`;
+    link.download = `${exam.title}_${classroom.name}_成绩单_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
     
@@ -263,10 +546,12 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   const handleReturnToRedo = () => {
     if (!selectedStudentId) return;
     
-    deleteExamSessionsByExam(examId, [selectedStudentId]);
+    const currentUser = exam?.teacherId;
+    deleteExamSessionsByExam(examId, [selectedStudentId], currentUser, redoReason || '教师要求重做');
     loadSessions();
     setSelectedStudentId(null);
     setShowRedoConfirm(false);
+    setRedoReason(''); // 清空原因
   };
 
   // Check answer helper
@@ -378,7 +663,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
         {/* Left Sidebar - Student List */}
         <div className="w-80 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col">
           {/* Student List */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto no-scrollbar">
             {filteredStudents.length === 0 ? (
               <div className="p-4 text-center text-sm text-slate-400">
                 暂无学生
@@ -404,11 +689,16 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
                         : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
                     }`}
                   >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
                     {student.avatar ? (
                       <img src={student.avatar} alt="" className="w-full h-full rounded-full object-cover" />
                     ) : (
-                      student.name.charAt(0)
+                      <div 
+                        className="w-full h-full rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: getColorFromString(student.userId || student.name) }}
+                      >
+                        {getInitials(student.name)}
+                      </div>
                     )}
                   </div>
                   
@@ -460,7 +750,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
         </div>
 
         {/* Right Content Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto no-scrollbar">
           {!selectedStudentId || !currentSession ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
@@ -608,14 +898,51 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
 
       {/* Return to Redo Confirm Modal */}
       {showRedoConfirm && (
-        <ConfirmModal
-          title="返回重做"
-          message="确定要清空该学生的作答记录吗？学生将可以重新答题。此操作不可撤销。"
-          confirmText="确定"
-          type="danger"
-          onConfirm={handleReturnToRedo}
-          onClose={() => setShowRedoConfirm(false)}
-        />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">返回重做</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                确定要打回该学生的考试，让其重新作答吗？
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
+                原记录将被标记为已删除（可在系统中查看历史），操作将被记录到审计日志。
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  打回原因（必填）
+                </label>
+                <textarea
+                  value={redoReason}
+                  onChange={(e) => setRedoReason(e.target.value)}
+                  placeholder="请说明打回的原因，例如：系统故障、作弊嫌疑、学生申请等..."
+                  className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-slate-800 dark:text-white resize-none"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowRedoConfirm(false);
+                  setRedoReason('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleReturnToRedo}
+                disabled={!redoReason.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-lg transition"
+              >
+                确认打回
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -647,6 +974,21 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
   const questionClass = 'text-lg md:text-xl';
   const optionClass = 'text-base md:text-lg';
   const passageClass = 'text-base md:text-lg';
+  
+  // Collapsed sections state
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
   
   // Helper to determine if a question (or any part of it) is incorrect
   const isQuestionIncorrect = (q: Question): boolean => {
@@ -720,7 +1062,7 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
   
   // Helper to render cloze-test passage with student answers inline
   const renderClozePassageGrading = (question: Question, startNum: number) => {
-    const passage = question.readingPassage || '';
+    const passage = stripGapBackgroundHighlight(question.readingPassage || '');
     const parts: (string | JSX.Element)[] = [];
     const spanRegex = /<span\s+data-gap="(\d+)"[^>]*>.*?<\/span>/g;
     let lastIndex = 0;
@@ -774,7 +1116,7 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
 
   // Helper to render compound-fill passage with student answers inline
   const renderCompoundFillPassageGrading = (question: Question, startNum: number) => {
-    const passage = question.readingPassage || '';
+    const passage = stripGapBackgroundHighlight(question.readingPassage || '');
     const parts: (string | JSX.Element)[] = [];
     const spanRegex = /<span\s+data-gap="(\d+)"[^>]*>.*?<\/span>/g;
     let lastIndex = 0;
@@ -825,24 +1167,85 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
     );
   };
   
+  // Calculate section score
+  const calculateSectionScore = (section: ExamSection): { earned: number; total: number } => {
+    let earned = 0;
+    let total = 0;
+    
+    section.items.forEach(item => {
+      if (item.type === 'consigne') return;
+      
+      const question = allQuestions.find(q => q.id === item.questionId);
+      if (!question) return;
+      
+      const points = item.points || 1;
+      
+      if (question.type === 'cloze-test' || question.type === 'compound-fill') {
+        const subQs = question.subQuestions || [];
+        subQs.forEach((sq, idx) => {
+          const subPoints = item.subPoints?.[idx] ?? 1;
+          total += subPoints;
+          if (checkAnswer(sq, session.answers[sq.id])) {
+            earned += subPoints;
+          }
+        });
+      } else if (question.subQuestions && question.subQuestions.length > 0) {
+        question.subQuestions.forEach((sq, idx) => {
+          const subPoints = item.subPoints?.[idx] ?? 1;
+          total += subPoints;
+          if (checkAnswer(sq, session.answers[sq.id])) {
+            earned += subPoints;
+          }
+        });
+      } else {
+        total += points;
+        if (checkAnswer(question, session.answers[question.id])) {
+          earned += points;
+        }
+      }
+    });
+    
+    return { earned, total };
+  };
+  
   return (
     <div className="space-y-6">
       {exam.sections.map((section) => {
         let questionNumber = 0;
+        const sectionScore = calculateSectionScore(section);
+        const isCollapsed = collapsedSections.has(section.id);
         
         return (
-          <div key={section.id} className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="mb-4">
-              <h3 className={`text-xl font-black text-slate-800 dark:text-white ${serifFont} mb-1`}>
-                {section.title}
-              </h3>
-              {section.instructions && (
-                <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed" 
-                   dangerouslySetInnerHTML={{ __html: section.instructions }} />
-              )}
-            </div>
+          <div key={section.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <button
+              onClick={() => toggleSection(section.id)}
+              className="w-full p-6 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+            >
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-3">
+                  <h3 className={`text-xl font-black text-slate-800 dark:text-white ${serifFont}`}>
+                    {section.title}
+                  </h3>
+                  <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg px-3 py-1">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">得分</span>
+                    <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                      {sectionScore.earned}/{sectionScore.total}
+                    </span>
+                  </div>
+                </div>
+                {section.instructions && !isCollapsed && (
+                  <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mt-2" 
+                     dangerouslySetInnerHTML={{ __html: section.instructions }} />
+                )}
+              </div>
+              <div className="ml-4 text-slate-400 dark:text-slate-500">
+                {isCollapsed ? <ChevronDown size={24} /> : <ChevronUp size={24} />}
+              </div>
+            </button>
             
-            <div className="space-y-4">
+            {!isCollapsed && (
+              <div className="px-6 pb-6">
+                <div className="space-y-4">
             {section.items.map((item, itemIdx) => {
               if (item.type === 'consigne') {
                 return (
@@ -1109,8 +1512,10 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
                     {renderQuestionTags(question)}
                     {question.readingPassage && (
                       <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
-                        <div className={`${optionClass} ${serifFont} text-slate-700 dark:text-slate-300 leading-relaxed`}
-                             dangerouslySetInnerHTML={{ __html: question.readingPassage }} />
+                        <div
+                          className={`${optionClass} ${serifFont} text-slate-700 dark:text-slate-300 leading-relaxed`}
+                          dangerouslySetInnerHTML={{ __html: stripGapBackgroundHighlight(question.readingPassage) }}
+                        />
                       </div>
                     )}
                     <div className="space-y-4">
@@ -1134,7 +1539,9 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
                 return renderSimpleQuestion(question, qNum);
               }
             })}
-            </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

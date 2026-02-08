@@ -4,6 +4,7 @@ import { Question, QuestionType } from '../types';
 import { Trash2, Plus, FileText, AlignLeft, List, X, CheckCircle, Puzzle, Keyboard, Wand2 } from 'lucide-react';
 import { getOptionGridColumns } from '../utils/optionLayout';
 import RichTextEditor, { RichTextEditorHandle } from './RichTextEditor';
+import { stripGapBackgroundHighlight } from '../utils/gapHtml';
 
 interface QuestionEditorProps {
     question: Question;
@@ -68,7 +69,7 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
         let gapIndex = 0;
         return clean.replace(/\{\{\d+\}\}|\(\d+\)\s*_{2,}/g, (match) => {
             gapIndex += 1;
-            return `<span data-gap="${gapIndex}" class="bg-amber-100/70 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1 rounded">(${gapIndex}) ____________</span>`;
+            return `<span data-gap="${gapIndex}" class="text-slate-600 dark:text-slate-400 font-serif">(${gapIndex}) ____________</span>`;
         });
     };
 
@@ -81,6 +82,14 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
     useEffect(() => {
         if (question.type === 'cloze-test' || question.type === 'compound-fill') {
             const passage = question.readingPassage || '';
+
+            // Clean legacy yellow highlight classes from previously-saved content.
+            const cleanedLegacy = stripGapBackgroundHighlight(passage);
+            if (cleanedLegacy !== passage) {
+                updateField('readingPassage', cleanedLegacy);
+                return;
+            }
+
             if (passage && !passage.includes('data-gap=')) {
                 const highlighted = highlightGaps(passage);
                 if (highlighted !== passage) {
@@ -283,7 +292,7 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
                             return (
                                 <div className={`grid ${gridColsClass} gap-2`}>
                                     {question.options.map((opt, oIdx) => (
-                                        <div key={opt.id} className={`flex items-center gap-1.5 p-1.5 rounded border transition-all ${question.correctOptionId === opt.id ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800'}`}>
+                                        <div key={opt.id} className={`flex items-center gap-1.5 transition-all ${question.correctOptionId === opt.id ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
                                             <button 
                                                 onClick={() => setCorrectOption(opt.id)}
                                                 className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${question.correctOptionId === opt.id ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 hover:border-slate-400'}`}
@@ -324,7 +333,7 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
 
     // --- Main Parent Editor Render ---
     return (
-        <div className="w-full bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all hover:border-indigo-300 dark:hover:border-indigo-700">
+        <div className="w-full bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all hover:border-indigo-300 dark:hover:border-indigo-700 font-serif">
             {/* Main Header */}
             <div className="p-4 border-b bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -390,7 +399,7 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
                                 onAddCloze={isAutoSyncType ? () => {
                                     // 使用临时大编号避免冲突，syncGapsFromPassage 会重新分配连续编号
                                     const tempNum = Date.now();
-                                    return `<span data-gap="${tempNum}" class="bg-amber-100/70 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1 rounded">(${tempNum}) ____________</span>`;
+                                    return `<span data-gap="${tempNum}" class="text-slate-600 dark:text-slate-400 font-serif">(${tempNum}) ____________</span>`;
                                 } : undefined}
                             />
                             {isAutoSyncType && (
@@ -491,7 +500,7 @@ const QuestionEditor: React.FC<QuestionEditorProps> = ({ question, index, onChan
                             return (
                                 <div className={`grid ${gridColsClass} gap-3`}>
                                     {question.options.map((opt, oIdx) => (
-                                        <div key={opt.id} className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${question.correctOptionId === opt.id ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800'}`}>
+                                        <div key={opt.id} className={`flex items-center gap-2 transition-all ${question.correctOptionId === opt.id ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
                                             <button 
                                                 onClick={() => setCorrectOption(opt.id)}
                                                 className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${question.correctOptionId === opt.id ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-slate-400'}`}

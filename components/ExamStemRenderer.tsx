@@ -1,5 +1,6 @@
 import React from 'react';
 import { QuestionType } from '../types';
+import { stripGapBackgroundHighlight } from '../utils/gapHtml';
 
 interface QuestionContent {
   stem?: string;
@@ -76,20 +77,22 @@ const ExamStemRenderer: React.FC<ExamStemRendererProps> = ({ content, type, show
 
   // Reading Comprehension - Only passage (sub-questions handled separately)
   if (type === 'reading-comprehension' && content.readingPassage) {
+    const cleanedPassage = stripGapBackgroundHighlight(content.readingPassage);
     return (
       <div
         className="whitespace-pre-wrap text-justify leading-relaxed prose max-w-none font-serif"
-        dangerouslySetInnerHTML={{ __html: content.readingPassage }}
+        dangerouslySetInnerHTML={{ __html: cleanedPassage }}
       />
     );
   }
 
   // Cloze Test - Show passage with blanks
   if (type === 'cloze-test' && content.readingPassage) {
+    const cleanedPassage = stripGapBackgroundHighlight(content.readingPassage);
     return (
       <div
         className="whitespace-pre-wrap text-justify leading-relaxed prose max-w-none font-serif"
-        dangerouslySetInnerHTML={{ __html: content.readingPassage }}
+        dangerouslySetInnerHTML={{ __html: cleanedPassage }}
       />
     );
   }
@@ -105,7 +108,7 @@ const ExamStemRenderer: React.FC<ExamStemRendererProps> = ({ content, type, show
     const BLANK_TOKEN = '__PP_BLANK__';
 
     // 1) First, handle HTML-based gap placeholders (from the rich editor)
-    let processedStem = content.stem;
+    let processedStem = stripGapBackgroundHighlight(content.stem);
     if (showAnswers && isBlankInStemQuestion && content.correctAnswer) {
       const answers = splitAnswers(content.correctAnswer);
       processedStem = injectAnswersIntoHtmlGaps(processedStem, answers);

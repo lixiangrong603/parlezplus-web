@@ -2,7 +2,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import SyllabusManager from './SyllabusManager';
 import { SyllabusCourse, Question, KnowledgePoint, User } from '../types';
-import { getSyllabusCourses, saveSyllabusCourse, deleteSyllabusCourse, getBankQuestions, saveBankQuestion, deleteBankQuestion } from '../utils/storage';
+import {
+    getSyllabusCourses,
+    saveSyllabusCourse,
+    cascadeDeleteSyllabusCourse,
+    checkSyllabusCourseQuestionReferences,
+    getBankQuestions,
+    saveBankQuestion,
+    deleteBankQuestion,
+    checkQuestionReferences,
+    ReferenceInfo
+} from '../utils/storage';
 import { CURRENT_USER_ID } from '../constants';
 import { Sparkles, BrainCircuit, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useJobs } from '../contexts/JobContext';
@@ -22,6 +32,12 @@ const QuestionBankDashboard: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bankQuestions, setBankQuestions] = useState<Question[]>([]);
   const [showWizard, setShowWizard] = useState(false);
+
+    const [courseDeleteConfirmState, setCourseDeleteConfirmState] = useState<{
+        courseId: string;
+        courseName: string;
+        references: ReferenceInfo[];
+    } | null>(null);
   
   // Editing state for existing questions
   const [editingQId, setEditingQId] = useState<string | null>(null);
@@ -58,10 +74,31 @@ const QuestionBankDashboard: React.FC = () => {
     setCourses(getSyllabusCourses(CURRENT_USER_ID));
   };
 
-  const handleDeleteCourse = (id: string) => {
-    deleteSyllabusCourse(id);
-    setCourses(getSyllabusCourses(CURRENT_USER_ID));
+    const refreshSyllabusAndQuestions = () => {
+        setCourses(getSyllabusCourses(CURRENT_USER_ID));
+        setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+    };
+
+  const handleDeleteCourse = async (id: string) => {
+        const course = courses.find(c => c.id === id);
+        if (!course) return;
+
+        const checkResult = checkSyllabusCourseQuestionReferences(id);
+
+        setCourseDeleteConfirmState({
+            courseId: id,
+            courseName: course.name,
+            references: checkResult.references
+        });
   };
+
+    const executeDeleteCourse = () => {
+        if (!courseDeleteConfirmState) return;
+        cascadeDeleteSyllabusCourse(courseDeleteConfirmState.courseId, user?.id);
+        setCourses(getSyllabusCourses(CURRENT_USER_ID));
+        setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+        setCourseDeleteConfirmState(null);
+    };
 
   // Helper to get selected KP objects
   const getSelectedKnowledgePoints = (): KnowledgePoint[] => {
@@ -95,15 +132,22 @@ const QuestionBankDashboard: React.FC = () => {
   };
 
   const handleDeleteExistingQuestion = async (id: string) => {
-      const ok = await modal.confirm({
-          title: '确认删除',
-          message: '确定要删除这道题吗？',
-          type: 'danger',
-          confirmText: '删除'
-      });
-      if (!ok) return;
-      deleteBankQuestion(id);
-      setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+    // 检查引用
+    const checkResult = checkQuestionReferences(id);
+    
+    const message = checkResult.hasReferences
+      ? `确定要删除这道题吗？\n\n${checkResult.message}\n\n该题将被软删除，可在30天内恢复。`
+      : '确定要删除这道题吗？该操作可在30天内恢复。';
+    
+    const ok = await modal.confirm({
+        title: '确认删除',
+        message,
+        type: 'danger',
+        confirmText: '删除'
+    });
+    if (!ok) return;
+    deleteBankQuestion(id, user?.id, '教师删除题目');
+    setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
   };
 
   const handleCancelEdit = () => {
@@ -124,13 +168,71 @@ const QuestionBankDashboard: React.FC = () => {
 
   return (
     <div className="flex h-full w-full bg-white dark:bg-slate-900 transition-colors duration-300">
+            {courseDeleteConfirmState && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800">
+                        <div className="p-6 border-b dark:border-slate-800">
+                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">删除课程</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                                课程「{courseDeleteConfirmState.courseName}」关联了题库题目（通过知识点）。
+                            </p>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4">
+                                <div className="text-sm font-bold text-amber-800 dark:text-amber-200">关联题目</div>
+                                {courseDeleteConfirmState.references.length === 0 ? (
+                                    <div className="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">
+                                        未发现关联题目。
+                                    </div>
+                                ) : (
+                                    <>
+                                        {courseDeleteConfirmState.references.map((ref, idx) => (
+                                            <div key={idx} className="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">
+                                                <div className="font-semibold">{ref.type}：{ref.count}</div>
+                                                {ref.items?.length ? (
+                                                    <ul className="mt-1 space-y-1 list-disc list-inside">
+                                                        {ref.items.map(it => (
+                                                            <li key={it.id} className="truncate">{it.name}</li>
+                                                        ))}
+                                                    </ul>
+                                                ) : null}
+                                            </div>
+                                        ))}
+                                        <div className="text-xs text-amber-700 dark:text-amber-300 mt-3">
+                                            本次删除将级联软删除课程及关联题目（30天内可在回收站恢复）。
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3 justify-end">
+                            <button
+                                onClick={() => setCourseDeleteConfirmState(null)}
+                                className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={() => executeDeleteCourse()}
+                                className="px-4 py-2 text-sm font-black text-white bg-red-600 hover:bg-red-700 rounded-xl transition"
+                            >
+                                级联删除（软删除）
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
       {/* Left Sidebar: Syllabus Manager */}
       <SyllabusManager 
         courses={courses}
         onUpdateCourse={handleUpdateCourse}
         onDeleteCourse={handleDeleteCourse}
+                onRefresh={refreshSyllabusAndQuestions}
         onSelectionChange={setSelectedIds}
         selectedIds={selectedIds}
+                operatorId={user?.id}
       />
 
       {/* Main Content */}

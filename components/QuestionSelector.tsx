@@ -5,6 +5,7 @@ import { Search, Filter, X, CheckSquare, Square, FileText, Layers, Video, BookOp
 import UnitTreeSelector from './UnitTreeSelector';
 import { getOptionGridColumns } from '../utils/optionLayout';
 import { useModal } from '../contexts/ModalContext';
+import { stripGapBackgroundHighlight } from '../utils/gapHtml';
 
 // 扩展的Question类型，包含来源信息和资源扩展属性
 type ExtendedQuestion = Question & {
@@ -531,23 +532,24 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
                 </div>
               ) : sourceFilter === 'resources' && groupedByResource ? (
                 // 资源模式：按资源分组显示
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-4 font-serif">
                   {groupedByResource.map(group => {
                     const firstQ = group.questions[0];
                     
                     const renderGapPlaceholders = (html?: string) => {
                       if (!html) return '';
-                      return html.replace(/\{\{(\d+)\}\}/g, '<span class="inline-block bg-amber-100/70 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1 rounded">($1) ____________</span>');
+                      const cleaned = stripGapBackgroundHighlight(html);
+                      return cleaned.replace(/\{\{(\d+)\}\}/g, '<span class="inline-block text-slate-600 dark:text-slate-400 font-serif">($1) ____________</span>');
                     };
 
                     return (
                       <div
                         key={group.sourceId}
                         onClick={() => toggleSelection(firstQ.id)}
-                        className={`p-4 border rounded-xl cursor-pointer transition-all ${
+                        className={`bg-white dark:bg-slate-900 rounded-2xl p-5 border shadow-sm hover:shadow-md transition-shadow cursor-pointer group relative overflow-hidden ${
                           group.allSelected
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            : 'border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -588,13 +590,13 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
                             {/* Question preview - show first question's content */}
                             {firstQ.readingPassage ? (
                               <div 
-                                className="text-sm text-slate-600 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800 mb-2 text-justify prose-sm max-w-none line-clamp-3"
+                                className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800 mb-2 text-justify prose-sm max-w-none"
                                 dangerouslySetInnerHTML={{ __html: renderGapPlaceholders(firstQ.readingPassage) }}
                               />
                             ) : firstQ.text ? (
                               <div 
-                                className="text-sm text-slate-700 dark:text-slate-300 mb-2 line-clamp-2"
-                                dangerouslySetInnerHTML={{ __html: firstQ.text }}
+                                className="text-slate-800 dark:text-slate-100 mb-3 text-sm line-clamp-2 prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: stripGapBackgroundHighlight(firstQ.text) }}
                               />
                             ) : null}
                             
@@ -615,13 +617,14 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
                 </div>
               ) : (
                 // 题库模式：按题目显示
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-4 font-serif">
                   {filteredQuestions.map(q => {
                     const isSelected = selectedIds.includes(q.id);
                     
                     const renderGapPlaceholders = (html?: string) => {
                       if (!html) return '';
-                      return html.replace(/\{\{(\d+)\}\}/g, '<span class="inline-block bg-amber-100/70 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1 rounded">($1) ____________</span>');
+                      const cleaned = stripGapBackgroundHighlight(html);
+                      return cleaned.replace(/\{\{(\d+)\}\}/g, '<span class="inline-block text-slate-600 dark:text-slate-400 font-serif">($1) ____________</span>');
                     };
 
                     const getKPTypeConfig = (type: string) => {
@@ -637,10 +640,10 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
                       <div
                         key={q.id}
                         onClick={() => toggleSelection(q.id)}
-                        className={`p-4 border rounded-xl cursor-pointer transition-all ${
+                        className={`bg-white dark:bg-slate-900 rounded-2xl p-5 border shadow-sm hover:shadow-md transition-shadow cursor-pointer group relative overflow-hidden ${
                           isSelected
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            : 'border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -745,14 +748,14 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
                             {/* Reading Passage for complex types - no label */}
                             {(q.type === 'reading-comprehension' || q.type === 'cloze-test' || q.type === 'compound-fill') && q.readingPassage ? (
                               <div 
-                                className="text-sm text-slate-600 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800 mb-2 text-justify prose-sm max-w-none"
+                                className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800 mb-2 text-justify prose-sm max-w-none"
                                 dangerouslySetInnerHTML={{ __html: renderGapPlaceholders(q.readingPassage) }}
                               />
                             ) : q.text ? (
                               /* Question Text for simple types */
                               <div 
-                                className="font-bold text-slate-800 dark:text-slate-100 mb-3 text-sm line-clamp-2 prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{ __html: q.text }}
+                                className="text-slate-800 dark:text-slate-100 mb-3 text-sm line-clamp-2 prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: stripGapBackgroundHighlight(q.text) }}
                               />
                             ) : null}
 
@@ -765,11 +768,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
                               return (
                                 <div className={`grid gap-2 ${gridColsClass}`}>
                                   {firstFour.map((opt, i) => (
-                                    <div key={opt.id} className={`flex items-start gap-2 text-xs p-2 rounded-lg border min-w-0 ${
-                                      opt.id === q.correctOptionId 
-                                        ? 'border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' 
-                                        : 'border-slate-100 dark:border-slate-700 text-slate-500 dark:text-slate-400'
-                                    }`}>
+                                    <div key={opt.id} className={`flex items-start gap-2 text-xs min-w-0 ${opt.id === q.correctOptionId ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
                                       <div className={`w-4 h-4 rounded-full flex items-center justify-center border text-[9px] shrink-0 mt-0.5 ${
                                         opt.id === q.correctOptionId 
                                           ? 'border-emerald-500 bg-emerald-500 text-white' 

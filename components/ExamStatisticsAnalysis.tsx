@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useContext } from 'react';
 import {
   X, ChevronDown, ChevronUp, CheckCircle, XCircle, 
-  BookOpen, Tag, Star, TrendingDown, User, ArrowUpDown, Sun, Moon
+  BookOpen, Tag, Star, TrendingDown, User, ArrowUpDown, Sun, Moon, FileText
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { ExamPaper, ExamSession, Question, MediaResource, User as UserType, SyllabusCourse } from '../types';
 import { getSyllabusCourses } from '../utils/storage';
 import { getOptionGridColumns } from '../utils/optionLayout';
+import { stripGapBackgroundHighlight } from '../utils/gapHtml';
 
 interface ExamStatisticsAnalysisProps {
   exam: ExamPaper;
@@ -458,7 +459,7 @@ const ExamStatisticsAnalysis: React.FC<ExamStatisticsAnalysisProps> = ({
                         </div>
                         <div 
                           className={`${textSizeClasses.passage} text-slate-700 dark:text-slate-300 leading-relaxed`}
-                          dangerouslySetInnerHTML={{ __html: selectedQuestion.parentQuestion.readingPassage }}
+                          dangerouslySetInnerHTML={{ __html: stripGapBackgroundHighlight(selectedQuestion.parentQuestion.readingPassage) }}
                         />
                       </div>
                     )}
@@ -617,6 +618,35 @@ const ExamStatisticsAnalysis: React.FC<ExamStatisticsAnalysisProps> = ({
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+                  
+                  {/* Transcript - Show if available from resource */}
+                  {selectedQuestion.resource?.transcript && selectedQuestion.resource.transcript.length > 0 && (
+                    <div className="mb-4 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
+                      <h4 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 mb-4 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <FileText size={16} className="text-indigo-600" />
+                        录音/视频原文 (Transcription)
+                      </h4>
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {selectedQuestion.resource.transcript.map((seg, idx) => (
+                          <div key={idx} className="group flex gap-3 items-start">
+                            <span className="text-[10px] font-mono text-slate-400 mt-1 shrink-0 bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                              {Math.floor(seg.startTime / 60).toString().padStart(2, '0')}:{(seg.startTime % 60).toString().padStart(2, '0')}
+                            </span>
+                            <div className="flex-1 space-y-1">
+                              <div className="text-sm leading-relaxed font-serif text-slate-700 dark:text-slate-200 font-medium">
+                                {seg.text}
+                              </div>
+                              {seg.translation && (
+                                <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 group-hover:line-clamp-none transition-all">
+                                  {seg.translation}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   

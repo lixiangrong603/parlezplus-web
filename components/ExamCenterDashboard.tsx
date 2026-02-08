@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ExamPaper, User, ExamSection, Question, Classroom } from '../types';
-import { getExamPapers, deleteExamPaper, getQuestionsByIds, updateExamPaper, getClassrooms } from '../utils/storage';
+import { getExamPapers, deleteExamPaper, getQuestionsByIds, updateExamPaper, getClassrooms, checkExamPaperReferences, cascadeDeleteExamPaper, ReferenceInfo } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   FileText, Plus, Archive, FolderOpen, Edit3, Trash2, Calendar, CheckCircle, Eye, 
@@ -136,6 +136,12 @@ const ExamCenterDashboard: React.FC = () => {
   const [analysisExam, setAnalysisExam] = useState<ExamPaper | null>(null);
   const [takingExam, setTakingExam] = useState<ExamPaper | null>(null);
   const [assigningExam, setAssigningExam] = useState<ExamPaper | null>(null);
+
+  const [examDeleteConfirmState, setExamDeleteConfirmState] = useState<{
+    examId: string;
+    examTitle: string;
+    references: ReferenceInfo[];
+  } | null>(null);
   
   // Folder management
   const [folders, setFolders] = useState<ExamFolder[]>([]);
@@ -264,14 +270,27 @@ const ExamCenterDashboard: React.FC = () => {
   };
 
   const handleDeleteExam = async (examId: string) => {
-    const ok = await modal.confirm({
-      title: '确认删除',
-      message: '确认删除该试卷？此操作不可撤销。',
-      type: 'danger',
-      confirmText: '删除'
+    const paper = examPapers.find(p => p.id === examId);
+    if (!paper) return;
+
+    const checkResult = checkExamPaperReferences(examId);
+    setExamDeleteConfirmState({
+      examId,
+      examTitle: paper.title,
+      references: checkResult.references
     });
-    if (!ok) return;
-    deleteExamPaper(examId);
+  };
+
+  const executeDeleteExam = (cascade: boolean) => {
+    if (!examDeleteConfirmState) return;
+
+    if (cascade) {
+      cascadeDeleteExamPaper(examDeleteConfirmState.examId, user?.id);
+    } else {
+      deleteExamPaper(examDeleteConfirmState.examId, user?.id, '教师删除试卷');
+    }
+
+    setExamDeleteConfirmState(null);
     loadExamPapers();
   };
 
@@ -375,6 +394,69 @@ const ExamCenterDashboard: React.FC = () => {
 
   return (
     <div className="flex h-full w-full bg-white dark:bg-slate-900 transition-colors duration-300">
+      {examDeleteConfirmState && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800">
+            <div className="p-6 border-b dark:border-slate-800">
+              <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">删除试卷</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                试卷「{examDeleteConfirmState.examTitle}」可能存在考试记录。
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4">
+                <div className="text-sm font-bold text-amber-800 dark:text-amber-200">关联考试记录</div>
+                {examDeleteConfirmState.references.length === 0 ? (
+                  <div className="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">未发现关联考试记录。</div>
+                ) : (
+                  <>
+                    {examDeleteConfirmState.references.map((ref, idx) => (
+                      <div key={idx} className="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">
+                        <div className="font-semibold">{ref.type}：{ref.count}</div>
+                        {ref.items?.length ? (
+                          <ul className="mt-1 space-y-1 list-disc list-inside">
+                            {ref.items.map(it => (
+                              <li key={it.id} className="truncate">{it.name}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                    <div className="text-xs text-amber-700 dark:text-amber-300 mt-3">
+                      仅删除试卷会保留考试记录；级联删除会将这些考试记录一并软删除（可在回收站恢复）。
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                两种方式都会软删除试卷（可在回收站恢复）。
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3 justify-end">
+              <button
+                onClick={() => setExamDeleteConfirmState(null)}
+                className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => executeDeleteExam(false)}
+                className="px-4 py-2 text-sm font-black text-amber-700 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/40 rounded-xl transition"
+              >
+                仅删除试卷
+              </button>
+              <button
+                onClick={() => executeDeleteExam(true)}
+                className="px-4 py-2 text-sm font-black text-white bg-red-600 hover:bg-red-700 rounded-xl transition"
+              >
+                级联删除（含考试记录）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Left Main Sidebar */}
       <div className="w-64 h-full bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
         {/* Header */}

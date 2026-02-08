@@ -5,6 +5,7 @@ import { getOptionGridColumns } from '../utils/optionLayout';
 import MediaPlayer from './MediaPlayer';
 import { ThemeContext } from '../App';
 import { useModal } from '../contexts/ModalContext';
+import { stripGapBackgroundHighlight } from '../utils/gapHtml';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, XCircle, 
   Clock, PlayCircle, AlertCircle, BookOpen, 
@@ -51,6 +52,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [markedQuestionIds, setMarkedQuestionIds] = useState<Set<string>>(new Set());
+  const [currentSession, setCurrentSession] = useState<ExamSession | null>(null);
   
   // Load syllabuses for knowledge points
   const syllabuses = useMemo(() => getSyllabusCourses(), []);
@@ -124,6 +126,9 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
 
     const existing = getExamSessionById(sessionId);
     if (!existing) return;
+
+    // Store current session for accessing teacher feedback and manual score
+    setCurrentSession(existing);
 
     const restoredAnswers = existing.answers || {};
     setAnswers(restoredAnswers);
@@ -823,7 +828,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
           </div>
 
           {/* Section List with Question Numbers */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto no-scrollbar">
             {(() => {
               return exam.sections.map((section, secIdx) => {
                 const sectionQuestions: { id: string; number: number; answered: boolean; correct?: boolean }[] = [];
@@ -1041,8 +1046,41 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
         </div>
 
         {/* Main content - Current Section */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6 no-scrollbar">
           <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
+            {/* Teacher Feedback and Manual Score - Show before first section */}
+            {isSubmitted && currentSession && currentSectionIndex === 0 && (currentSession.teacherFeedback || currentSession.manualScore !== undefined) && (
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-2xl p-6 border-2 border-indigo-200 dark:border-indigo-800 shadow-lg">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-lg">
+                    <Star size={24} className="text-white" />
+                  </div>
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-100">
+                        教师评语与评分
+                      </h3>
+                      {currentSession.manualScore !== undefined && (
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-lg px-4 py-2 border border-indigo-200 dark:border-indigo-700 shadow-sm">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">最终得分</span>
+                          <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                            {currentSession.manualScore}
+                            <span className="text-sm text-indigo-400 dark:text-indigo-500 ml-1">/{currentSession.totalScore}</span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {currentSession.teacherFeedback && (
+                      <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-indigo-100 dark:border-indigo-800 shadow-sm">
+                        <div className="text-base leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                          {currentSession.teacherFeedback}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Section Content */}
             {exam.sections[currentSectionIndex] && (
               <RenderSection 
@@ -1511,7 +1549,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
         node: (
           <h3
             className={`${questionClass} ${serifFont} ${isMarked ? 'text-red-700 dark:text-red-300' : 'text-slate-800 dark:text-slate-100'} leading-normal`}
-            dangerouslySetInnerHTML={{ __html: rawStem }}
+            dangerouslySetInnerHTML={{ __html: stripGapBackgroundHighlight(rawStem) }}
           />
         )
       };
@@ -1761,7 +1799,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
   };
 
   const renderClozePassage = (question: Question, startNum: number) => {
-    const passage = question.readingPassage || '';
+    let passage = stripGapBackgroundHighlight(question.readingPassage || '');
     const parts: (string | JSX.Element)[] = [];
     
     // Parse the HTML and replace spans with dropdowns
@@ -1830,7 +1868,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
     const subQs = question.subQuestions || [];
     questionNumber += subQs.length;
 
-    const passage = question.readingPassage || '';
+    let passage = stripGapBackgroundHighlight(question.readingPassage || '');
     const parts: (string | JSX.Element)[] = [];
     
     const spanRegex = /<span\s+data-gap="(\d+)"[^>]*>.*?<\/span>/g;
@@ -1937,7 +1975,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
             <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
               <div
                 className={`${passageClass} ${serifFont} leading-relaxed text-slate-700 dark:text-slate-200 prose max-w-none`}
-                dangerouslySetInnerHTML={{ __html: question.readingPassage || '' }}
+                dangerouslySetInnerHTML={{ __html: stripGapBackgroundHighlight(question.readingPassage || '') }}
               />
             </div>
           </div>
@@ -1975,7 +2013,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
       : (
           <h3
             className={`${questionClass} ${serifFont} ${isMarked ? 'text-red-700 dark:text-red-300' : 'text-slate-800 dark:text-slate-100'} leading-normal`}
-            dangerouslySetInnerHTML={{ __html: question.text }}
+            dangerouslySetInnerHTML={{ __html: stripGapBackgroundHighlight(question.text) }}
           />
         );
 
@@ -2380,7 +2418,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
               )}
             </div>
             {/* Right: Questions */}
-            <div className="space-y-4 overflow-y-auto max-h-[600px]">
+            <div className="space-y-4 overflow-y-auto max-h-[600px] no-scrollbar">
               {filteredItems.map((item, itemIdx) => {
                 if (item.type === 'consigne') {
                   const nextItem = filteredItems[itemIdx + 1];

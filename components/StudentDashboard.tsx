@@ -2,11 +2,12 @@
 import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
 import { MediaResource, Classroom, Submission, ExamPaper, User, ExamSession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Key, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck, FileText, LayoutGrid, List } from 'lucide-react';
-import { getClassroomById, getClassrooms, getSubmissions, getExamPapers, getExamSessions } from '../utils/storage';
-import { generateRandomCoverArt } from '../utils/mediaUtils';
+import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck, FileText, LayoutGrid, List, Camera, Trash2, Loader2, User as UserIcon } from 'lucide-react';
+import { getClassroomById, getClassrooms, getSubmissions, getExamPapers, getExamSessions, saveUser } from '../utils/storage';
+import { generateRandomCoverArt, getInitials, getColorFromString, compressImage, validateImageFile } from '../utils/mediaUtils';
 import { ThemeContext } from '../App';
 import ExamTaker from './ExamTaker';
+import { ChangePasswordForm } from './ChangePasswordForm';
 
 // Icons used in StudentDashboard
 const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
@@ -25,16 +26,55 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
   const [activeClass, setActiveClass] = useState<Classroom | null>(null);
   const [allClassrooms, setAllClassrooms] = useState<Classroom[]>([]);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isClassSwitcherOpen, setIsClassSwitcherOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<'all' | 'incomplete'>('incomplete'); 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [settingsTab, setSettingsTab] = useState<'profile' | 'security'>('profile');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [examSessions, setExamSessions] = useState<ExamSession[]>([]);
   const [assignedExams, setAssignedExams] = useState<ExamPaper[]>([]);
   const [takingExam, setTakingExam] = useState<ExamPaper | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   
   const classSwitcherRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const compressed = await compressImage(file, 400, 400, 0.8);
+      setAvatarPreview(compressed);
+      
+      // 立即保存
+      if (user) {
+        const updatedUser = { ...user, avatar: compressed };
+        saveUser(updatedUser);
+      }
+    } catch (err) {
+      alert('图片处理失败，请重试');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarPreview(null);
+    if (user) {
+      const updatedUser = { ...user, avatar: undefined };
+      saveUser(updatedUser);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -221,23 +261,29 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            <div className="hidden lg:flex items-center gap-6 mr-6">
-               <div className="flex flex-col items-end">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">已完成</span>
-                  <span className="text-sm font-black text-emerald-600">{completedCount}</span>
-               </div>
-               <div className="w-[1px] h-6 bg-slate-100 dark:bg-slate-800"></div>
-               <div className="flex flex-col items-end">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">待继续</span>
-                  <span className="text-sm font-black text-orange-500">{incompleteCount}</span>
-               </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{user?.name}</p>
             </div>
 
             <button 
-              onClick={() => setIsMenuOpen(true)}
-              className="p-2 -mr-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95"
+              onClick={() => setShowSettings(true)}
+              className="w-9 h-9 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all active:scale-95"
+              title="我的设置"
             >
-              <MenuIcon />
+              {user?.avatar ? (
+                <img 
+                  src={user.avatar} 
+                  alt={user?.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div 
+                  className="w-full h-full flex items-center justify-center text-white text-sm font-black"
+                  style={{ backgroundColor: getColorFromString(user?.id || user?.name || '') }}
+                >
+                  {getInitials(user?.name || '')}
+                </div>
+              )}
             </button>
           </div>
         </div>
@@ -756,72 +802,95 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
         </div>
       </div>
 
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
-            onClick={() => setIsMenuOpen(false)}
-          ></div>
-          
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl z-50 overflow-hidden animate-fade-in-up border-t dark:border-slate-800 sm:border dark:border-slate-800">
-            <div className="p-8 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-              <div>
-                <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">账户信息</h3>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">Account & Preferences</p>
-              </div>
-              <button onClick={() => setIsMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-white dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-700 transition-all">
-                <XIcon />
+      {showSettings && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex h-[500px] border dark:border-slate-800">
+            <div className="w-48 bg-slate-50 dark:bg-slate-950/50 border-r border-slate-100 dark:border-slate-800 flex flex-col p-4 shrink-0">
+              <nav className="space-y-1">
+                <button onClick={() => setSettingsTab('profile')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${settingsTab === 'profile' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}>
+                  <Camera size={18} /> 个人资料
+                </button>
+                <button onClick={() => setSettingsTab('security')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${settingsTab === 'security' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}>
+                  <Lock size={18} /> 安全设置
+                </button>
+              </nav>
+              <button onClick={logout} className="mt-auto w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50">
+                <LogOut size={18} /> 退出登录
               </button>
             </div>
-            
-            <div className="p-8 space-y-6">
-              <div className="flex items-center gap-4 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/30">
-                 <img src={user?.avatar || `https://i.pravatar.cc/150?u=${user?.id}`} className="w-14 h-14 rounded-full border-2 border-white dark:border-slate-800 shadow-sm" />
-                 <div>
-                    <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg">{user?.name}</h4>
-                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{activeClass?.name || '自由学习者'}</p>
-                 </div>
+            <div className="flex-1 flex flex-col min-w-0">
+              <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center">
+                <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">{settingsTab === 'profile' ? '个人资料' : '安全与密码'}</h2>
+                <button onClick={() => setShowSettings(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400">
+                  <XIcon />
+                </button>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">完成资源</p>
-                    <p className="text-xl font-black text-slate-800 dark:text-slate-100">{completedCount}</p>
-                 </div>
-                 <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">活跃天数</p>
-                    <p className="text-xl font-black text-slate-800 dark:text-slate-100">12</p>
-                 </div>
-              </div>
-
-              <div className="space-y-3">
-                 <div className="flex items-center justify-between gap-2 text-indigo-900 dark:text-indigo-400 font-bold text-sm">
-                    <div className="flex items-center gap-2">
-                       < Sun size={16} className="text-amber-500" />
-                       <span>暗夜模式</span>
+              <div className="p-8 flex-1 overflow-y-auto no-scrollbar">
+                {settingsTab === 'profile' ? (
+                  <div className="max-w-md mx-auto text-center">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">个人头像</h3>
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="relative group">
+                        {avatarPreview ? (
+                          <img 
+                            src={avatarPreview} 
+                            alt="Avatar" 
+                            className="w-32 h-32 rounded-full object-cover border-4 border-slate-100 dark:border-slate-800 shadow-lg"
+                          />
+                        ) : (
+                          <div 
+                            className="w-32 h-32 rounded-full flex items-center justify-center text-white text-4xl font-black shadow-lg border-4 border-slate-100 dark:border-slate-800"
+                            style={{ backgroundColor: getColorFromString(user?.id || user?.name || '') }}
+                          >
+                            {getInitials(user?.name || '')}
+                          </div>
+                        )}
+                        {isUploadingAvatar && (
+                          <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                            <Loader2 size={32} className="text-white animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        className="hidden"
+                      />
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingAvatar}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          <Camera size={16} />
+                          {avatarPreview ? '更换头像' : '上传头像'}
+                        </button>
+                        {avatarPreview && (
+                          <button
+                            onClick={handleRemoveAvatar}
+                            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95"
+                          >
+                            <Trash2 size={16} />
+                            删除
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        支持 JPG、PNG 或 WEBP 格式，最大 5MB
+                      </p>
                     </div>
-                    <button 
-                      onClick={toggleTheme}
-                      className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}
-                    >
-                      <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
-                    </button>
-                 </div>
-              </div>
-
-              <div className="space-y-3 pt-4">
-                <button 
-                  onClick={logout}
-                  className="w-full p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center gap-2 font-black shadow-sm hover:bg-red-100 dark:hover:bg-red-900/30 transition-all active:scale-95"
-                >
-                   <LogOut size={18} /> 退出当前登录
-                </button>
-                <button 
-                  onClick={() => setIsMenuOpen(false)}
-                  className="w-full p-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl flex items-center justify-center gap-2 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                >
-                   返回主页
-                </button>
+                  </div>
+                ) : (
+                  <div className="max-w-md mx-auto">
+                    <div className="mb-6">
+                      <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">修改密码</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">为了您的账户安全，建议定期更新密码</p>
+                    </div>
+                    <ChangePasswordForm onSuccess={() => setShowSettings(false)} />
+                  </div>
+                )}
               </div>
             </div>
           </div>

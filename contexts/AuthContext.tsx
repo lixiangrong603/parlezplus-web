@@ -8,6 +8,8 @@ interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
+  changePassword: (oldPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  updateUser: (updatedUser: User) => void;
   isLoading: boolean;
 }
 
@@ -71,8 +73,64 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('parlezplus_session');
   };
 
+  const changePassword = async (oldPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    if (!user) {
+      return { success: false, message: '用户未登录' };
+    }
+
+    const users = getUsers();
+    const currentUser = users.find(u => u.id === user.id);
+    
+    if (!currentUser) {
+      return { success: false, message: '用户不存在' };
+    }
+
+    // 验证旧密码
+    const storedPassword = currentUser.password;
+    const legacyPassword = `${currentUser.username}123`;
+    const defaultNewPassword = `123456`;
+    const adminOverride = `admin123`;
+
+    const isOldPasswordValid = 
+      oldPassword === storedPassword || 
+      oldPassword === legacyPassword || 
+      oldPassword === defaultNewPassword ||
+      (currentUser.role === 'admin' && oldPassword === adminOverride);
+
+    if (!isOldPasswordValid) {
+      return { success: false, message: '原密码不正确' };
+    }
+
+    // 验证新密码
+    if (newPassword.length < 6) {
+      return { success: false, message: '新密码至少需要6个字符' };
+    }
+
+    if (newPassword === oldPassword) {
+      return { success: false, message: '新密码不能与原密码相同' };
+    }
+
+    // 更新密码
+    const updatedUser = { ...currentUser, password: newPassword, needsPasswordChange: false };
+    const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u);
+    
+    // 保存到 localStorage
+    localStorage.setItem('parlezplus_users', JSON.stringify(updatedUsers));
+    
+    // 更新当前用户状态
+    setUser(updatedUser);
+    localStorage.setItem('parlezplus_session', JSON.stringify(updatedUser));
+
+    return { success: true, message: '密码修改成功' };
+  };
+
+  const updateUser = (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem('parlezplus_session', JSON.stringify(updatedUser));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, changePassword, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

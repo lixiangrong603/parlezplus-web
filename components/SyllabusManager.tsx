@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { SyllabusCourse, Unit, KnowledgePoint, KnowledgePointType } from '../types';
+import { cascadeDeleteSyllabusKnowledgePoint, cascadeDeleteSyllabusUnit } from '../utils/storage';
 import { 
   Folder, FolderOpen, FileText, ChevronRight, ChevronDown, 
   Plus, Edit2, Trash2, Check, X, Book,
@@ -51,16 +52,20 @@ interface SyllabusManagerProps {
   courses: SyllabusCourse[];
   onUpdateCourse: (course: SyllabusCourse) => void;
   onDeleteCourse: (id: string) => void;
+  onRefresh: () => void;
   onSelectionChange: (selectedIds: string[]) => void;
   selectedIds: string[];
+  operatorId?: string;
 }
 
 const SyllabusManager: React.FC<SyllabusManagerProps> = ({ 
   courses, 
   onUpdateCourse, 
   onDeleteCourse,
+  onRefresh,
   onSelectionChange,
-  selectedIds
+  selectedIds,
+  operatorId
 }) => {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -225,28 +230,33 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({
 
   const handleDelete = (id: string, type: 'course' | 'unit' | 'point', course: SyllabusCourse, unit?: Unit) => {
     if (type === 'course') {
-      confirmDelete("删除课程", "确定要删除该课程吗？包含的所有单元和知识点也将被永久删除。", () => {
-          onDeleteCourse(id);
-      });
+      onDeleteCourse(id);
     } else if (type === 'unit') {
-      confirmDelete("删除单元", "确定要删除该单元吗？包含的所有知识点也将被删除。", () => {
-          const updatedUnits = course.units.filter(u => u.id !== id);
-          onUpdateCourse({ ...course, units: updatedUnits });
-      });
-    } else if (type === 'point' && unit) {
-      confirmDelete("删除知识点", "确定要删除该知识点吗？", () => {
-          const updatedUnits = course.units.map(u => {
-            if (u.id === unit.id) {
-              return { ...u, knowledgePoints: u.knowledgePoints.filter(p => p.id !== id) };
-            }
-            return u;
-          });
-          onUpdateCourse({ ...course, units: updatedUnits });
-          // If deleted point was selected, remove from selection
-          if (selectedIds.includes(id)) {
-              onSelectionChange(selectedIds.filter(sid => sid !== id));
+      const unitToDelete = course.units.find(u => u.id === id);
+      const pointIds = unitToDelete?.knowledgePoints?.map(p => p.id) || [];
+      confirmDelete(
+        '删除单元（级联软删除）',
+        '确定要删除该单元吗？将级联软删除该单元及其知识点，并软删除关联题库题目（30天内可在回收站恢复）。',
+        () => {
+          cascadeDeleteSyllabusUnit(course.id, id, operatorId);
+          if (pointIds.length > 0) {
+            onSelectionChange(selectedIds.filter(sid => !pointIds.includes(sid)));
           }
-      });
+          onRefresh();
+        }
+      );
+    } else if (type === 'point' && unit) {
+      confirmDelete(
+        '删除知识点（级联软删除）',
+        '确定要删除该知识点吗？将软删除关联题库题目（30天内可在回收站恢复）。',
+        () => {
+          cascadeDeleteSyllabusKnowledgePoint(course.id, unit.id, id, operatorId);
+          if (selectedIds.includes(id)) {
+            onSelectionChange(selectedIds.filter(sid => sid !== id));
+          }
+          onRefresh();
+        }
+      );
     }
   };
 

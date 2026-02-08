@@ -9,9 +9,10 @@ import {
 } from 'lucide-react';
 import { MediaResource, TranscriptSegment, Channel, AzureWord } from '../types';
 import { 
-  getChannels, saveChannel, deleteChannel, 
-  getResources, saveResource, deleteResource,
-  uploadResourceToMockCDN, getClassrooms
+  getChannels, saveChannel,
+  getResources, saveResource,
+  uploadResourceToMockCDN, getClassrooms,
+  checkChannelReferences, cascadeDeleteChannel, cascadeDeleteResource, checkResourceReferences, ReferenceInfo
 } from '../utils/storage';
 import { CURRENT_USER_ID } from '../constants'; 
 import { parseSubtitleJson } from '../utils/textAnalysis';
@@ -133,6 +134,12 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
     isOpen: boolean, title: string, message: string, onConfirm: () => void
   } | null>(null);
 
+  const [channelDeleteConfirmState, setChannelDeleteConfirmState] = useState<{
+    channelId: string;
+    channelName: string;
+    references: ReferenceInfo[];
+  } | null>(null);
+
   useEffect(() => {
     if (user) {
       setChannels(getChannels(user.id));
@@ -184,24 +191,35 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
     setActiveChannelId(nc.id);
   };
 
-  const handleDeleteChannel = (id: string, e: React.MouseEvent) => {
+  const handleDeleteChannel = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setConfirmConfig({
-      isOpen: true,
-      title: "删除频道",
-      message: "确定要删除这个频道吗？频道内的所有资源也将被永久物理删除，无法撤销。",
-      onConfirm: () => {
-        if (!user) return;
-        deleteChannel(id);
-        const updatedChannels = getChannels(user.id);
-        setChannels(updatedChannels);
-        const allResources = getResources(user.id);
-        const filteredResources = allResources.filter(r => r.channelId !== id);
-        localStorage.setItem('parlezplus_resources', JSON.stringify(filteredResources));
-        setResources(filteredResources);
-        if (activeChannelId === id) setActiveChannelId(updatedChannels[0]?.id || '');
-      }
+    if (!user) return;
+
+    const channel = channels.find(c => c.id === id);
+    if (!channel) return;
+
+    const checkResult = checkChannelReferences(id);
+    setChannelDeleteConfirmState({
+      channelId: id,
+      channelName: channel.name,
+      references: checkResult.references
     });
+  };
+
+  const executeDeleteChannel = () => {
+    if (!user) return;
+    if (!channelDeleteConfirmState) return;
+
+    cascadeDeleteChannel(channelDeleteConfirmState.channelId, user.id);
+
+    const deletedId = channelDeleteConfirmState.channelId;
+    setChannelDeleteConfirmState(null);
+
+    const updatedChannels = getChannels(user.id);
+    setChannels(updatedChannels);
+    const allResources = getResources(user.id);
+    setResources(allResources);
+    if (activeChannelId === deletedId) setActiveChannelId(updatedChannels[0]?.id || '');
   };
 
   const getLevelBadgeStyle = (level: string) => {
@@ -217,6 +235,63 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
 
   return (
     <div className="flex h-full overflow-hidden bg-white dark:bg-slate-900">
+      {channelDeleteConfirmState && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800">
+            <div className="p-6 border-b dark:border-slate-800">
+              <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">删除频道</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                频道「{channelDeleteConfirmState.channelName}」可能包含资源。
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4">
+                <div className="text-sm font-bold text-amber-800 dark:text-amber-200">关联资源</div>
+                {channelDeleteConfirmState.references.length === 0 ? (
+                  <div className="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">未发现关联资源。</div>
+                ) : (
+                  <>
+                    {channelDeleteConfirmState.references.map((ref, idx) => (
+                      <div key={idx} className="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">
+                        <div className="font-semibold">{ref.type}：{ref.count}</div>
+                        {ref.items?.length ? (
+                          <ul className="mt-1 space-y-1 list-disc list-inside">
+                            {ref.items.map(it => (
+                              <li key={it.id} className="truncate">{it.name}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                    <div className="text-xs text-amber-700 dark:text-amber-300 mt-3">
+                      本次删除将级联软删除频道下的资源（可在回收站恢复）。
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                删除后可在回收站恢复，超过30天将自动清理。
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3 justify-end">
+              <button
+                onClick={() => setChannelDeleteConfirmState(null)}
+                className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => executeDeleteChannel()}
+                className="px-4 py-2 text-sm font-black text-white bg-red-600 hover:bg-red-700 rounded-xl transition"
+              >
+                级联删除（软删除）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="w-64 bg-slate-50 dark:bg-slate-950 flex flex-col border-r border-slate-200 dark:border-slate-800 shrink-0 transition-colors">
         <div className="h-16 px-4 border-b border-slate-200 dark:border-slate-800 shrink-0 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-800 dark:text-slate-100">资源频道</h2>
@@ -397,9 +472,9 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                             onClick={() => { 
                               setConfirmConfig({
                                 isOpen: true,
-                                title: "彻底删除资源",
-                                message: `确定要删除“${resource.title}”吗？此操作无法恢复。`,
-                                onConfirm: () => { if (user) { deleteResource(resource.id); setResources(getResources(user.id)); } }
+                                title: "删除资源（级联软删除）",
+                                message: `确定要删除“${resource.title}”吗？\n\n将级联软删除该资源相关的提交记录与练习数据，可在回收站恢复，超过30天将自动清理。`,
+                                onConfirm: () => { if (user) { cascadeDeleteResource(resource.id, user.id); setResources(getResources(user.id)); } }
                               });
                             }} 
                             className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all" 

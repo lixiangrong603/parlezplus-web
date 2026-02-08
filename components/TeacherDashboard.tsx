@@ -6,11 +6,13 @@ import {
   FileVideo, AlertCircle, Eye, Calendar, Database,
   Settings, Lock, LogOut, Key, Globe, Sparkles, X, CheckCircle, ChevronLeft, Plus, Trash2, Sun, Moon, RotateCcw,
   Send, History, BookmarkPlus, MinusCircle, ChevronDown, ChevronUp, FileCheck, Edit2, Loader2, FileSpreadsheet,
-  AlertTriangle
+  AlertTriangle, Upload, Camera
 } from 'lucide-react';
-import { Classroom, Student, Submission, MediaResource, User, ExamPaper } from '../types';
+import { Classroom, Student, Submission, MediaResource, User as UserType, ExamPaper } from '../types';
 import { 
-  getClassrooms, saveClassroom, deleteClassroom, saveUser, getUsers, getUserById, getResources, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass
+  getClassrooms, saveClassroom, saveUser, getUsers, getUserById, 
+  getResources, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass,
+  checkClassroomReferences, cascadeDeleteClassroom, ReferenceInfo
 } from '../utils/storage';
 import { MOCK_RESOURCES, CURRENT_USER_ID } from '../constants'; 
 import { ResourceManagement } from './ResourceManagement';
@@ -22,6 +24,10 @@ import ExamCenterDashboard from './ExamCenterDashboard';
 import { ClassSidebar } from './ClassSidebar';
 import { StudentRoster } from './StudentRoster';
 import ExamGradingManager from './ExamGradingManager';
+import RecycleBinViewer from './RecycleBinViewer';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { ChangePasswordForm } from './ChangePasswordForm';
+import { getInitials, getColorFromString, compressImage, validateImageFile } from '../utils/mediaUtils';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -99,6 +105,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
   const [activeTab, setActiveTab] = useState<'classes' | 'resources' | 'bank' | 'exams'>('classes');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
   const [previewResource, setPreviewResource] = useState<MediaResource | null>(null);
   const [gradingTaskId, setGradingTaskId] = useState<string | null>(null);
   const [gradingExam, setGradingExam] = useState<{ examId: string; classId: string } | null>(null);
@@ -153,12 +160,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
            <button onClick={toggleTheme} className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95">
              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
            </button>
+           <button 
+             onClick={() => setShowRecycleBin(true)} 
+             className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95"
+             title="回收站"
+           >
+             <Trash2 size={20} />
+           </button>
            <div className="text-right hidden sm:block">
               <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{user?.name}</p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">高级法语讲师</p>
            </div>
            <button onClick={() => setShowSettings(true)} className="w-9 h-9 rounded-full border-2 border-slate-100 dark:border-slate-800 hover:border-indigo-400 p-0.5 transition-all active:scale-95 overflow-hidden">
-             <img src={user?.avatar || "https://i.pravatar.cc/150?u=teacher"} className="w-full h-full rounded-full object-cover" />
+             {user?.avatar ? (
+               <img src={user.avatar} className="w-full h-full rounded-full object-cover" />
+             ) : (
+               <div 
+                 className="w-full h-full rounded-full flex items-center justify-center text-white text-sm font-black"
+                 style={{ backgroundColor: getColorFromString(user?.id || user?.name || '') }}
+               >
+                 {getInitials(user?.name || '')}
+               </div>
+             )}
            </button>
         </div>
       </header>
@@ -196,6 +218,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
       </main>
 
       {showSettings && <TeacherSettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
+      {showRecycleBin && (
+        <RecycleBinViewer
+          onClose={() => setShowRecycleBin(false)}
+          teacherId={user?.id}
+        />
+      )}
     </div>
   );
 };
@@ -216,7 +244,11 @@ const ClassManager = ({
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [showAddClass, setShowAddClass] = useState(false);
   const [newClassName, setNewClassName] = useState('');
-  const [confirmState, setConfirmState] = useState<{isOpen: boolean, classId: string} | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    classId: string;
+    className: string;
+    references: ReferenceInfo[];
+  } | null>(null);
 
   useEffect(() => {
     const classes = getClassrooms(teacherId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -246,13 +278,25 @@ const ClassManager = ({
   };
 
   const handleDeleteClass = (id: string) => {
-    setConfirmState({ isOpen: true, classId: id });
+    const classToDelete = classrooms.find(c => c.id === id);
+    if (!classToDelete) return;
+    
+    // 检查引用
+    const checkResult = checkClassroomReferences(id);
+    
+    setConfirmState({
+      classId: id,
+      className: classToDelete.name,
+      references: checkResult.references
+    });
   };
 
   const executeDeleteClass = () => {
     if (!confirmState) return;
     const id = confirmState.classId;
-    deleteClassroom(id);
+
+    cascadeDeleteClassroom(id, teacherId);
+    
     setClassrooms(getClassrooms(teacherId));
     if (selectedClassId === id) onSelectClass(null);
     setConfirmState(null);
@@ -301,13 +345,84 @@ const ClassManager = ({
           </div>
         </div>
       )}
-      <CustomConfirmModal 
-        isOpen={!!confirmState} 
-        onClose={() => setConfirmState(null)} 
-        onConfirm={executeDeleteClass}
-        title="删除班级"
-        message="确定要删除这个班级吗？所有学生进度和作业关联将被清空，此操作不可恢复。"
-      />
+      
+      {/* Delete Confirmation Modal with References */}
+      {confirmState && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <AlertTriangle className="text-red-600 dark:text-red-400" size={20} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">删除班级</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  班级 "{confirmState.className}"
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1">
+              {confirmState.references.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
+                      <div className="text-sm text-amber-800 dark:text-amber-200">
+                        <p className="font-medium mb-1">发现关联数据</p>
+                        <p>该班级有以下关联数据：</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {confirmState.references.map((ref, idx) => (
+                    <div key={idx} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-slate-900 dark:text-white">
+                          {ref.type === 'StudentPracticeData' && '学生练习数据'}
+                          {ref.type === 'Submission' && '作业提交'}
+                          {ref.type === 'ExamSession' && '考试记录'}
+                        </span>
+                        <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                          {ref.count} 个
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+                      本次删除将级联软删除班级及关联学生数据，可在回收站恢复，超过30天将自动清理。
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    该班级没有关联数据，可以安全删除
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmState(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => executeDeleteClass()}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition"
+              >
+                级联删除（软删除）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -384,7 +499,7 @@ const ClassDetailView = ({
             id: `s-${Date.now()}`, 
             userId: existingUser.id, 
             name: existingUser.name, 
-            avatar: existingUser.avatar || `https://i.pravatar.cc/150?u=${existingUser.id}`, 
+            avatar: existingUser.avatar, 
             overallProgress: 0 
         };
         const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
@@ -398,9 +513,9 @@ const ClassDetailView = ({
         });
     } else {
         const studentUserId = `u-${Date.now()}`;
-        const newUser: User = { id: studentUserId, username: newStudentData.username.trim().toLowerCase(), password: '123456', name: newStudentData.name.trim(), role: 'student', isBlocked: false, classId: classId };
+        const newUser: UserType = { id: studentUserId, username: newStudentData.username.trim().toLowerCase(), password: '123456', name: newStudentData.name.trim(), role: 'student', isBlocked: false, classId: classId, needsPasswordChange: true };
         saveUser(newUser);
-        const newStudent: Student = { id: `s-${Date.now()}`, userId: studentUserId, name: newStudentData.name.trim(), avatar: `https://i.pravatar.cc/150?u=${studentUserId}`, overallProgress: 0 };
+        const newStudent: Student = { id: `s-${Date.now()}`, userId: studentUserId, name: newStudentData.name.trim(), overallProgress: 0 };
         const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
         saveClassroom(updatedClass);
     }
@@ -809,23 +924,23 @@ const ClassDetailView = ({
                             id: `s-${Date.now()}-${username}`,
                             userId: existingUser.id,
                             name: existingUser.name,
-                            avatar: existingUser.avatar || `https://i.pravatar.cc/150?u=${existingUser.id}`,
+                            avatar: existingUser.avatar,
                             overallProgress: 0
                         });
                         addedCount++;
                     } else {
                         // 账号不存在，新建
                         const studentUserId = `u-${Date.now()}-${username}`;
-                        const newUser: User = { 
+                        const newUser: UserType = { 
                             id: studentUserId, username, password: '123456', 
-                            name, role: 'student', isBlocked: false, classId: classId 
+                            name, role: 'student', isBlocked: false, classId: classId,
+                            needsPasswordChange: true
                         };
                         saveUser(newUser);
                         newStudents.push({
                             id: `s-${Date.now()}-${username}`,
                             userId: studentUserId,
                             name: newUser.name,
-                            avatar: `https://i.pravatar.cc/150?u=${studentUserId}`,
                             overallProgress: 0
                         });
                         createdCount++;
@@ -1071,12 +1186,40 @@ const AddTaskModal = ({
 };
 
 const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLogout: () => void }) => {
-  const { isDarkMode, toggleTheme } = useContext(ThemeContext);
-  const [activeTab, setActiveTab] = useState<'general' | 'security'>('general');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'security'>('profile');
   const [azureKey, setAzureKey] = useState(localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_key`) || '');
   const [azureRegion, setAzureRegion] = useState(localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_region`) || 'westeurope');
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`) || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const compressed = await compressImage(file, 400, 400, 0.8);
+      setAvatarPreview(compressed);
+    } catch (err) {
+      alert('图片处理失败，请重试');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarPreview(null);
+  };
 
   const handleSave = () => {
     setIsSaving(true);
@@ -1084,41 +1227,113 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
       localStorage.setItem(`${CURRENT_USER_ID}_azure_speech_key`, azureKey);
       localStorage.setItem(`${CURRENT_USER_ID}_azure_speech_region`, azureRegion);
       localStorage.setItem(`${CURRENT_USER_ID}_gemini_api_key`, geminiKey);
-      setIsSaving(false); onClose();
+      
+      // 保存头像
+      if (user && avatarPreview !== user.avatar) {
+        const updatedUser = { ...user, avatar: avatarPreview || undefined };
+        saveUser(updatedUser);
+      }
+      
+      setIsSaving(false);
+      onClose();
+      window.location.reload(); // 刷新以更新头像显示
     }, 800);
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex h-[500px] border dark:border-slate-800">
-        <div className="w-48 bg-slate-50 dark:bg-slate-950/50 border-r border-slate-100 dark:border-slate-800 flex flex-col p-4 shrink-0">
-          <nav className="space-y-1">
-            <button onClick={() => setActiveTab('general')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${activeTab === 'general' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}><Settings size={18} /> 通用配置</button>
-            <button onClick={() => setActiveTab('security')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${activeTab === 'security' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}><Lock size={18} /> 安全设置</button>
-          </nav>
-          <button onClick={onLogout} className="mt-auto w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50"><LogOut size={18} /> 退出登录</button>
-        </div>
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="text-lg font-black text-slate-800 dark:text-slate-100">{activeTab === 'general' ? 'API 与服务配置' : '安全与密码'}</h2><button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={20} /></button></div>
-          <div className="p-8 flex-1 overflow-y-auto no-scrollbar">
-            {activeTab === 'general' ? (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
-                  <span className="text-xs font-bold dark:text-slate-100">暗夜模式</span>
-                  <button onClick={toggleTheme} className={`w-12 h-6 rounded-full p-1 transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-200'}`}><div className={`w-4 h-4 bg-white rounded-full transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} /></button>
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Key</label><input type="password" value={azureKey} onChange={e => setAzureKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
-                  <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Region</label><input type="text" value={azureRegion} onChange={e => setAzureRegion(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
-                  <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Gemini Key</label><input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
-                </div>
-              </div>
-            ) : <div className="p-4 text-center text-slate-400 italic">密码修改功能暂未开放</div>}
+    <>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-fade-in">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex h-[500px] border dark:border-slate-800">
+          <div className="w-48 bg-slate-50 dark:bg-slate-950/50 border-r border-slate-100 dark:border-slate-800 flex flex-col p-4 shrink-0">
+            <nav className="space-y-1">
+              <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${activeTab === 'profile' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}><Camera size={18} /> 个人资料</button>
+              <button onClick={() => setActiveTab('api')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${activeTab === 'api' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}><Settings size={18} /> API 设置</button>
+              <button onClick={() => setActiveTab('security')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${activeTab === 'security' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}><Lock size={18} /> 安全设置</button>
+            </nav>
+            <button onClick={onLogout} className="mt-auto w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50"><LogOut size={18} /> 退出登录</button>
           </div>
-          <div className="p-6 border-t dark:border-slate-800 flex justify-end gap-3 shrink-0"><button onClick={onClose} className="px-6 py-2 text-sm font-bold text-slate-500">取消</button><button onClick={handleSave} disabled={isSaving} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={18} />} 保存配置</button></div>
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="text-lg font-black text-slate-800 dark:text-slate-100">{activeTab === 'profile' ? '个人资料' : activeTab === 'api' ? 'API 与服务配置' : '安全与密码'}</h2><button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={20} /></button></div>
+            <div className="p-8 flex-1 overflow-y-auto no-scrollbar">
+              {activeTab === 'profile' ? (
+                <div className="max-w-md mx-auto text-center">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">个人头像</h3>
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="relative group">
+                      {avatarPreview ? (
+                        <img 
+                          src={avatarPreview} 
+                          alt="Avatar" 
+                          className="w-32 h-32 rounded-full object-cover border-4 border-slate-100 dark:border-slate-800 shadow-lg"
+                        />
+                      ) : (
+                        <div 
+                          className="w-32 h-32 rounded-full flex items-center justify-center text-white text-4xl font-black shadow-lg border-4 border-slate-100 dark:border-slate-800"
+                          style={{ backgroundColor: getColorFromString(user?.id || user?.name || '') }}
+                        >
+                          {getInitials(user?.name || '')}
+                        </div>
+                      )}
+                      {isUploadingAvatar && (
+                        <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                          <Loader2 size={32} className="text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingAvatar}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        <Camera size={16} />
+                        {avatarPreview ? '更换头像' : '上传头像'}
+                      </button>
+                      {avatarPreview && (
+                        <button
+                          onClick={handleRemoveAvatar}
+                          className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95"
+                        >
+                          <Trash2 size={16} />
+                          删除
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
+                      支持 JPG、PNG 或 WEBP 格式，最大 5MB
+                    </p>
+                  </div>
+                </div>
+              ) : activeTab === 'api' ? (
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Key</label><input type="password" value={azureKey} onChange={e => setAzureKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Region</label><input type="text" value={azureRegion} onChange={e => setAzureRegion(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Gemini Key</label><input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-w-md mx-auto">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">修改密码</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">为了您的账户安全，建议定期更新密码</p>
+                  </div>
+                  <ChangePasswordForm onSuccess={() => onClose()} />
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t dark:border-slate-800 flex justify-end gap-3 shrink-0"><button onClick={onClose} className="px-6 py-2 text-sm font-bold text-slate-500">取消</button><button onClick={handleSave} disabled={isSaving} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={18} />} 保存配置</button></div>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

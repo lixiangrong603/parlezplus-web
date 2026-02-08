@@ -1,14 +1,18 @@
-
 import React, { useState, useEffect, useContext } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Users, UserPlus, Trash2, ShieldAlert, ShieldCheck, 
-  Search, Filter, LogOut, Plus, X, Check, MoreVertical, Sun, Moon
+  Search, Filter, LogOut, Plus, X, Check, MoreVertical, Sun, Moon, AlertTriangle, FileText
 } from 'lucide-react';
 import { User, UserRole } from '../types';
-import { getUsers, saveUser, deleteUser, toggleBlockUser } from '../utils/storage';
+import { 
+  getUsers, saveUser, toggleBlockUser, 
+  checkUserReferences, cascadeDeleteUser, ReferenceInfo 
+} from '../utils/storage';
 import { ThemeContext } from '../App';
 import { useModal } from '../contexts/ModalContext';
+import OperationLogViewer from './OperationLogViewer';
+import RecycleBinViewer from './RecycleBinViewer';
 
 export const AdminDashboard: React.FC = () => {
   const { user: currentUser, logout } = useAuth();
@@ -17,7 +21,14 @@ export const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ username: '', name: '', role: 'student' as UserRole });
+  const [showLogViewer, setShowLogViewer] = useState(false);
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
+  const [newUser, setNewUser] = useState({ username: '', name: '', role: 'teacher' as UserRole });
+  const [deleteConfirmState, setDeleteConfirmState] = useState<{
+    userId: string;
+    userName: string;
+    references: ReferenceInfo[];
+  } | null>(null);
 
   useEffect(() => {
     setUsers(getUsers());
@@ -30,12 +41,13 @@ export const AdminDashboard: React.FC = () => {
       username: newUser.username.toLowerCase(),
       name: newUser.name,
       role: newUser.role,
-      isBlocked: false
+      isBlocked: false,
+      needsPasswordChange: true
     };
     saveUser(user);
     setUsers(getUsers());
     setShowAddModal(false);
-    setNewUser({ username: '', name: '', role: 'student' });
+    setNewUser({ username: '', name: '', role: 'teacher' });
   };
 
   const handleDelete = async (id: string) => {
@@ -43,15 +55,41 @@ export const AdminDashboard: React.FC = () => {
       await modal.alert({ message: '不能删除当前登录账号' });
       return;
     }
-    const ok = await modal.confirm({
-      title: '确认删除',
-      message: '确定要彻底删除该用户及其所有关联数据吗？',
-      type: 'danger',
-      confirmText: '删除'
-    });
-    if (!ok) return;
-    deleteUser(id);
+    
+    const userToDelete = users.find(u => u.id === id);
+    if (!userToDelete) return;
+    
+    // 检查引用
+    const checkResult = checkUserReferences(id);
+    
+    if (checkResult.hasReferences) {
+      // 显示引用信息对话框
+      setDeleteConfirmState({
+        userId: id,
+        userName: userToDelete.name,
+        references: checkResult.references
+      });
+    } else {
+      // 没有引用，直接删除
+      const ok = await modal.confirm({
+        title: '确认删除',
+        message: `确定要删除用户“${userToDelete.name}”吗？\n\n该用户将被标记为已删除（软删除），可在30天内恢复。`,
+        type: 'danger',
+        confirmText: '删除'
+      });
+      if (!ok) return;
+      cascadeDeleteUser(id, currentUser?.id);
+      setUsers(getUsers());
+    }
+  };
+  
+  const executeDelete = async () => {
+    if (!deleteConfirmState) return;
+
+    cascadeDeleteUser(deleteConfirmState.userId, currentUser?.id);
+    
     setUsers(getUsers());
+    setDeleteConfirmState(null);
   };
 
   const handleToggleBlock = async (id: string) => {
@@ -89,6 +127,18 @@ export const AdminDashboard: React.FC = () => {
             <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{currentUser?.name}</p>
             <p className="text-[10px] text-slate-400 dark:text-slate-500">超级管理员</p>
           </div>
+          <button 
+            onClick={() => setShowLogViewer(true)}
+            className="flex items-center gap-2 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-all"
+          >
+            <FileText size={16} /> 操作日志
+          </button>
+          <button 
+            onClick={() => setShowRecycleBin(true)}
+            className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+          >
+            <Trash2 size={16} /> 回收站
+          </button>
           <button 
             onClick={logout}
             className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-all"
@@ -236,8 +286,8 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase ml-1">身份角色</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['student', 'teacher', 'admin'] as UserRole[]).map(role => (
+                <div className="grid grid-cols-2 gap-3">
+                  {(['teacher', 'admin'] as UserRole[]).map(role => (
                     <button
                       key={role}
                       onClick={() => setNewUser({...newUser, role})}
@@ -245,7 +295,7 @@ export const AdminDashboard: React.FC = () => {
                         newUser.role === role ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-400'
                       }`}
                     >
-                      {role === 'student' ? '学生' : role === 'teacher' ? '教师' : '管理员'}
+                      {role === 'teacher' ? '教师' : '管理员'}
                     </button>
                   ))}
                 </div>
@@ -263,6 +313,103 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Delete Confirmation Modal with References */}
+      {deleteConfirmState && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <AlertTriangle className="text-red-600 dark:text-red-400" size={20} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">删除用户</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  用户 "{deleteConfirmState.userName}" 有关联数据
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="space-y-4">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
+                    <div className="text-sm text-amber-800 dark:text-amber-200">
+                      <p className="font-medium mb-1">发现关联数据</p>
+                      <p>该用户有以下关联数据。删除将级联软删除这些数据，可在回收站恢复。</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {deleteConfirmState.references.map((ref, idx) => (
+                  <div key={idx} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-slate-900 dark:text-white">
+                        {ref.type === 'Channel' && '频道'}
+                        {ref.type === 'MediaResource' && '资源'}
+                        {ref.type === 'Classroom' && '班级'}
+                        {ref.type === 'Question' && '题目'}
+                        {ref.type === 'ExamPaper' && '试卷'}
+                      </span>
+                      <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                        {ref.count} 个
+                      </span>
+                    </div>
+                    {ref.items.length > 0 && (
+                      <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                        <p className="font-medium">示例：</p>
+                        {ref.items.map((item, i) => (
+                          <div key={i} className="pl-2 truncate">• {item.name}</div>
+                        ))}
+                        {ref.count > ref.items.length && (
+                          <div className="pl-2 text-slate-500">...及其他 {ref.count - ref.items.length} 个</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+                    本次删除将级联软删除用户及其所有关联数据，可在回收站恢复，超过30天将自动清理。
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteConfirmState(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => executeDelete()}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition"
+              >
+                级联删除（软删除）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Operation Log Viewer */}
+      {showLogViewer && (
+        <OperationLogViewer
+          onClose={() => setShowLogViewer(false)}
+          currentUserId={currentUser?.id}
+        />
+      )}
+
+      {/* Recycle Bin Viewer */}
+      {showRecycleBin && (
+        <RecycleBinViewer
+          onClose={() => setShowRecycleBin(false)}
+        />
       )}
     </div>
   );

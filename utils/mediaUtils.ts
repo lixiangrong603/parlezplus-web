@@ -147,3 +147,162 @@ export const generateRandomCoverArt = (seedStr: string): string => {
 
   return canvas.toDataURL('image/png');
 };
+
+/**
+ * === 头像工具函数 ===
+ */
+
+/**
+ * 根据名称生成首字母（中文取第一个字，英文取第一个字母）
+ * @param name 用户姓名
+ * @returns 首字母
+ */
+export const getInitials = (name: string): string => {
+  if (!name) return '?';
+  
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  
+  // 中文字符检测
+  const isChinese = /[\u4e00-\u9fa5]/.test(trimmed[0]);
+  
+  if (isChinese) {
+    // 中文：返回第一个字
+    return trimmed[0];
+  } else {
+    // 英文：返回第一个字母的大写
+    return trimmed[0].toUpperCase();
+  }
+};
+
+/**
+ * 根据字符串生成一致的颜色（用于头像背景）
+ * @param str 输入字符串（通常是用户ID或姓名）
+ * @returns HSL颜色字符串
+ */
+export const getColorFromString = (str: string): string => {
+  if (!str) return '#6366f1'; // indigo-500
+  
+  // 预设的协调配色方案，与网站主题相匹配
+  const themeColors = [
+    '#6366f1', // indigo-500
+    '#8b5cf6', // violet-500
+    '#a855f7', // purple-500
+    '#ec4899', // pink-500
+    '#f43f5e', // rose-500
+    '#10b981', // emerald-500
+    '#14b8a6', // teal-500
+    '#06b6d4', // cyan-500
+    '#3b82f6', // blue-500
+    '#6366f1', // indigo-500（重复一次增加权重）
+    '#f59e0b', // amber-500
+    '#ef4444', // red-500
+  ];
+  
+  // 使用简单哈希算法确保同一字符串总是返回相同颜色
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    hash = hash & hash;
+  }
+  
+  // 从预设颜色中选择一个
+  const index = Math.abs(hash) % themeColors.length;
+  return themeColors[index];
+};
+
+/**
+ * 将文件转换为Base64字符串
+ * @param file 文件对象
+ * @returns Promise<string> Base64字符串
+ */
+export const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
+ * 验证图片文件
+ * @param file 文件对象
+ * @returns 验证结果和错误信息
+ */
+export const validateImageFile = (file: File): { valid: boolean; error?: string } => {
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  if (!validTypes.includes(file.type)) {
+    return {
+      valid: false,
+      error: '仅支持 JPG、PNG 或 WEBP 格式的图片'
+    };
+  }
+  
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  if (file.size > maxSize) {
+    return {
+      valid: false,
+      error: '图片大小不能超过 5MB'
+    };
+  }
+  
+  return { valid: true };
+};
+
+/**
+ * 压缩图片到指定大小
+ * @param file 原始图片文件
+ * @param maxWidth 最大宽度
+ * @param maxHeight 最大高度
+ * @param quality 质量 (0-1)
+ * @returns Promise<string> 压缩后的Base64字符串
+ */
+export const compressImage = (
+  file: File,
+  maxWidth: number = 400,
+  maxHeight: number = 400,
+  quality: number = 0.8
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // 计算缩放比例
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('无法获取canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        const base64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(base64);
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};

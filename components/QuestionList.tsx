@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Question, QuestionType, KnowledgePoint, KnowledgePointType } from '../types';
 import { Search, Filter, Edit3, Trash2, FileText, List, AlignLeft, Layers, Puzzle, Keyboard, BookA, Calendar, ArrowDown, ArrowUp, Clock } from 'lucide-react';
 import { getOptionGridColumns } from '../utils/optionLayout';
+import { stripGapBackgroundHighlight } from '../utils/gapHtml.ts';
 
 interface QuestionListProps {
   questions: Question[];
@@ -34,7 +35,8 @@ const QuestionList: React.FC<QuestionListProps> = ({ questions, onEdit, onDelete
 
   const renderGapPlaceholders = (html?: string) => {
     if (!html) return '';
-    return html.replace(/\{\{(\d+)\}\}/g, '<span class="inline-block bg-amber-100/70 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1 rounded">($1) ____________</span>');
+    const cleaned = stripGapBackgroundHighlight(html);
+    return cleaned.replace(/\{\{(\d+)\}\}/g, '<span class="inline-block text-slate-600 dark:text-slate-400 font-serif">($1) ____________</span>');
   };
 
   const stripHtmlForDisplay = (html?: string) => {
@@ -240,7 +242,7 @@ const QuestionList: React.FC<QuestionListProps> = ({ questions, onEdit, onDelete
             <p>没有找到匹配的题目</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-4 font-serif">
           {pagedQuestions.map((q, idx) => (
             <div key={q.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
               <div className="flex justify-between items-start mb-3">
@@ -302,7 +304,7 @@ const QuestionList: React.FC<QuestionListProps> = ({ questions, onEdit, onDelete
                 </div>
               ) : (
                 <div 
-                  className="font-bold text-slate-800 dark:text-slate-100 mb-3 text-sm line-clamp-2 prose-sm max-w-none"
+                  className="text-slate-800 dark:text-slate-100 mb-3 text-sm line-clamp-2 prose-sm max-w-none"
                   dangerouslySetInnerHTML={{ __html: q.text || '<span class="text-slate-400">无题干</span>' }}
                 />
               )}
@@ -319,7 +321,7 @@ const QuestionList: React.FC<QuestionListProps> = ({ questions, onEdit, onDelete
                   return (
                     <div className={`grid gap-2 ${gridColsClass}`}>
                       {firstFour.map((opt, i) => (
-                        <div key={opt.id} className={`flex items-start gap-2 text-xs p-2 rounded-lg border min-w-0 ${opt.id === q.correctOptionId ? 'border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'border-slate-100 dark:border-slate-700 text-slate-500 dark:text-slate-400'}`}>
+                        <div key={opt.id} className={`flex items-start gap-2 text-xs min-w-0 ${opt.id === q.correctOptionId ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
                           <div className={`w-4 h-4 rounded-full flex items-center justify-center border text-[9px] shrink-0 mt-0.5 ${opt.id === q.correctOptionId ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
                             {String.fromCharCode(65 + i)}
                           </div>

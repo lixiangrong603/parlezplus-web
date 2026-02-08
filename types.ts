@@ -10,6 +10,11 @@ export interface User {
   avatar?: string;
   isBlocked?: boolean;
   classId?: string; // Link student to a specific class
+  needsPasswordChange?: boolean; // 标记用户是否需要修改密码（首次登录）
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string; // 删除操作者ID
 }
 
 // [FIX] 添加缺失的 PitchDataPoint 接口定义以修复 PitchVisualizer.tsx 的编译错误
@@ -50,12 +55,20 @@ export interface KnowledgePoint {
   id: string;
   name: string;
   type: KnowledgePointType;
+  // 软删除字段（用于回收站恢复）
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 export interface Unit {
   id: string;
   name: string;
   knowledgePoints: KnowledgePoint[];
+  // 软删除字段（用于回收站恢复）
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 export interface SyllabusCourse {
@@ -64,6 +77,10 @@ export interface SyllabusCourse {
   units: Unit[];
   userId: string; // 关联到教师
   createdAt: number;
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 export type QuestionType = 'multiple-choice' | 'fill-in-the-blank' | 'reading-comprehension' | 'cloze-test' | 'compound-fill';
@@ -99,6 +116,10 @@ export interface Question {
   createdAt?: number;
   createdBy?: 'ai' | 'manual';
   teacherId?: string; // 关联的教师ID，用于权限隔离
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 // --- End Question Bank Types ---
@@ -108,6 +129,10 @@ export interface Channel {
   userId?: string; 
   name: string;
   createdAt: number;
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 export interface MediaResource {
@@ -133,6 +158,10 @@ export interface MediaResource {
   assignedClassIds?: string[]; // New: IDs of classrooms this resource is assigned to
   grammarTags?: string[]; // New: Grammar topics
   vocabTags?: string[];   // New: Vocabulary themes
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 // Updated to match new Gemini Schema (Removed per-word feedback for speed)
@@ -153,7 +182,7 @@ export interface AIResponse {
 export interface Student {
   id: string;
   name: string;
-  avatar: string;
+  avatar?: string;
   overallProgress: number;
   userId?: string; // Link back to the User record
 }
@@ -178,6 +207,12 @@ export interface Submission {
     answers: Record<string, string>;
   };
   status: 'pending_review' | 'graded';
+
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
+  deletedReason?: string;
 }
 
 export interface Classroom {
@@ -187,6 +222,10 @@ export interface Classroom {
   studentCount: number;
   students: Student[];
   createdAt?: number; // Optional timestamp for sorting
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 export enum RecorderState {
@@ -232,6 +271,10 @@ export interface ExamPaper {
 
   // [NEW] Online exam runtime settings (teacher-configurable)
   examTakerSettings?: ExamTakerSettings;
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
 }
 
 export interface ExamTakerResourcePlaybackSettings {
@@ -272,4 +315,34 @@ export interface ExamSession {
   gradedBy?: string; // 批改教师ID
   gradedAt?: number; // 批改时间戳
   status?: 'pending' | 'graded'; // 批改状态
+  // 软删除字段（用于打回重做场景）
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
+  deletedReason?: string; // 删除/打回原因
+}
+
+// --- 操作审计日志类型 ---
+export type OperationType = 
+  | 'delete_user' 
+  | 'delete_classroom' 
+  | 'delete_exam' 
+  | 'delete_resource'
+  | 'delete_channel'
+  | 'delete_question'
+  | 'return_to_redo' // 打回重做
+  | 'withdraw_task'
+  | 'withdraw_exam';
+
+export interface OperationLog {
+  id: string;
+  operatorId: string; // 操作者ID
+  operatorName: string; // 操作者名称
+  operationType: OperationType;
+  targetId: string; // 被操作的目标ID
+  targetType: string; // 目标类型（User, Classroom等）
+  targetName?: string; // 目标名称（用于显示）
+  reason?: string; // 操作原因
+  details?: Record<string, any>; // 额外详情
+  timestamp: number;
 }
