@@ -208,7 +208,7 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
                   <th className="py-3">名称</th>
                   <th className="py-3">删除时间</th>
                   <th className="py-3">剩余天数</th>
-                  <th className="py-3 text-right">操作</th>
+                  <th className="py-3 text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -232,8 +232,8 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
                     </td>
                     <td className="py-4 pr-3 text-xs text-slate-600 dark:text-slate-300">{formatTime(it.deletedAt)}</td>
                     <td className="py-4 pr-3 text-xs text-slate-600 dark:text-slate-300">{it.daysRemaining}</td>
-                    <td className="py-4 text-right">
-                      <div className="inline-flex items-center gap-2">
+                    <td className="py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleRestore(it)}
                           disabled={restoringId === it.id || deletingId === it.id}

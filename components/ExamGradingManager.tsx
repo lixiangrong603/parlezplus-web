@@ -16,7 +16,8 @@ import {
   deleteExamSessionsByExam,
   getQuestionsWithResourceInfo,
   getResources,
-  getSyllabusCourses
+  getSyllabusCourses,
+  getUserById
 } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import ExamStatisticsAnalysis from './ExamStatisticsAnalysis';
@@ -64,6 +65,16 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
     
     loadSessions();
   }, [examId, classId]);
+
+  // Refresh classroom data when storage is updated (e.g., student avatar changed)
+  useEffect(() => {
+    const handleDataChanged = () => {
+      const classData = getClassroomById(classId);
+      if (classData) setClassroom(classData);
+    };
+    window.addEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
+    return () => window.removeEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
+  }, [classId]);
 
   const loadSessions = () => {
     const sessionData = getExamSessionsByExamAndClass(examId, classId);
@@ -146,8 +157,10 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
     
     return classroom.students.map(student => {
       const session = sessions.find(s => s.studentId === student.userId);
+      const userAvatar = student.userId ? getUserById(student.userId)?.avatar : undefined;
       return {
         ...student,
+        avatar: userAvatar || student.avatar,
         session,
         hasSubmitted: session?.isSubmitted || false,
         isGraded: session?.status === 'graded',
@@ -573,7 +586,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   }
 
   return (
-    <div className="h-full w-full bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="h-full w-full bg-slate-50 dark:bg-slate-950 flex flex-col" style={{ zoom: '0.9' }}>
       {/* Header */}
       <div className="h-16 shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -766,9 +779,6 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
                   
                   {/* Left: Student Identity & Stats */}
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-xl shrink-0 shadow-md shadow-indigo-200 dark:shadow-none">
-                      {studentList.find(s => s.userId === selectedStudentId)?.name.charAt(0)}
-                    </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-3">
                         <h3 className="text-lg font-black text-slate-800 dark:text-white truncate">
@@ -1275,57 +1285,62 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
                 return (
                   <div key={item.questionId} className="mb-6">
                     {renderQuestionTags(question)}
-                    <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
-                      <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
-                        {renderClozePassageGrading(question, startNum)}
-                      </div>
-                    </div>
-                    {/* Show answer summary below */}
-                    <div className="ml-4 grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {subQs.map((subQ, idx) => {
-                        const isCorrect = checkAnswer(subQ, session.answers[subQ.id]);
-                        const correctOpt = subQ.options.find(o => o.id === subQ.correctOptionId);
-                        const userOpt = subQ.options.find(o => o.id === session.answers[subQ.id]);
-                        const displayNum = startNum + idx;
-                        
-                        return (
-                          <div key={subQ.id} className="text-sm">
-                            <span className="font-bold mr-2">({displayNum})</span>
-                            <span className={isCorrect ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
-                              {correctOpt?.text}
-                            </span>
-                            {!isCorrect && userOpt && (
-                              <span className="text-slate-500 ml-2">
-                                (您选: {userOpt.text})
-                              </span>
-                            )}
+                    <div className="flex items-start gap-2">
+                      <span className={`font-bold ${questionClass} ${serifFont} min-w-[30px] mt-0.5`}>{startNum}.</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
+                          <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
+                            {renderClozePassageGrading(question, startNum)}
                           </div>
-                        );
-                      })}
-                    </div>
-
-                    {question.explanation && (
-                      <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
-                        <span className="font-bold text-xs">解析：</span>
-                        <span className="whitespace-pre-wrap leading-relaxed">{question.explanation}</span>
-                      </div>
-                    )}
-
-                    {hasSubExplanations && (
-                      <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
-                        <span className="font-bold text-xs">解析：</span>
-                        <div className="mt-1 space-y-1">
-                          {subQs.map((sq, idx) =>
-                            sq.explanation ? (
-                              <div key={sq.id} className="whitespace-pre-wrap leading-relaxed">
-                                <span className="font-bold">({startNum + idx}) </span>
-                                {sq.explanation}
-                              </div>
-                            ) : null
-                          )}
                         </div>
+                        {/* Show answer summary below */}
+                        <div className="ml-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {subQs.map((subQ, idx) => {
+                            const isCorrect = checkAnswer(subQ, session.answers[subQ.id]);
+                            const correctOpt = subQ.options.find(o => o.id === subQ.correctOptionId);
+                            const userOpt = subQ.options.find(o => o.id === session.answers[subQ.id]);
+                            const displayNum = startNum + idx;
+                            
+                            return (
+                              <div key={subQ.id} className="text-sm">
+                                <span className="font-bold mr-2">({displayNum})</span>
+                                <span className={isCorrect ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
+                                  {correctOpt?.text}
+                                </span>
+                                {!isCorrect && userOpt && (
+                                  <span className="text-slate-500 ml-2">
+                                    (您选: {userOpt.text})
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {question.explanation && (
+                          <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+                            <span className="font-bold text-xs">解析：</span>
+                            <span className="whitespace-pre-wrap leading-relaxed">{question.explanation}</span>
+                          </div>
+                        )}
+
+                        {hasSubExplanations && (
+                          <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+                            <span className="font-bold text-xs">解析：</span>
+                            <div className="mt-1 space-y-1">
+                              {subQs.map((sq, idx) =>
+                                sq.explanation ? (
+                                  <div key={sq.id} className="whitespace-pre-wrap leading-relaxed">
+                                    <span className="font-bold">({startNum + idx}) </span>
+                                    {sq.explanation}
+                                  </div>
+                                ) : null
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               }
@@ -1343,34 +1358,39 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
                 return (
                   <div key={item.questionId} className="mb-6">
                     {renderQuestionTags(question)}
-                    <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
-                      <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
-                        {renderCompoundFillPassageGrading(question, startNum)}
+                    <div className="flex items-start gap-2">
+                      <span className={`font-bold ${questionClass} ${serifFont} min-w-[30px] mt-0.5`}>{startNum}.</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
+                          <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
+                            {renderCompoundFillPassageGrading(question, startNum)}
+                          </div>
+                        </div>
+
+                        {question.explanation && (
+                          <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+                            <span className="font-bold text-xs">解析：</span>
+                            <span className="whitespace-pre-wrap leading-relaxed">{question.explanation}</span>
+                          </div>
+                        )}
+
+                        {hasSubExplanations && (
+                          <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+                            <span className="font-bold text-xs">解析：</span>
+                            <div className="mt-1 space-y-1">
+                              {subQs.map((sq, idx) =>
+                                sq.explanation ? (
+                                  <div key={sq.id} className="whitespace-pre-wrap leading-relaxed">
+                                    <span className="font-bold">({startNum + idx}) </span>
+                                    {sq.explanation}
+                                  </div>
+                                ) : null
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    {question.explanation && (
-                      <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
-                        <span className="font-bold text-xs">解析：</span>
-                        <span className="whitespace-pre-wrap leading-relaxed">{question.explanation}</span>
-                      </div>
-                    )}
-
-                    {hasSubExplanations && (
-                      <div className="mt-3 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
-                        <span className="font-bold text-xs">解析：</span>
-                        <div className="mt-1 space-y-1">
-                          {subQs.map((sq, idx) =>
-                            sq.explanation ? (
-                              <div key={sq.id} className="whitespace-pre-wrap leading-relaxed">
-                                <span className="font-bold">({startNum + idx}) </span>
-                                {sq.explanation}
-                              </div>
-                            ) : null
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               }

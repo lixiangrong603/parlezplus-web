@@ -8,6 +8,7 @@ import {
   Send, History, BookmarkPlus, MinusCircle, ChevronDown, ChevronUp, FileCheck, Edit2, Loader2, FileSpreadsheet,
   AlertTriangle, Upload, Camera
 } from 'lucide-react';
+import AvatarEditor from './AvatarEditor';
 import { Classroom, Student, Submission, MediaResource, User as UserType, ExamPaper } from '../types';
 import { 
   getClassrooms, saveClassroom, saveUser, getUsers, getUserById, 
@@ -474,6 +475,12 @@ const ClassDetailView = ({
 
   useEffect(() => { loadData(); }, [classId, teacherId]);
 
+  useEffect(() => {
+    const handleDataChanged = () => loadData();
+    window.addEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
+    return () => window.removeEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
+  }, [classId, teacherId]);
+
   const handleAddStudent = () => {
     if (!newStudentData.name.trim() || !newStudentData.username.trim()) return;
     
@@ -718,7 +725,7 @@ const ClassDetailView = ({
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400">任务内容</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">完成进度</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">截止日期</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-right">操作</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -754,8 +761,8 @@ const ClassDetailView = ({
                                 <Edit2 size={10} className="opacity-0 group-hover/date:opacity-100 transition-opacity" />
                               </button>
                             </td>
-                            <td className="px-6 py-4 text-right align-middle">
-                              <div className="flex items-center justify-end gap-1">
+                            <td className="px-6 py-4 text-center align-middle">
+                              <div className="flex items-center justify-center gap-1">
                                 <button 
                                   onClick={() => onOpenGradingTask(res.id)} 
                                   className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-[10px] font-black hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition-all shadow-sm"
@@ -793,7 +800,7 @@ const ClassDetailView = ({
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400">作业内容</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">完成进度</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">截止日期</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-right">操作</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 text-center">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -836,8 +843,8 @@ const ClassDetailView = ({
                                 <Edit2 size={10} className="opacity-0 group-hover/date:opacity-100 transition-opacity" />
                               </button>
                             </td>
-                            <td className="px-6 py-4 text-right align-middle">
-                              <div className="flex items-center justify-end gap-2">
+                            <td className="px-6 py-4 text-center align-middle">
+                              <div className="flex items-center justify-center gap-2">
                                 <button 
                                   onClick={() => onOpenGradingExam(exam.id, classId)}
                                   className="px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
@@ -1193,6 +1200,8 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`) || '');
   const [isSaving, setIsSaving] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
+  const [candidateImage, setCandidateImage] = useState<string | null>(null);
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -1206,15 +1215,20 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
       return;
     }
 
-    setIsUploadingAvatar(true);
-    try {
-      const compressed = await compressImage(file, 400, 400, 0.8);
-      setAvatarPreview(compressed);
-    } catch (err) {
-      alert('图片处理失败，请重试');
-    } finally {
-      setIsUploadingAvatar(false);
-    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCandidateImage(event.target?.result as string);
+      setShowAvatarEditor(true);
+      // Reset input value to allow selecting same file again
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropComplete = (croppedImage: string) => {
+    setAvatarPreview(croppedImage);
+    setShowAvatarEditor(false);
+    setCandidateImage(null);
   };
 
   const handleRemoveAvatar = () => {
@@ -1333,6 +1347,16 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
           </div>
         </div>
       </div>
+      {showAvatarEditor && candidateImage && (
+        <AvatarEditor 
+          image={candidateImage}
+          onCrop={handleCropComplete}
+          onCancel={() => {
+            setShowAvatarEditor(false);
+            setCandidateImage(null);
+          }}
+        />
+      )}
     </>
   );
 };

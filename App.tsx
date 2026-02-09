@@ -9,7 +9,6 @@ import { AdminDashboard } from './components/AdminDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import PracticeStudio from './components/PracticeStudio';
 import { getResources, initializeAutomaticCleanup } from './utils/storage';
-import { cleanAllAvatars } from './utils/cleanAvatars';
 import { ModalProvider, useModal } from './contexts/ModalContext';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 
@@ -27,15 +26,7 @@ function AppContent() {
   const [selectedResource, setSelectedResource] = useState<MediaResource | null>(null);
   const [resources, setResources] = useState<MediaResource[]>([]);
 
-  // 清理旧的头像数据（只在首次加载时运行一次）
-  useEffect(() => {
-    const hasCleanedAvatars = localStorage.getItem('parlezplus_avatars_cleaned');
-    if (!hasCleanedAvatars) {
-      const result = cleanAllAvatars();
-      console.log(`🧹 首次启动清理：删除了 ${result.users} 个用户头像和 ${result.students} 个学生头像`);
-      localStorage.setItem('parlezplus_avatars_cleaned', 'true');
-    }
-  }, []);
+  // 已移除启动时自动清理旧头像的逻辑；保留手动触发脚本供管理员使用
 
   // Apply theme class to HTML element
   useEffect(() => {

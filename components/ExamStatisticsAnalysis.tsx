@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useContext } from 'react';
 import {
-  X, ChevronDown, ChevronUp, CheckCircle, XCircle, 
+  X, ChevronDown, ChevronUp, CheckCircle, XCircle, ChevronLeft, ChevronRight, BarChart3,
   BookOpen, Tag, Star, TrendingDown, User, ArrowUpDown, Sun, Moon, FileText
 } from 'lucide-react';
 import { ThemeContext } from '../App';
@@ -44,10 +44,12 @@ const ExamStatisticsAnalysis: React.FC<ExamStatisticsAnalysisProps> = ({
   students,
   onClose
 }) => {
-  const [sortBy, setSortBy] = useState<'errorRate' | 'order'>('errorRate');
+  const [sortBy, setSortBy] = useState<'errorRate' | 'order'>('order');
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionStatistic | null>(null);
   const [showCorrectStudents, setShowCorrectStudents] = useState(false);
   const [showIncorrectStudents, setShowIncorrectStudents] = useState(false);
+  const [showTopStats, setShowTopStats] = useState(false);
+  const [isListCollapsed, setIsListCollapsed] = useState(false);
   const [textSize, setTextSize] = useState<'base' | 'lg' | 'xl'>('base');
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
   
@@ -255,6 +257,17 @@ const ExamStatisticsAnalysis: React.FC<ExamStatisticsAnalysisProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setShowTopStats(!showTopStats)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                  showTopStats 
+                    ? 'bg-indigo-600 text-white shadow-lg' 
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <BarChart3 size={18} />
+                统计概览
+              </button>
+              <button
                 onClick={toggleTheme}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                 title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
@@ -271,61 +284,83 @@ const ExamStatisticsAnalysis: React.FC<ExamStatisticsAnalysisProps> = ({
           </div>
           
           {/* Overall Stats Cards */}
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
-              <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">总题数</div>
-              <div className="text-2xl font-black text-slate-800 dark:text-white">
-                {overallStats.totalQuestions}
+          {showTopStats && (
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3 animate-slide-down">
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">总题数</div>
+                <div className="text-2xl font-black text-slate-800 dark:text-white">
+                  {overallStats.totalQuestions}
+                </div>
+              </div>
+              
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3">
+                <div className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">平均错误率</div>
+                <div className="text-2xl font-black text-indigo-700 dark:text-indigo-300">
+                  {overallStats.avgErrorRate.toFixed(1)}%
+                </div>
+              </div>
+              
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
+                <div className="text-xs text-red-600 dark:text-red-400 mb-1">高错误率 (&gt;50%)</div>
+                <div className="text-2xl font-black text-red-700 dark:text-red-300">
+                  {overallStats.highErrorCount}
+                </div>
+              </div>
+              
+              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3">
+                <div className="text-xs text-amber-600 dark:text-amber-400 mb-1">中错误率 (30-50%)</div>
+                <div className="text-2xl font-black text-amber-700 dark:text-amber-300">
+                  {overallStats.mediumErrorCount}
+                </div>
+              </div>
+              
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3">
+                <div className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">低错误率 (≤30%)</div>
+                <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                  {overallStats.lowErrorCount}
+                </div>
               </div>
             </div>
-            
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3">
-              <div className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">平均错误率</div>
-              <div className="text-2xl font-black text-indigo-700 dark:text-indigo-300">
-                {overallStats.avgErrorRate.toFixed(1)}%
-              </div>
-            </div>
-            
-            <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
-              <div className="text-xs text-red-600 dark:text-red-400 mb-1">高错误率 (&gt;50%)</div>
-              <div className="text-2xl font-black text-red-700 dark:text-red-300">
-                {overallStats.highErrorCount}
-              </div>
-            </div>
-            
-            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3">
-              <div className="text-xs text-amber-600 dark:text-amber-400 mb-1">中错误率 (30-50%)</div>
-              <div className="text-2xl font-black text-amber-700 dark:text-amber-300">
-                {overallStats.mediumErrorCount}
-              </div>
-            </div>
-            
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3">
-              <div className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">低错误率 (≤30%)</div>
-              <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
-                {overallStats.lowErrorCount}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
         
         {/* Content */}
-        <div className="flex-1 overflow-hidden flex">
+        <div className="flex-1 overflow-hidden flex relative">
+          {/* Collapsed List Indicator/Button */}
+          {isListCollapsed && (
+            <button
+              onClick={() => setIsListCollapsed(false)}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-6 h-24 bg-white dark:bg-slate-800 border-y border-r border-slate-200 dark:border-slate-700 rounded-r-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-all"
+              title="展开列表"
+            >
+              <ChevronRight size={18} />
+            </button>
+          )}
+
           {/* Question List */}
-          <div className="w-[512px] shrink-0 overflow-y-auto border-r border-slate-200 dark:border-slate-700 hide-scrollbar">
+          <div className={`shrink-0 overflow-y-auto border-r border-slate-200 dark:border-slate-700 hide-scrollbar transition-all duration-300 ease-in-out ${isListCollapsed ? 'w-0 opacity-0 invisible' : 'w-[480px] opacity-100 visible'}`}>
             <div className="p-4">
               {/* Sort Controls */}
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
                   题目列表 ({sortedStatistics.length})
                 </div>
-                <button
-                  onClick={() => setSortBy(sortBy === 'errorRate' ? 'order' : 'errorRate')}
-                  className="px-3 py-1.5 text-sm bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <ArrowUpDown size={14} />
-                  {sortBy === 'errorRate' ? '按错误率排序' : '按题号排序'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSortBy(sortBy === 'errorRate' ? 'order' : 'errorRate')}
+                    className="px-3 py-1.5 text-sm bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <ArrowUpDown size={14} />
+                    {sortBy === 'errorRate' ? '按错误率排序' : '按题号排序'}
+                  </button>
+                  <button
+                    onClick={() => setIsListCollapsed(true)}
+                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 group"
+                    title="收起列表"
+                  >
+                    <ChevronLeft size={20} className="group-hover:text-slate-600 dark:group-hover:text-slate-300" />
+                  </button>
+                </div>
               </div>
               
               {/* Question Items */}

@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
 import { MediaResource, Classroom, Submission, ExamPaper, User, ExamSession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck, FileText, LayoutGrid, List, Camera, Trash2, Loader2, User as UserIcon } from 'lucide-react';
+import AvatarEditor from './AvatarEditor';
 import { getClassroomById, getClassrooms, getSubmissions, getExamPapers, getExamSessions, saveUser } from '../utils/storage';
 import { generateRandomCoverArt, getInitials, getColorFromString, compressImage, validateImageFile } from '../utils/mediaUtils';
 import { ThemeContext } from '../App';
@@ -36,6 +37,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   const [takingExam, setTakingExam] = useState<ExamPaper | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
+  const [candidateImage, setCandidateImage] = useState<string | null>(null);
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   
   const classSwitcherRef = useRef<HTMLDivElement>(null);
@@ -51,20 +54,24 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
       return;
     }
 
-    setIsUploadingAvatar(true);
-    try {
-      const compressed = await compressImage(file, 400, 400, 0.8);
-      setAvatarPreview(compressed);
-      
-      // 立即保存
-      if (user) {
-        const updatedUser = { ...user, avatar: compressed };
-        saveUser(updatedUser);
-      }
-    } catch (err) {
-      alert('图片处理失败，请重试');
-    } finally {
-      setIsUploadingAvatar(false);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCandidateImage(event.target?.result as string);
+      setShowAvatarEditor(true);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropComplete = (croppedImage: string) => {
+    setAvatarPreview(croppedImage);
+    setShowAvatarEditor(false);
+    setCandidateImage(null);
+    
+    // Save to server/storage
+    if (user) {
+      const updatedUser = { ...user, avatar: croppedImage };
+      saveUser(updatedUser);
     }
   };
 
@@ -290,44 +297,47 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
       </div>
       
       <div className="w-full flex-1 overflow-y-auto no-scrollbar pb-12">
-        <div className="max-w-7xl mx-auto px-6 pt-4 md:pt-6 space-y-6 md:space-y-8">
+        <div className="max-w-7xl mx-auto px-6 space-y-6 md:space-y-8">
+          <div className="h-1 md:h-2" />
           
-          <div className="flex items-center justify-between gap-4 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-1">
-               <button 
-                 onClick={() => setViewMode('grid')}
-                 className={`p-1.5 md:p-2 rounded-xl transition-all active:scale-95 ${viewMode === 'grid' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                 title="网格视图"
-               >
-                 <LayoutGrid size={18} className="md:size-[20px]" />
-               </button>
-               <button 
-                 onClick={() => setViewMode('list')}
-                 className={`p-1.5 md:p-2 rounded-xl transition-all active:scale-95 ${viewMode === 'list' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
-                 title="列表视图"
-               >
-                 <List size={18} className="md:size-[20px]" />
-               </button>
-            </div>
+          <div className="sticky top-0 z-20 -mx-6 px-6 pb-3 pt-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md transition-all">
+            <div className="flex items-center justify-between gap-4 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-1">
+                 <button 
+                   onClick={() => setViewMode('grid')}
+                   className={`p-1.5 md:p-2 rounded-xl transition-all active:scale-95 ${viewMode === 'grid' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                   title="网格视图"
+                 >
+                   <LayoutGrid size={18} className="md:size-[20px]" />
+                 </button>
+                 <button 
+                   onClick={() => setViewMode('list')}
+                   className={`p-1.5 md:p-2 rounded-xl transition-all active:scale-95 ${viewMode === 'list' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                   title="列表视图"
+                 >
+                   <List size={18} className="md:size-[20px]" />
+                 </button>
+              </div>
 
-            <div className="flex items-center gap-0.5 md:gap-1 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-xl">
-               <button 
-                 onClick={() => setFilterTab('incomplete')}
-                 className={`px-3 py-1.5 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all active:scale-95 flex items-center gap-1.5 ${filterTab === 'incomplete' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
-               >
-                 待完成
-                 {incompleteCount > 0 && (
-                   <span className={`text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-bold ${filterTab === 'incomplete' ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
-                     {incompleteCount}
-                   </span>
-                 )}
-               </button>
-               <button 
-                 onClick={() => setFilterTab('all')}
-                 className={`px-3 py-1.5 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all active:scale-95 ${filterTab === 'all' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
-               >
-                 全部任务
-               </button>
+              <div className="flex items-center gap-0.5 md:gap-1 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-xl">
+                 <button 
+                   onClick={() => setFilterTab('incomplete')}
+                   className={`px-3 py-1.5 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all active:scale-95 flex items-center gap-1.5 ${filterTab === 'incomplete' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                 >
+                   待完成
+                   {incompleteCount > 0 && (
+                     <span className={`text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-bold ${filterTab === 'incomplete' ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
+                       {incompleteCount}
+                     </span>
+                   )}
+                 </button>
+                 <button 
+                   onClick={() => setFilterTab('all')}
+                   className={`px-3 py-1.5 md:px-4 rounded-lg text-xs md:text-sm font-bold transition-all active:scale-95 ${filterTab === 'all' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                 >
+                   全部任务
+                 </button>
+              </div>
             </div>
           </div>
 
@@ -895,6 +905,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
             </div>
           </div>
         </div>
+      )}
+
+      {showAvatarEditor && candidateImage && (
+        <AvatarEditor 
+          image={candidateImage}
+          onCrop={handleCropComplete}
+          onCancel={() => {
+            setShowAvatarEditor(false);
+            setCandidateImage(null);
+          }}
+        />
       )}
     </div>
   );

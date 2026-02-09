@@ -1489,8 +1489,6 @@ const RenderSection: React.FC<RenderSectionProps> = ({
     setResourceDraftDirty(false);
   }, [currentResourceId, activeResourcePlaybackSettings]);
 
-  let questionNumber = 0;
-
   const buildInlineBlankParts = (stemHtml: string) => {
     if (typeof document === 'undefined') {
       return { htmlWithMarkers: stemHtml, blankCount: 0 };
@@ -1691,6 +1689,25 @@ const RenderSection: React.FC<RenderSectionProps> = ({
     return !questionResourceMap[item.questionId];
   });
 
+  // Calculate starting question number for this set of filtered items
+  let initialQuestionNumber = 0;
+  if (filteredItems.length > 0) {
+    const firstItem = filteredItems[0];
+    const firstItemIdxInOriginal = section.items.indexOf(firstItem);
+    for (let i = 0; i < firstItemIdxInOriginal; i++) {
+      const item = section.items[i];
+      if (item.type === 'consigne' || !item.questionId) continue;
+      const q = allQuestions.find(qq => qq.id === item.questionId);
+      if (!q) continue;
+      if (q.subQuestions && q.subQuestions.length > 0) {
+        initialQuestionNumber += q.subQuestions.length;
+      } else {
+        initialQuestionNumber += 1;
+      }
+    }
+  }
+  let questionNumber = initialQuestionNumber;
+
   const renderQuestion = (item: ExamItem, question: Question) => {
     // Handle Consigne
     if (item.type === 'consigne') {
@@ -1754,46 +1771,51 @@ const RenderSection: React.FC<RenderSectionProps> = ({
         className="mb-4"
       >
         {renderQuestionTags(question)}
-        <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
-          <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
-            {renderClozePassage(question, startNum)}
+        <div className="flex items-start gap-2">
+          <span className={`font-bold ${questionClass} ${serifFont} min-w-[30px] mt-0.5`}>{startNum}.</span>
+          <div className="flex-1 min-w-0">
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded mb-3">
+              <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
+                {renderClozePassage(question, startNum)}
+              </div>
+            </div>
+            {isSubmitted && (
+              <div className="ml-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+                {subQs.map((subQ, idx) => {
+                  const isCorrect = checkAnswer(subQ, answers[subQ.id]);
+                  const correctOpt = subQ.options.find(o => o.id === subQ.correctOptionId);
+                  const userOpt = subQ.options.find(o => o.id === answers[subQ.id]);
+                  const displayNum = startNum + idx;
+                  
+                  return (
+                    <div key={subQ.id} className="text-sm">
+                      <span className="font-bold mr-2">({displayNum})</span>
+                      <span className={isCorrect ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
+                        {correctOpt?.text}
+                      </span>
+                      {!isCorrect && userOpt && (
+                        <span className="text-slate-500 ml-2">
+                          (您选: {userOpt.text})
+                        </span>
+                      )}
+                      {isSubmitted && subQ.explanation && (
+                        <div className="mt-2 ml-6 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-xs text-indigo-900 dark:text-indigo-200">
+                          <span className="font-bold text-[10px]">解析：</span> {subQ.explanation}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {isSubmitted && question.explanation && (
+              <div className="mt-4 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+                <span className="font-bold text-xs">解析：</span>
+                <div className="mt-1 leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
+              </div>
+            )}
           </div>
         </div>
-        {isSubmitted && (
-          <div className="ml-4 grid grid-cols-1 md:grid-cols-2 gap-2">
-            {subQs.map((subQ, idx) => {
-              const isCorrect = checkAnswer(subQ, answers[subQ.id]);
-              const correctOpt = subQ.options.find(o => o.id === subQ.correctOptionId);
-              const userOpt = subQ.options.find(o => o.id === answers[subQ.id]);
-              const displayNum = startNum + idx;
-              
-              return (
-                <div key={subQ.id} className="text-sm">
-                  <span className="font-bold mr-2">({displayNum})</span>
-                  <span className={isCorrect ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
-                    {correctOpt?.text}
-                  </span>
-                  {!isCorrect && userOpt && (
-                    <span className="text-slate-500 ml-2">
-                      (您选: {userOpt.text})
-                    </span>
-                  )}
-                  {isSubmitted && subQ.explanation && (
-                    <div className="mt-2 ml-6 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-xs text-indigo-900 dark:text-indigo-200">
-                      <span className="font-bold text-[10px]">解析：</span> {subQ.explanation}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {isSubmitted && question.explanation && (
-          <div className="mt-4 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
-            <span className="font-bold text-xs">解析：</span>
-            <div className="mt-1 leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
-          </div>
-        )}
       </div>
     );
   };
@@ -1933,33 +1955,38 @@ const RenderSection: React.FC<RenderSectionProps> = ({
         className="mb-4"
       >
         {renderQuestionTags(question)}
-        <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">
-          <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
-            {parts.map((part, idx) => 
-              typeof part === 'string' ? <span key={idx} dangerouslySetInnerHTML={{ __html: part }} /> : part
+        <div className="flex items-start gap-2">
+          <span className={`font-bold ${questionClass} ${serifFont} min-w-[30px] mt-0.5`}>{startNum}.</span>
+          <div className="flex-1 min-w-0">
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">
+              <div className={`${passageClass} ${serifFont} leading-normal text-slate-700 dark:text-slate-200`}>
+                {parts.map((part, idx) => 
+                  typeof part === 'string' ? <span key={idx} dangerouslySetInnerHTML={{ __html: part }} /> : part
+                )}
+              </div>
+            </div>
+            {isSubmitted && question.explanation && (
+              <div className="mt-4 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
+                <span className="font-bold text-xs">解析：</span>
+                <div className="mt-1 leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
+              </div>
+            )}
+            {isSubmitted && subQs.some(sq => !!sq.explanation) && (
+              <div className="mt-2 space-y-2 ml-4">
+                {subQs.map((sq, idx) =>
+                  sq.explanation ? (
+                    <div
+                      key={sq.id}
+                      className="p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-xs text-indigo-900 dark:text-indigo-200"
+                    >
+                      <span className="font-bold text-[10px]">({startNum + idx}) 解析：</span> {sq.explanation}
+                    </div>
+                  ) : null
+                )}
+              </div>
             )}
           </div>
         </div>
-        {isSubmitted && question.explanation && (
-          <div className="mt-4 p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-sm text-indigo-900 dark:text-indigo-200">
-            <span className="font-bold text-xs">解析：</span>
-            <div className="mt-1 leading-relaxed whitespace-pre-wrap">{question.explanation}</div>
-          </div>
-        )}
-        {isSubmitted && subQs.some(sq => !!sq.explanation) && (
-          <div className="mt-2 space-y-2 ml-4">
-            {subQs.map((sq, idx) =>
-              sq.explanation ? (
-                <div
-                  key={sq.id}
-                  className="p-2 bg-indigo-50 dark:bg-indigo-900/10 border-l-2 border-indigo-400 text-xs text-indigo-900 dark:text-indigo-200"
-                >
-                  <span className="font-bold text-[10px]">({startNum + idx}) 解析：</span> {sq.explanation}
-                </div>
-              ) : null
-            )}
-          </div>
-        )}
       </div>
     );
   };

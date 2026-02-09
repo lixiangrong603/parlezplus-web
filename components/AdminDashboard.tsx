@@ -186,7 +186,7 @@ export const AdminDashboard: React.FC = () => {
                   <th className="px-8 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">基本信息</th>
                   <th className="px-8 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">身份角色</th>
                   <th className="px-8 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">账号状态</th>
-                  <th className="px-8 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">管理操作</th>
+                  <th className="px-8 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">管理操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
@@ -225,8 +225,8 @@ export const AdminDashboard: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-8 py-5 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-8 py-5 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button 
                           onClick={() => handleToggleBlock(u.id)}
                           className={`p-2 rounded-xl transition-all ${u.isBlocked ? 'text-emerald-500 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20' : 'text-orange-400 dark:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20'}`}

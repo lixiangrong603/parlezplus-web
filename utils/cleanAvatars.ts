@@ -10,6 +10,15 @@ const STORAGE_KEYS = {
   CLASSROOMS: 'parlezplus_classrooms',
 };
 
+const isLegacyAvatar = (avatar: string): boolean => {
+  const a = avatar.trim();
+  if (!a) return false;
+  // Keep new uploaded avatars (data URLs)
+  if (a.startsWith('data:image/')) return false;
+  // Only remove old external avatar service
+  return a.includes('pravatar.cc') || a.includes('i.pravatar.cc');
+};
+
 /**
  * 清理用户表中的头像
  */
@@ -22,7 +31,7 @@ export const cleanUserAvatars = (): number => {
 
   users = users.map(user => {
     // 如果头像是 pravatar.cc 或者存在旧的头像，删除它
-    if (user.avatar) {
+    if (user.avatar && isLegacyAvatar(user.avatar)) {
       cleanedCount++;
       const { avatar, ...userWithoutAvatar } = user;
       return userWithoutAvatar;
@@ -46,7 +55,7 @@ export const cleanClassroomAvatars = (): number => {
 
   classrooms = classrooms.map(classroom => {
     const students = classroom.students.map(student => {
-      if (student.avatar) {
+      if (student.avatar && isLegacyAvatar(student.avatar)) {
         cleanedCount++;
         const { avatar, ...studentWithoutAvatar } = student;
         return studentWithoutAvatar;

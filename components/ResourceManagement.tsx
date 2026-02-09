@@ -398,7 +398,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                     <th className="w-[10%] px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">难度</th>
                     <th className="w-[18%] px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">创建时间</th>
                     <th className="w-[15%] px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">状态</th>
-                    <th className="w-[17%] px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">操作</th>
+                    <th className="w-[17%] px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -445,8 +445,8 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                           {resource.status === 'ready' ? `已发布 (${resource.assignedClassIds?.length || 0})` : '草稿'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <button 
                             onClick={() => onPreview(resource)}
                             className="p-2 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-all" 

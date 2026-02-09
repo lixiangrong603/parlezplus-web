@@ -803,6 +803,42 @@ export const getUserById = (id: string): User | undefined => {
   return getUsers().find(u => u.id === id);
 };
 
+const emitDataChanged = () => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event('parlezplus:data-changed'));
+};
+
+const syncUserAvatarToClassrooms = (user: User): boolean => {
+  const classrooms = getClassrooms(undefined, true);
+  let changed = false;
+
+  const updated = classrooms.map(cls => {
+    let classChanged = false;
+    const updatedStudents = cls.students.map(student => {
+      const matches = student.userId === user.id || student.id === user.id;
+      if (!matches) return student;
+
+      if (student.avatar === user.avatar) return student;
+      classChanged = true;
+
+      if (user.avatar) {
+        return { ...student, avatar: user.avatar };
+      }
+
+      const { avatar: _avatar, ...studentWithoutAvatar } = student;
+      return studentWithoutAvatar;
+    });
+
+    if (!classChanged) return cls;
+    changed = true;
+    return { ...cls, students: updatedStudents };
+  });
+
+  if (!changed) return false;
+  localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(updated));
+  return true;
+};
+
 export const saveUser = (user: User) => {
   const users = getUsers();
   const index = users.findIndex(u => u.id === user.id);
@@ -812,6 +848,10 @@ export const saveUser = (user: User) => {
     users.push(user);
   }
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+
+  // Keep classroom student records in sync (student lists read from Classroom.students)
+  syncUserAvatarToClassrooms(user);
+  emitDataChanged();
 };
 
 export const deleteUser = (id: string, operatorId?: string, reason?: string) => {
@@ -1082,6 +1122,8 @@ export const saveClassroom = (classroom: Classroom) => {
       classes.push(classroom);
   }
   localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classes));
+
+  emitDataChanged();
 };
 
 export const deleteClassroom = (id: string, operatorId?: string, reason?: string) => {

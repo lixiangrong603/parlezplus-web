@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Student } from '../types';
 import { Users, UserPlus, RotateCcw, UserMinus, FileSpreadsheet, ChevronDown, ChevronUp } from 'lucide-react';
 import { getInitials, getColorFromString } from '../utils/mediaUtils';
+import { getUserById } from '../utils/storage';
 
 interface StudentRosterProps {
   classId: string;
@@ -67,9 +68,12 @@ export const StudentRoster: React.FC<StudentRosterProps> = ({
                 key={student.id} 
                 className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 relative group transition-all hover:shadow-md"
               >
-                {student.avatar ? (
+                {(() => {
+                  const userAvatar = student.userId ? getUserById(student.userId)?.avatar : undefined;
+                  const avatar = userAvatar || student.avatar;
+                  return avatar ? (
                   <img 
-                    src={student.avatar} 
+                    src={avatar} 
                     className="w-12 h-12 rounded-full border-2 border-white dark:border-slate-700 shadow-sm object-cover" 
                   />
                 ) : (
@@ -79,7 +83,8 @@ export const StudentRoster: React.FC<StudentRosterProps> = ({
                   >
                     {getInitials(student.name)}
                   </div>
-                )}
+                  );
+                })()}
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate w-full text-center">
                   {student.name}
                 </span>
