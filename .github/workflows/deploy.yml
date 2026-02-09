@@ -2,8 +2,12 @@ name: Deploy to Cloudflare Pages
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch: # 支持手动触发
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: # 允许手动触发
 
 jobs:
   deploy:
@@ -11,7 +15,7 @@ jobs:
     permissions:
       contents: read
       deployments: write
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +32,7 @@ jobs:
       - name: Build
         run: npm run build
 
+      # 使用 wrangler-action 部署（支持 D1 和 R2 绑定）
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
@@ -35,10 +40,12 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=parlezplus
 
-      - name: Run D1 migrations (only on first deploy or schema change)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+      # 首次部署或 schema 变更时运行数据库迁移
+      - name: Run D1 migrations (if schema changed)
+        if: github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute parlezplus_db --remote --file=database/schema.sql
+        continue-on-error: true # schema 已存在时不会失败
