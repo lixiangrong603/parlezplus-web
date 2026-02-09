@@ -85,7 +85,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
 
   useEffect(() => {
     if (user) {
-        setAllClassrooms(getClassrooms());
+        // 学生只能看到包含他们的班级
+        const allClasses = getClassrooms();
+        const myClassrooms = allClasses.filter(classroom => 
+          classroom.students.some(student => student.userId === user.id)
+        );
+        setAllClassrooms(myClassrooms);
         setSubmissions(getSubmissions());
         setExamSessions(getExamSessions(user.id));
     }

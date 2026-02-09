@@ -18,64 +18,11 @@ const STORAGE_KEYS = {
 };
 
 // --- INITIAL DATA SEEDS ---
-const INITIAL_USERS: User[] = [
-  { id: 'u-admin', username: 'admin', password: 'admin123', role: 'admin', name: '系统管理员' },
-  { id: 'teacher_sophie', username: 'teacher', password: 'teacher123', role: 'teacher', name: 'Sophie Dubois' },
-  { id: 'u-student', username: 'student', password: 'student123', role: 'student', name: 'Alice Zhang', classId: 'default-class' },
-];
+const INITIAL_USERS: User[] = [];
 
-const INITIAL_CLASSROOMS: Classroom[] = [{
-  id: 'default-class',
-  userId: 'teacher_sophie',
-  name: '法语零基础 A1 班',
-  studentCount: 1,
-  students: [
-    { id: 's1', userId: 'u-student', name: 'Alice Zhang', overallProgress: 88 }
-  ]
-}];
+const INITIAL_CLASSROOMS: Classroom[] = [];
 
-const INITIAL_SYLLABUS: SyllabusCourse[] = [
-  {
-    id: 'course-1',
-    name: 'TCF/TEF 备考全攻略',
-    userId: 'teacher_sophie',
-    createdAt: Date.now(),
-    units: [
-      {
-        id: 'unit-1',
-        name: 'A1 基础语法',
-        knowledgePoints: [
-          { id: 'kp-1', name: 'Le Présent (现在时)', type: 'grammar' },
-          { id: 'kp-2', name: 'Les Articles (冠词)', type: 'grammar' }
-        ]
-      },
-      {
-        id: 'unit-2',
-        name: 'B1 进阶表达',
-        knowledgePoints: [
-          { id: 'kp-3', name: 'Subjonctif (虚拟式)', type: 'grammar' },
-          { id: 'kp-4', name: 'Cause et Conséquence (因果表达)', type: 'vocabulary' }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'course-2',
-    name: '商务法语 (Français des Affaires)',
-    userId: 'teacher_sophie',
-    createdAt: Date.now(),
-    units: [
-      {
-        id: 'unit-3',
-        name: '求职与面试',
-        knowledgePoints: [
-          { id: 'kp-5', name: 'CV et Lettre de motivation', type: 'reading' },
-          { id: 'kp-6', name: 'Entretien (面试词汇)', type: 'vocabulary' }
-        ]
-      }
-    ]
-  }
-];
+const INITIAL_SYLLABUS: SyllabusCourse[] = [];
 
 // --- QUESTION BANK & SYLLABUS ---
 
@@ -2649,4 +2596,36 @@ export const cascadeDeleteUser = (userId: string, operatorId?: string) => {
 
   // 最后删除用户
   deleteUser(userId, operatorId, '级联删除');
+};
+
+// ======================== API KEY MANAGEMENT ========================
+
+/**
+ * 获取指定用户的 API 密钥
+ */
+export const getUserApiKeys = (userId: string) => {
+  return {
+    geminiKey: localStorage.getItem(`${userId}_gemini_api_key`) || '',
+    azureKey: localStorage.getItem(`${userId}_azure_speech_key`) || '',
+    azureRegion: localStorage.getItem(`${userId}_azure_speech_region`) || 'westeurope'
+  };
+};
+
+/**
+ * 保存用户的 API 密钥
+ */
+export const saveUserApiKeys = (userId: string, keys: {
+  geminiKey?: string;
+  azureKey?: string;
+  azureRegion?: string;
+}) => {
+  if (keys.geminiKey !== undefined) {
+    localStorage.setItem(`${userId}_gemini_api_key`, keys.geminiKey);
+  }
+  if (keys.azureKey !== undefined) {
+    localStorage.setItem(`${userId}_azure_speech_key`, keys.azureKey);
+  }
+  if (keys.azureRegion !== undefined) {
+    localStorage.setItem(`${userId}_azure_speech_region`, keys.azureRegion);
+  }
 };

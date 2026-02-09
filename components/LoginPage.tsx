@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, Sparkles, AlertCircle, Zap } from 'lucide-react';
+import { LogIn, Sparkles, AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -20,16 +20,6 @@ export const LoginPage: React.FC = () => {
       setError('用户名或密码错误，或账号已被禁用');
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickLogin = async (roleUser: string) => {
-    setIsSubmitting(true);
-    // 适配新的默认密码 123456
-    const pwd = (roleUser === 'admin') ? 'admin123' : 
-                (roleUser === 'teacher') ? 'teacher123' : 
-                (roleUser === 'student') ? 'student123' : '123456';
-    await login(roleUser, pwd);
-    setIsSubmitting(false);
   };
 
   return (
@@ -54,7 +44,7 @@ export const LoginPage: React.FC = () => {
             <input 
               type="text" 
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              placeholder="admin / teacher / student"
+              placeholder="学号/工号"
               value={username}
               onChange={e => setUsername(e.target.value)}
               required
@@ -85,27 +75,9 @@ export const LoginPage: React.FC = () => {
             disabled={isSubmitting}
             className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
           >
-            {isSubmitting ? '登录中...' : <><LogIn size={20} /> 进入系统</>}
+            {isSubmitting ? '登录中...' : <><LogIn size={20} /> 登录</>}
           </button>
         </form>
-
-        <div className="mt-8 pt-6 border-t border-slate-50 dark:border-slate-800 text-center">
-          <div className="flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 text-xs font-bold mb-4">
-             <Zap size={14} className="text-amber-400 fill-amber-400" />
-             <span>开发环境极速通道</span>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-             <button onClick={() => handleQuickLogin('admin')} className="py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition border border-transparent dark:border-slate-700">
-                管理员
-             </button>
-             <button onClick={() => handleQuickLogin('teacher')} className="py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition border border-transparent dark:border-slate-700">
-                教师
-             </button>
-             <button onClick={() => handleQuickLogin('student')} className="py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition border border-transparent dark:border-slate-700">
-                学生
-             </button>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -1195,9 +1195,9 @@ const AddTaskModal = ({
 const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLogout: () => void }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'security'>('profile');
-  const [azureKey, setAzureKey] = useState(localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_key`) || '');
-  const [azureRegion, setAzureRegion] = useState(localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_region`) || 'westeurope');
-  const [geminiKey, setGeminiKey] = useState(localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`) || '');
+  const [azureKey, setAzureKey] = useState(user?.id ? localStorage.getItem(`${user.id}_azure_speech_key`) || '' : '');
+  const [azureRegion, setAzureRegion] = useState(user?.id ? localStorage.getItem(`${user.id}_azure_speech_region`) || 'westeurope' : 'westeurope');
+  const [geminiKey, setGeminiKey] = useState(user?.id ? localStorage.getItem(`${user.id}_gemini_api_key`) || '' : '');
   const [isSaving, setIsSaving] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
   const [candidateImage, setCandidateImage] = useState<string | null>(null);
@@ -1238,9 +1238,11 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
   const handleSave = () => {
     setIsSaving(true);
     setTimeout(() => {
-      localStorage.setItem(`${CURRENT_USER_ID}_azure_speech_key`, azureKey);
-      localStorage.setItem(`${CURRENT_USER_ID}_azure_speech_region`, azureRegion);
-      localStorage.setItem(`${CURRENT_USER_ID}_gemini_api_key`, geminiKey);
+      if (user?.id) {
+        localStorage.setItem(`${user.id}_azure_speech_key`, azureKey);
+        localStorage.setItem(`${user.id}_azure_speech_region`, azureRegion);
+        localStorage.setItem(`${user.id}_gemini_api_key`, geminiKey);
+      }
       
       // 保存头像
       if (user && avatarPreview !== user.avatar) {

@@ -142,8 +142,14 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
 
   useEffect(() => {
     if (user) {
-      setChannels(getChannels(user.id));
+      const loadedChannels = getChannels(user.id);
+      setChannels(loadedChannels);
       setResources(getResources(user.id));
+      
+      // 默认选中第一个频道
+      if (loadedChannels.length > 0) {
+        setActiveChannelId(loadedChannels[0].id);
+      }
     }
   }, [user]);
 

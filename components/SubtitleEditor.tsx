@@ -7,7 +7,8 @@ import {
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MediaResource, TranscriptSegment, AzureWord, WordTiming, Question } from '../types';
 import { useJobs } from '../contexts/JobContext';
-import { CURRENT_USER_ID, DEFAULT_COVERS } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
+import { DEFAULT_COVERS } from '../constants';
 import ResourceTagger from './ResourceTagger';
 import QuizEditor from './QuizEditor';
 import { useModal } from '../contexts/ModalContext';
@@ -122,6 +123,8 @@ interface SubtitleEditorProps {
 }
 
 const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSave }) => {
+  const { user } = useAuth();
+  const modal = useModal();
   const [segments, setSegments] = useState<TranscriptSegment[]>(resource.transcript);
   const [rawAzureWords, setRawAzureWords] = useState<AzureWord[]>(resource.rawAzureWords || []);
   const [questions, setQuestions] = useState<Question[]>(resource.questions || []);
@@ -202,15 +205,21 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
   };
 
   const runWorkflow = async (type: 'azure' | 'gemini') => {
-    if (activeJob?.status === 'processing') return; 
+    if (activeJob?.status === 'processing') return;
+    
+    if (!user?.id) {
+      await modal.alert({ message: '请先登录' });
+      return;
+    }
+    
     if (type === 'azure') {
-       const key = localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_key`);
-       const region = localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_region`);
+       const key = localStorage.getItem(`${user.id}_azure_speech_key`);
+       const region = localStorage.getItem(`${user.id}_azure_speech_region`);
        if (!key || !region) { await modal.alert({ message: '请先在设置中配置 Azure Speech Key 和 Region' }); return; }
        if (!resource.videoUrl) { await modal.alert({ message: '没有找到视频/音频源' }); return; }
        startAzureJob(resource, key, region);
     } else if (type === 'gemini') {
-       const key = localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`);
+       const key = localStorage.getItem(`${user.id}_gemini_api_key`);
        if (!key) { await modal.alert({ message: '请先在设置中配置 Gemini API Key' }); return; }
        if (segments.length === 0) { await modal.alert({ message: '请先进行 Azure 转写以获取原文字幕。' }); return; }
        startGeminiJob(resource.id, segments, key);
@@ -606,7 +615,7 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                   questions={questions}
                   onChange={setQuestions}
                   fullText={fullText}
-                  geminiKey={localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`) || ''}
+                  geminiKey={user?.id ? localStorage.getItem(`${user.id}_gemini_api_key`) || '' : ''}
                   onOpenSettings={() => void modal.alert({ message: '请先在设置中配置 Gemini API Key' })}
                   resourceId={resource.id}
               />

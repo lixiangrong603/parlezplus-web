@@ -234,9 +234,15 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
   const handleEvaluate = () => {
       if (!currentSubmission?.audioUrl || !resource || !evalJobId) return;
       
-      const azureKey = localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_key`);
-      const azureRegion = localStorage.getItem(`${CURRENT_USER_ID}_azure_speech_region`);
-      const geminiKey = localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`) || "";
+      if (!user?.id) {
+          void modal.alert({ message: '请先登录' });
+          setIsBatching(false);
+          return;
+      }
+      
+      const azureKey = localStorage.getItem(`${user.id}_azure_speech_key`);
+      const azureRegion = localStorage.getItem(`${user.id}_azure_speech_region`);
+      const geminiKey = localStorage.getItem(`${user.id}_gemini_api_key`) || "";
       
       if (!azureKey || !azureRegion || !geminiKey) {
           if(!azureKey) void modal.alert({ message: '未配置 Azure Speech Key' });

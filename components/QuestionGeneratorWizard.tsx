@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { KnowledgePoint, Question, QuestionType } from '../types';
 import { Sparkles, BrainCircuit, CheckCircle, ArrowRight, Loader2, Save, X, RotateCcw, FileText, List, AlignLeft, Puzzle, Keyboard } from 'lucide-react';
 import { useJobs } from '../contexts/JobContext';
-import { CURRENT_USER_ID } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
 import QuestionEditor from './QuestionEditor';
 import { useModal } from '../contexts/ModalContext';
 
@@ -18,6 +18,7 @@ interface QuestionGeneratorWizardProps {
 const QuestionGeneratorWizard: React.FC<QuestionGeneratorWizardProps> = ({ 
     knowledgePoints: initialKnowledgePoints, onClose, onSave, initialJobId, onJobStarted 
 }) => {
+    const { user } = useAuth();
     const modal = useModal();
     const { startSyllabusQuizGeneration, jobs, clearJob } = useJobs();
     
@@ -73,7 +74,12 @@ const QuestionGeneratorWizard: React.FC<QuestionGeneratorWizardProps> = ({
             return;
         }
 
-        const apiKey = localStorage.getItem(`${CURRENT_USER_ID}_gemini_api_key`);
+        if (!user?.id) {
+            void modal.alert({ message: '请先登录' });
+            return;
+        }
+
+        const apiKey = localStorage.getItem(`${user.id}_gemini_api_key`);
         if (!apiKey) {
             void modal.alert({ message: '请先在教师设置中配置 Gemini API Key' });
             return;

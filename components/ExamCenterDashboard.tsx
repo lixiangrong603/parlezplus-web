@@ -346,8 +346,10 @@ const ExamCenterDashboard: React.FC = () => {
   }, [user?.id]);
 
   const loadFolders = () => {
+    if (!user?.id) return;
     try {
-      const foldersStr = localStorage.getItem(FOLDERS_KEY);
+      const userFoldersKey = `${FOLDERS_KEY}_${user.id}`;
+      const foldersStr = localStorage.getItem(userFoldersKey);
       if (foldersStr) {
         setFolders(JSON.parse(foldersStr));
       }
@@ -357,7 +359,9 @@ const ExamCenterDashboard: React.FC = () => {
   };
 
   const saveFolders = (newFolders: ExamFolder[]) => {
-    localStorage.setItem(FOLDERS_KEY, JSON.stringify(newFolders));
+    if (!user?.id) return;
+    const userFoldersKey = `${FOLDERS_KEY}_${user.id}`;
+    localStorage.setItem(userFoldersKey, JSON.stringify(newFolders));
     setFolders(newFolders);
   };
 
