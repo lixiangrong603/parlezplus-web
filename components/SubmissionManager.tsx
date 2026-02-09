@@ -92,14 +92,18 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
 
   // 初始化加载数据
   useEffect(() => {
-    const res = getResources(user?.id).find(r => r.id === taskId);
-    if (res) setResource(res);
-    
-    const cls = getClassroomById(classId);
-    if (cls) {
-        setClassroom(cls);
-        refreshSubmissions();
-    }
+    const loadData = async () => {
+      const allResources = await getResources(user?.id);
+      const res = allResources.find(r => r.id === taskId);
+      if (res) setResource(res);
+      
+      const cls = getClassroomById(classId);
+      if (cls) {
+          setClassroom(cls);
+          refreshSubmissions();
+      }
+    };
+    loadData();
   }, [taskId, classId, user?.id]);
 
     // Refresh classroom data when storage is updated (e.g., student avatar changed)

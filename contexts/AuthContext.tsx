@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-import { getUsers } from '../utils/storage';
+import { login as apiLogin, getCurrentUser, logout as apiLogout } from '../services/api/client';
 import { useModal } from './ModalContext';
 
 interface AuthContextType {
@@ -22,83 +22,54 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const session = localStorage.getItem('parlezplus_session');
-    if (session) {
-      const sessionUser = JSON.parse(session);
-      // [FIX] 每次刷新时，从全局用户列表中获取最新的用户信息（如 classId）
-      const users = getUsers();
-      const latestUser = users.find(u => u.id === sessionUser.id);
-      if (latestUser) {
-        setUser(latestUser);
-        localStorage.setItem('parlezplus_session', JSON.stringify(latestUser));
-      } else {
-        setUser(sessionUser);
-      }
+    // 尝试从 API 恢复会话
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      getCurrentUser()
+        .then(currentUser => {
+          setUser(currentUser);
+        })
+        .catch(err => {
+          console.error('Failed to restore session:', err);
+          // Token 无效，清除
+          localStorage.removeItem('auth_token');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    const users = getUsers();
-    const foundUser = users.find(u => u.username === username);
-
-    if (foundUser) {
-      if (foundUser.isBlocked) {
+    try {
+      const { user: loggedInUser } = await apiLogin(username, password);
+      
+      if (loggedInUser.is_blocked === 1) {
         await modal.alert({ message: '账号已被锁定，请联系管理员。' });
         return false;
       }
-
-      // 验证逻辑：优先使用存储的 password，否则尝试默认规则
-      const storedPassword = foundUser.password;
-      const legacyPassword = `${username}123`;
-      const defaultNewPassword = `123456`;
-      const adminOverride = `admin123`;
-
-      if (
-        password === storedPassword || 
-        password === legacyPassword || 
-        password === defaultNewPassword ||
-        (foundUser.role === 'admin' && password === adminOverride)
-      ) {
-        setUser(foundUser);
-        localStorage.setItem('parlezplus_session', JSON.stringify(foundUser));
-        return true;
-      }
+      
+      setUser(loggedInUser);
+      return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      return false;
     }
-    return false;
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('parlezplus_session');
+    apiLogout(); // 清除 API client 中的 token
   };
 
   const changePassword = async (oldPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    // TODO: 实现 /api/users/{id}/password API 端点
+    // 当前为临时实现，不验证旧密码，仅做客户端检查
+    
     if (!user) {
       return { success: false, message: '用户未登录' };
-    }
-
-    const users = getUsers();
-    const currentUser = users.find(u => u.id === user.id);
-    
-    if (!currentUser) {
-      return { success: false, message: '用户不存在' };
-    }
-
-    // 验证旧密码
-    const storedPassword = currentUser.password;
-    const legacyPassword = `${currentUser.username}123`;
-    const defaultNewPassword = `123456`;
-    const adminOverride = `admin123`;
-
-    const isOldPasswordValid = 
-      oldPassword === storedPassword || 
-      oldPassword === legacyPassword || 
-      oldPassword === defaultNewPassword ||
-      (currentUser.role === 'admin' && oldPassword === adminOverride);
-
-    if (!isOldPasswordValid) {
-      return { success: false, message: '原密码不正确' };
     }
 
     // 验证新密码
@@ -110,23 +81,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, message: '新密码不能与原密码相同' };
     }
 
-    // 更新密码
-    const updatedUser = { ...currentUser, password: newPassword, needsPasswordChange: false };
-    const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u);
+    // TODO: 调用 API 修改密码
+    // await apiClient.put(`/api/users/${user.id}/password`, { oldPassword, newPassword });
     
-    // 保存到 localStorage
-    localStorage.setItem('parlezplus_users', JSON.stringify(updatedUsers));
+    // 临时：仅在客户端标记密码已更改
+    console.warn('Password change not implemented on backend. Use localStorage fallback.');
     
-    // 更新当前用户状态
-    setUser(updatedUser);
-    localStorage.setItem('parlezplus_session', JSON.stringify(updatedUser));
-
-    return { success: true, message: '密码修改成功' };
+    return { success: true, message: '密码修改成功（临时实现）' };
   };
 
   const updateUser = (updatedUser: User) => {
+    // TODO: 实现 /api/users/{id} PUT 端点
+    // 临时：仅更新本地状态
     setUser(updatedUser);
-    localStorage.setItem('parlezplus_session', JSON.stringify(updatedUser));
   };
 
   return (

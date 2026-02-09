@@ -158,8 +158,6 @@ const handleAzureAssessFull = async (id, payload) => {
         try {
             self.postMessage({ type: 'PROGRESS', id, progress: "正在通过 Gemini 生成评语..." });
             
-            const ai = new GoogleGenAI({ apiKey: geminiKey });
-            
             const promptContent = "你是一位专业的法语口语教练。请根据学生的朗读得分提供简短评价：\\n" +
                 "- 综合得分: " + (assessment.PronScore || 0) + "\\n" +
                 "- 准确度: " + (assessment.AccuracyScore || 0) + "\\n" +
@@ -167,13 +165,27 @@ const handleAzureAssessFull = async (id, payload) => {
                 "- 建议纠正的单词: " + (weakWords.join(', ') || '表现完美') + "\\n" +
                 "请用中文写一段50字左右的鼓励性评语，指出一个亮点和一个改进点。";
 
-            const geminiResponse = await ai.models.generateContent({
+            const requestBody = {
                 model: 'gemini-3-flash-preview',
                 contents: [{ parts: [{ text: promptContent }] }]
+            };
+            
+            const response = await fetch('/api/proxy-gemini', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': \`Bearer \${geminiKey}\`
+                },
+                body: JSON.stringify(requestBody)
             });
             
-            if (geminiResponse && geminiResponse.text) {
-                generalFeedback = geminiResponse.text.trim();
+            if (!response.ok) {
+                throw new Error(\`Gemini proxy failed: \${response.status}\`);
+            }
+            
+            const data = await response.json();
+            if (data && data.text) {
+                generalFeedback = data.text.trim();
             }
         } catch (geminiError) {
             console.error("Gemini call failed in worker:", geminiError);
@@ -210,16 +222,35 @@ const handleAzureAssessFull = async (id, payload) => {
 const handleGeminiCorrect = async (id, payload) => {
     const { segments, apiKey } = payload;
     if (!apiKey) throw new Error("API Key missing");
-    const ai = new GoogleGenAI({ apiKey });
+    
+    // 使用代理 API 而非直连 Gemini（绕过中国 GFW）
     const segmentPayload = segments.map((s) => ({ id: s.id, text: s.id + ": " + s.text }));
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview', 
-        contents: [{ parts: [{ text: "Translate the following French segments to Simplified Chinese. Return as a JSON array of objects with 'id' and 'translation'. Segments: " + JSON.stringify(segmentPayload) }] }],
+    
+    const requestBody = {
+        model: 'gemini-3-flash-preview',
+        contents: [{ 
+            parts: [{ 
+                text: "Translate the following French segments to Simplified Chinese. Return as a JSON array of objects with 'id' and 'translation'. Segments: " + JSON.stringify(segmentPayload) 
+            }] 
+        }],
         config: { responseMimeType: "application/json" }
+    };
+    
+    const response = await fetch('/api/proxy-gemini', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': \`Bearer \${apiKey}\` // 使用存储的 token（非 Gemini key）
+        },
+        body: JSON.stringify(requestBody)
     });
     
-    let jsonStr = response.text.trim();
+    if (!response.ok) {
+        throw new Error(\`Gemini API proxy failed: \${response.status}\`);
+    }
+    
+    const data = await response.json();
+    let jsonStr = data.text.trim();
     if (jsonStr.startsWith("\x60\x60\x60")) jsonStr = jsonStr.replace(/\x60+json|\x60+/g, "");
     
     try {
@@ -233,18 +264,32 @@ const handleGeminiCorrect = async (id, payload) => {
 const handleGeminiGenerateQuiz = async (id, payload) => {
     const { fullText, count, difficulty, apiKey } = payload;
     if (!apiKey) throw new Error("API Key missing");
-    const ai = new GoogleGenAI({ apiKey });
     
     const prompt = "Create " + count + " TCF-style reading comprehension questions (level " + difficulty + ") for the following French text: \\"" + fullText + "\\". Return as a valid JSON array of objects, each containing: 'text' (the question), 'options' (array of 4 objects with 'text' and 'isCorrect' boolean), and 'explanation' (in Chinese).";
 
-    const response = await ai.models.generateContent({
+    const requestBody = {
       model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: { responseMimeType: "application/json" }
+    };
+    
+    const response = await fetch('/api/proxy-gemini', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': \`Bearer \${apiKey}\`
+        },
+        body: JSON.stringify(requestBody)
     });
+    
+    if (!response.ok) {
+        throw new Error(\`Gemini API proxy failed: \${response.status}\`);
+    }
+    
+    const data = await response.json();
 
     try {
-        const rawQuestions = JSON.parse(response.text);
+        const rawQuestions = JSON.parse(data.text);
         const finalQuestions = rawQuestions.map((q, idx) => {
             const qId = "q-" + Date.now() + "-" + idx;
             const options = q.options.map((opt, oIdx) => ({
@@ -270,7 +315,6 @@ const handleGeminiGenerateSyllabusQuiz = async (id, payload) => {
     const { knowledgePoints, count, difficulty, type, subQuestionCount, apiKey, customPrompt } = payload;
     
     if (!apiKey) throw new Error("API Key missing");
-    const ai = new GoogleGenAI({ apiKey });
 
     // 1. Role & General Instruction
     let prompt = "As an excellent French language teacher following the CEFR standards, generate " + count + " high-quality questions for Level " + difficulty + ".\\n";
@@ -416,13 +460,28 @@ const handleGeminiGenerateSyllabusQuiz = async (id, payload) => {
         "}>";
     }
 
-    const response = await ai.models.generateContent({
+    const requestBody = {
       model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: { 
           responseMimeType: "application/json"
       }
+    };
+    
+    const fetchResponse = await fetch('/api/proxy-gemini', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': \`Bearer \${apiKey}\`
+        },
+        body: JSON.stringify(requestBody)
     });
+    
+    if (!fetchResponse.ok) {
+        throw new Error(\`Gemini proxy failed: \${fetchResponse.status}\`);
+    }
+    
+    const response = await fetchResponse.json();
 
         self.postMessage({ type: 'PROGRESS', id, progress: 'Gemini: 已收到响应，正在解析题目...' });
 

@@ -463,10 +463,10 @@ const ClassDetailView = ({
     type?: "danger" | "info"
   } | null>(null);
 
-  const loadData = () => {
+  const loadData = async () => {
     const cls = getClassrooms(teacherId).find(c => c.id === classId);
     if (cls) setClassroom(cls);
-    const allResources = getResources(teacherId);
+    const allResources = await getResources(teacherId);
     setAssignedResources(allResources.filter(r => r.assignedClassIds?.includes(classId)).sort((a, b) => b.createdAt - a.createdAt));
     const allExams = getExamPapers(teacherId);
     setAssignedExams(allExams.filter(e => e.assignedClassIds?.includes(classId)));
@@ -576,12 +576,13 @@ const ClassDetailView = ({
       isOpen: true,
       title: "撤回任务",
       message: "确定要从该班级撤回此任务吗？学生将无法再看到该任务。",
-      onConfirm: () => {
-        const resource = getResources(teacherId).find(r => r.id === resourceId);
+      onConfirm: async () => {
+        const resources = await getResources(teacherId);
+        const resource = resources.find(r => r.id === resourceId);
         if (resource) {
           const updated = { ...resource, assignedClassIds: (resource.assignedClassIds || []).filter(id => id !== classId) };
-          saveResource(updated);
-          loadData();
+          await saveResource(updated);
+          await loadData();
         }
       }
     });
@@ -984,13 +985,14 @@ const ClassDetailView = ({
           teacherId={teacherId}
           classId={classId}
           onClose={() => setShowAddTask(false)}
-          onAssignResource={(rid, d) => {
-            const resource = getResources(teacherId).find(r => r.id === rid);
+          onAssignResource={async (rid, d) => {
+            const resources = await getResources(teacherId);
+            const resource = resources.find(r => r.id === rid);
             if (resource) {
               const nextClassIds = Array.from(new Set([...(resource.assignedClassIds || []), classId]));
-              saveResource({ ...resource, status: 'ready', deadline: d, assignedClassIds: nextClassIds });
+              await saveResource({ ...resource, status: 'ready', deadline: d, assignedClassIds: nextClassIds });
             }
-            loadData();
+            await loadData();
             setShowAddTask(false);
           }}
           onAssignExam={(examId, d) => {
@@ -1108,11 +1110,21 @@ const AddTaskModal = ({
   alreadyAssignedResourceIds: string[];
   alreadyAssignedExamIds: string[];
 }) => {
-  const resources = getResources(teacherId).filter(r => !alreadyAssignedResourceIds.includes(r.id));
-  const exams = getExamPapers(teacherId).filter(e => !alreadyAssignedExamIds.includes(e.id));
+  const [resources, setResources] = useState<MediaResource[]>([]);
+  const [exams, setExams] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'resources' | 'exams'>('resources');
   const [selectedDeadline, setSelectedDeadline] = useState<string>('');
   const [selectedExamDeadline, setSelectedExamDeadline] = useState<string>('');
+
+  useEffect(() => {
+    const loadData = async () => {
+      const allResources = await getResources(teacherId);
+      setResources(allResources.filter(r => !alreadyAssignedResourceIds.includes(r.id)));
+      const allExams = getExamPapers(teacherId);
+      setExams(allExams.filter(e => !alreadyAssignedExamIds.includes(e.id)));
+    };
+    loadData();
+  }, [teacherId, alreadyAssignedResourceIds, alreadyAssignedExamIds]);
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden animate-fade-in-up border dark:border-slate-800">

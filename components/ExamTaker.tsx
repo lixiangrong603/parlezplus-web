@@ -193,7 +193,7 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
       setQuestionResourceMap(resourceMap);
 
       // Load full resource data
-      const allResources = getResources();
+      const allResources = await getResources();
       const resMap: Record<string, MediaResource> = {};
       uniqueResourceIds.forEach(rid => {
         const resource = allResources.find(r => r.id === rid);

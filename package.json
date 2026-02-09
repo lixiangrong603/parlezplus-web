@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name=parlezplus",
+    "db:create": "npx wrangler d1 create parlezplus_db",
+    "db:migrate": "npx wrangler d1 execute parlezplus_db --file=database/schema.sql",
+    "db:query": "npx wrangler d1 execute parlezplus_db --command",
+    "pages:dev": "npx wrangler pages dev dist",
+    "login": "npx wrangler login"
   },
   "dependencies": {
     "@google/genai": "latest",
@@ -23,10 +29,19 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260207.0",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.24",
+    "postcss": "^8.5.6",
+    "rollup-plugin-visualizer": "^6.0.5",
+    "tailwindcss": "^4.1.18",
+    "terser": "^5.46.0",
     "tinyglobby": "^0.2.15",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "wrangler": "^4.63.0"
   }
 }

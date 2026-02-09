@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Check, Minus, Plus, Move } from 'lucide-react';
+import { X, Check, Minus, Plus, Move, Loader2 } from 'lucide-react';
+import { uploadAvatar } from '../services/api/client';
 
 interface AvatarEditorProps {
   image: string; // Data URL
-  onCrop: (croppedImage: string) => void;
+  onCrop: (croppedImage: string) => void; // 返回 CDN URL 或 DataURL（fallback）
   onCancel: () => void;
 }
 
@@ -12,6 +13,7 @@ const AvatarEditor: React.FC<AvatarEditorProps> = ({ image, onCrop, onCancel }) 
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isUploading, setIsUploading] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -38,12 +40,17 @@ const AvatarEditor: React.FC<AvatarEditorProps> = ({ image, onCrop, onCancel }) 
     setIsDragging(false);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!imageRef.current || !canvasRef.current) return;
+    
+    setIsUploading(true);
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      setIsUploading(false);
+      return;
+    }
 
     const size = 400; // Output size
     canvas.width = size;
@@ -63,22 +70,35 @@ const AvatarEditor: React.FC<AvatarEditorProps> = ({ image, onCrop, onCancel }) 
     const drawWidth = img.naturalWidth * (img.offsetWidth / img.naturalWidth) * zoom * scale;
     const drawHeight = img.naturalHeight * (img.offsetHeight / img.naturalHeight) * zoom * scale;
     
-    // Center of the container in canvas coordinates
-    const centerX = size / 2;
-    const centerY = size / 2;
-
-    // Current position of the image center relative to container center
-    // position.x/y are top-left offsets... wait, my position logic is simple dragging.
-    // Let's adjust: ctx.drawImage(img, dx, dy, dw, dh)
-    
     // dx/dy = offset from canvas top-left
     const dx = (position.x + (containerSize / 2) - (img.offsetWidth * zoom / 2)) * scale;
     const dy = (position.y + (containerSize / 2) - (img.offsetHeight * zoom / 2)) * scale;
 
     ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
 
-    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    onCrop(croppedDataUrl);
+    // 转换为 Blob 并上传到 R2
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        console.error('Failed to create blob from canvas');
+        const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        onCrop(fallbackDataUrl);
+        setIsUploading(false);
+        return;
+      }
+      
+      try {
+        const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const cdnUrl = await uploadAvatar(file);
+        onCrop(cdnUrl); // 返回 R2 CDN URL
+      } catch (error) {
+        console.error('Failed to upload avatar:', error);
+        // Fallback to DataURL
+        const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        onCrop(fallbackDataUrl);
+      } finally {
+        setIsUploading(false);
+      }
+    }, 'image/jpeg', 0.8);
   };
 
   // Center image on load
@@ -157,16 +177,27 @@ const AvatarEditor: React.FC<AvatarEditorProps> = ({ image, onCrop, onCancel }) 
             <div className="flex gap-3">
               <button 
                 onClick={onCancel}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all"
+                disabled={isUploading}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 取消
               </button>
               <button 
                 onClick={handleConfirm}
-                className="flex-[2] py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
+                disabled={isUploading}
+                className="flex-[2] py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Check size={18} />
-                确认保存
+                {isUploading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    上传中...
+                  </>
+                ) : (
+                  <>
+                    <Check size={18} />
+                    确认保存
+                  </>
+                )}
               </button>
             </div>
           </div>

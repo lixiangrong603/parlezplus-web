@@ -45,10 +45,14 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
   const [kpTypeFilter, setKpTypeFilter] = useState<string>('ALL');
 
   useEffect(() => {
-    setBankQuestions(getBankQuestions(user.id));
-    setResources(getResources(user.id));
-    setCourses(getSyllabusCourses(user.id));
-    setChannels(getChannels(user.id));
+    const loadData = async () => {
+      setBankQuestions(getBankQuestions(user.id));
+      const loadedResources = await getResources(user.id);
+      setResources(loadedResources);
+      setCourses(getSyllabusCourses(user.id));
+      setChannels(getChannels(user.id));
+    };
+    loadData();
   }, [user.id]);
 
   // 构建知识点映射

@@ -1,16 +1,28 @@
 
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, lazy, Suspense } from 'react';
 import { MediaResource } from './types';
-import { TeacherDashboard } from './components/TeacherDashboard'; 
 import { JobProvider } from './contexts/JobContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/LoginPage';
-import { AdminDashboard } from './components/AdminDashboard';
-import StudentDashboard from './components/StudentDashboard';
-import PracticeStudio from './components/PracticeStudio';
 import { getResources, initializeAutomaticCleanup } from './utils/storage';
 import { ModalProvider, useModal } from './contexts/ModalContext';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
+
+// 懒加载重型组件 (显著减少首屏加载时间)
+const TeacherDashboard = lazy(() => import('./components/TeacherDashboard').then(m => ({ default: m.TeacherDashboard })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const StudentDashboard = lazy(() => import('./components/StudentDashboard'));
+const PracticeStudio = lazy(() => import('./components/PracticeStudio'));
+
+// 加载中占位符组件
+const LoadingSpinner = () => (
+  <div className="h-screen w-screen flex items-center justify-center bg-indigo-50 dark:bg-slate-950">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+      <p className="text-slate-500 dark:text-slate-400 text-sm">加载中...</p>
+    </div>
+  </div>
+);
 
 // Theme Context
 interface ThemeContextType {
@@ -39,11 +51,15 @@ function AppContent() {
 
   // Reload resources whenever user role is resolved or we return to dashboard
   useEffect(() => {
-    if (!isLoading && user) {
-      // 教师只加载自己的资源，学生加载全部（以便在子组件中根据班级过滤）
-      const fetchId = user.role === 'teacher' ? user.id : undefined;
-      setResources(getResources(fetchId));
-    }
+    const loadResources = async () => {
+      if (!isLoading && user) {
+        // 教师只加载自己的资源，学生加载全部（以便在子组件中根据班级过滤）
+        const fetchId = user.role === 'teacher' ? user.id : undefined;
+        const loadedResources = await getResources(fetchId);
+        setResources(loadedResources);
+      }
+    };
+    loadResources();
   }, [isLoading, user, selectedResource]);
 
   if (isLoading) {
@@ -79,34 +95,42 @@ function AppContent() {
 
   // Admin View
   if (user.role === 'admin') {
-    return <AdminDashboard />;
+    return (
+      <Suspense fallback={<LoadingSpinner />}>
+        <AdminDashboard />
+      </Suspense>
+    );
   }
 
   // Teacher View
   if (user.role === 'teacher') {
     return (
-      <JobProvider>
-        <TeacherDashboard onBack={() => {}} />
-      </JobProvider>
+      <Suspense fallback={<LoadingSpinner />}>
+        <JobProvider>
+          <TeacherDashboard onBack={() => {}} />
+        </JobProvider>
+      </Suspense>
     );
   }
 
   // Student View
   return (
-    <JobProvider>
-      {!selectedResource ? (
-        <StudentDashboard 
-          resources={resources} 
-          onSelectResource={(resource) => setSelectedResource(resource)} 
-          onEnterTeacherMode={() => modal.alert({ message: "您的账号暂无教师权限" })}
-        />
-      ) : (
-        <PracticeStudio 
-          resource={selectedResource} 
-          onBack={() => setSelectedResource(null)} 
-        />
-      )}
-    </JobProvider>
+    <Suspense fallback={<LoadingSpinner />}>
+      <JobProvider>
+        {!selectedResource ? (
+          <StudentDashboard 
+            resources={resources} 
+            onSelectResource={(resource) => setSelectedResource(resource)} 
+            onEnterTeacherMode={() => modal.alert({ message: "您的账号暂无教师权限" })}
+          />
+        ) : (
+          <PracticeStudio 
+            resource={selectedResource} 
+            onBack={() => setSelectedResource(null)} 
+          />
+        )}
+      </JobProvider>
+    </Suspense>
   );
 }
 

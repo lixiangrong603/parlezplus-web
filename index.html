@@ -1,33 +1,11 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <title>ParlezPlus - French Shadowing</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            animation: {
-              'fade-in': 'fadeIn 0.3s ease-out',
-              'fade-in-up': 'fadeInUp 0.4s ease-out',
-              'fade-in-down': 'fadeInDown 0.4s ease-out',
-            },
-            keyframes: {
-              fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-              fadeInUp: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
-              fadeInDown: { '0%': { opacity: '0', transform: 'translateY(-10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
-            },
-            screens: {
-              'print': {'raw': 'print'},
-            }
-          }
-        }
-      }
-    </script>
+    <title>ParlezPlus - 法语跟读练习平台</title>
+    <!-- Tailwind CSS 通过 npm + Vite 构建，不再使用 CDN -->
     <style>
       /* Prevent overall page scrolling/bouncing */
       html, body {
@@ -46,22 +24,9 @@
         scrollbar-width: none;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "microsoft-cognitiveservices-speech-sdk": "https://esm.sh/microsoft-cognitiveservices-speech-sdk@^1.47.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+    <!-- 所有依赖通过 npm 安装，Vite 自动打包，不再使用 esm.sh -->
+    <link rel="stylesheet" href="/index.css">
+  </head>
   <body class="bg-slate-50 text-slate-900 antialiased transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
     <div id="root" class="h-full w-full"></div>
   <script type="module" src="/index.tsx"></script>

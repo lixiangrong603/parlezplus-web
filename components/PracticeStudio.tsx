@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { RecorderState, MediaResource, Submission, TranscriptSegment } from '../types';
 import { fetchResourceFromCDN, saveStudentProgress, getStudentProgress, submitAssignment, getSubmissions } from '../utils/storage';
 import { encodeWAV, resampleAudio, stitchAudioSegments, mixAudio, dataURLtoBlob } from '../utils/audioUtils';
+import { uploadRecording } from '../services/api/client';
 import Transcript from './Transcript';
 import MediaPlayer from './MediaPlayer';
 import QuizTaker from './QuizTaker';
@@ -94,14 +95,31 @@ registerProcessor('audio-processor', AudioProcessor);
 
 const RECORDING_DELAY_MS = 1000;
 
-// Helper to convert Blob to Base64
-const blobToBase64 = (blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+// DEPRECATED: 不再使用 Base64 存储，改用 R2 上传
+// const blobToBase64 = (blob: Blob): Promise<string> => {
+//   return new Promise((resolve, reject) => {
+//     const reader = new FileReader();
+//     reader.onloadend = () => resolve(reader.result as string);
+//     reader.onerror = reject;
+//     reader.readAsDataURL(blob);
+//   });
+// };
+
+// 上传录音到 R2
+const uploadBlobToR2 = async (blob: Blob): Promise<string> => {
+  try {
+    const cdnUrl = await uploadRecording(blob);
+    return cdnUrl;
+  } catch (error) {
+    console.error('Failed to upload recording:', error);
+    // Fallback to Base64 for localStorage
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
 };
 
 interface PracticeStudioProps {
@@ -670,11 +688,12 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
               }));
               setRecorderState(RecorderState.IDLE);
               
-              blobToBase64(wavBlob).then(base64 => {
+              // 上传录音到 R2
+              uploadBlobToR2(wavBlob).then(urlOrBase64 => {
                   saveStudentProgress({
                       userId: currentUserId,
                       resourceId: resource.id,
-                      segmentRecordings: { [segId]: base64 },
+                      segmentRecordings: { [segId]: urlOrBase64 },
                       lastUpdated: Date.now()
                   });
               });
@@ -691,11 +710,12 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
               setRecorderState(RecorderState.REVIEWING_AUDIO);
               setHasPerformedFullRecording(true);
               
-              blobToBase64(wavBlob).then(base64 => {
+              // 上传完整录音到 R2
+              uploadBlobToR2(wavBlob).then(urlOrBase64 => {
                   saveStudentProgress({
                       userId: currentUserId,
                       resourceId: resource.id,
-                      fullRecording: base64,
+                      fullRecording: urlOrBase64,
                       lastUpdated: Date.now()
                   });
               });

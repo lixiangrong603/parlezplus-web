@@ -1,5 +1,11 @@
 
 import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession, OperationLog } from '../types';
+import { 
+  getResources as apiGetResources, 
+  createResource as apiCreateResource, 
+  updateResource as apiUpdateResource, 
+  deleteResource as apiDeleteResource 
+} from '../services/api/client';
 
 const STORAGE_KEYS = {
   CHANNELS: 'parlezplus_channels',
@@ -901,91 +907,155 @@ export const deleteChannel = (id: string, operatorId?: string, reason?: string) 
 };
 
 // --- MEDIA RESOURCES ---
-export const getResources = (teacherId?: string, includeDeleted: boolean = false): MediaResource[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.RESOURCES);
-  let resources: MediaResource[] = [];
-  
-  if (!data) {
-    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify([]));
-    resources = [];
-  } else {
-    resources = JSON.parse(data);
-  }
-  
-  // 过滤已删除数据
-  if (!includeDeleted) {
-    resources = resources.filter(r => !r.isDeleted);
-  }
-  
-  // 如果提供了 teacherId，过滤该教师的频道下的资源
-  if (teacherId) {
-    const channels = getChannels(teacherId);
-    const channelIds = channels.map(c => c.id);
-    // 兼容旧资源：如果资源没有 teacherId，使用 channelId 推导
-    return resources.filter(r => {
-      // 如果资源在该教师的频道中，显示它
-      if (channelIds.includes(r.channelId || 'default')) return true;
-      // 兼容：如果资源明确有 teacherId 匹配，也显示
-      if (r.teacherId && r.teacherId === teacherId) return true;
-      return false;
-    });
-  }
-  
-  return resources;
-};
-
-export const saveResource = (resource: MediaResource, teacherId?: string) => {
-  const rawData = localStorage.getItem(STORAGE_KEYS.RESOURCES);
-  let allResources: MediaResource[] = rawData ? JSON.parse(rawData) : [];
-  
-  const isNew = !allResources.some(r => r.id === resource.id);
-  if (isNew) {
-      const siblings = allResources.filter(r => r.channelId === resource.channelId);
-      let newTitle = resource.title;
-      let counter = 1;
-      while (siblings.some(r => r.title === newTitle)) {
-          newTitle = `${resource.title} (${counter})`;
-          counter++;
-      }
-      resource.title = newTitle;
-  }
-
-  // 确保 resource 有 teacherId（通过 channelId 所属教师推导）
-  const resourceToSave = {
-    ...resource,
-    teacherId: teacherId || resource.teacherId || ''
-  };
-
-  const index = allResources.findIndex(r => r.id === resource.id);
-  if (index >= 0) {
-      allResources[index] = resourceToSave;
-  } else {
-      allResources.push(resourceToSave);
-  }
-  localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(allResources));
-};
-
-export const deleteResource = (id: string, operatorId?: string, reason?: string) => {
-  const data = localStorage.getItem(STORAGE_KEYS.RESOURCES);
-  if (!data) return;
-  const allResources: MediaResource[] = JSON.parse(data);
-  const resourceIndex = allResources.findIndex(r => r.id === id);
-  if (resourceIndex >= 0) {
-    allResources[resourceIndex].isDeleted = true;
-    allResources[resourceIndex].deletedAt = Date.now();
-    allResources[resourceIndex].deletedBy = operatorId;
-    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(allResources));
+// 重构：使用 Cloudflare D1 数据库 + R2 存储
+export const getResources = async (teacherId?: string, includeDeleted: boolean = false): Promise<MediaResource[]> => {
+  try {
+    const resources = await apiGetResources(teacherId);
     
-    // 记录操作日志
+    // 过滤已删除数据（如果后端未过滤）
+    if (!includeDeleted) {
+      return resources.filter((r: any) => !r.is_deleted);
+    }
+    
+    return resources;
+  } catch (error) {
+    console.error('Failed to fetch resources from API:', error);
+    // Fallback to localStorage if API fails
+    const data = localStorage.getItem(STORAGE_KEYS.RESOURCES);
+    let resources: MediaResource[] = [];
+    
+    if (!data) {
+      localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify([]));
+      resources = [];
+    } else {
+      resources = JSON.parse(data);
+    }
+    
+    // 过滤已删除数据
+    if (!includeDeleted) {
+      resources = resources.filter(r => !r.isDeleted);
+    }
+    
+    // 如果提供了 teacherId，过滤该教师的频道下的资源
+    if (teacherId) {
+      const channels = getChannels(teacherId);
+      const channelIds = channels.map(c => c.id);
+      return resources.filter(r => {
+        if (channelIds.includes(r.channelId || 'default')) return true;
+        if (r.teacherId && r.teacherId === teacherId) return true;
+        return false;
+      });
+    }
+    
+    return resources;
+  }
+};
+
+export const saveResource = async (resource: MediaResource, teacherId?: string): Promise<void> => {
+  try {
+    // 检查是否是新建还是更新
+    const isNew = !resource.id || resource.id.startsWith('temp-');
+    
+    if (isNew) {
+      // 创建新资源
+      const result = await apiCreateResource({
+        title: resource.title,
+        teacher_id: teacherId || resource.teacherId || '',
+        classroom_id: resource.assignedClassIds?.[0] || '',
+        channel_id: resource.channelId,
+        video_r2_key: resource.videoUrl, // 需要转换为 R2 key
+        audio_r2_key: resource.audioUrl,
+        cover_r2_key: resource.coverImage || '',
+        transcript: JSON.stringify(resource.transcript),
+        questions: JSON.stringify(resource.questions),
+        tags: JSON.stringify([...(resource.grammarTags || []), ...(resource.vocabTags || [])]),
+      });
+      
+      console.log('Resource created:', result);
+    } else {
+      // 更新现有资源
+      await apiUpdateResource(resource.id, {
+        title: resource.title,
+        transcript: JSON.stringify(resource.transcript),
+        questions: JSON.stringify(resource.questions),
+        tags: JSON.stringify([...(resource.grammarTags || []), ...(resource.vocabTags || [])]),
+      });
+      
+      console.log('Resource updated:', resource.id);
+    }
+  } catch (error) {
+    console.error('Failed to save resource via API:', error);
+    // Fallback to localStorage
+    const rawData = localStorage.getItem(STORAGE_KEYS.RESOURCES);
+    let allResources: MediaResource[] = rawData ? JSON.parse(rawData) : [];
+    
+    const isNew = !allResources.some(r => r.id === resource.id);
+    if (isNew) {
+        const siblings = allResources.filter(r => r.channelId === resource.channelId);
+        let newTitle = resource.title;
+        let counter = 1;
+        while (siblings.some(r => r.title === newTitle)) {
+            newTitle = `${resource.title} (${counter})`;
+            counter++;
+        }
+        resource.title = newTitle;
+    }
+
+    const resourceToSave = {
+      ...resource,
+      teacherId: teacherId || resource.teacherId || ''
+    };
+
+    const index = allResources.findIndex(r => r.id === resource.id);
+    if (index >= 0) {
+        allResources[index] = resourceToSave;
+    } else {
+        allResources.push(resourceToSave);
+    }
+    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(allResources));
+  }
+};
+
+export const deleteResource = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteResource(id);
+    console.log('Resource deleted via API:', id);
+    
+    // 记录操作日志（如果后端未记录）
     if (operatorId) {
       logOperation({
         operatorId,
         operationType: 'delete_resource',
         targetId: id,
         targetType: 'MediaResource',
-        targetName: allResources[resourceIndex].title,
+        targetName: id, // API 不返回 title
         reason
       });
+    }
+  } catch (error) {
+    console.error('Failed to delete resource via API:', error);
+    // Fallback to localStorage
+    const data = localStorage.getItem(STORAGE_KEYS.RESOURCES);
+    if (!data) return;
+    const allResources: MediaResource[] = JSON.parse(data);
+    const resourceIndex = allResources.findIndex(r => r.id === id);
+    if (resourceIndex >= 0) {
+      allResources[resourceIndex].isDeleted = true;
+      allResources[resourceIndex].deletedAt = Date.now();
+      allResources[resourceIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(allResources));
+      
+      // 记录操作日志
+      if (operatorId) {
+        logOperation({
+          operatorId,
+          operationType: 'delete_resource',
+          targetId: id,
+          targetType: 'MediaResource',
+          targetName: allResources[resourceIndex].title,
+          reason
+        });
+      }
     }
   }
 };
@@ -1154,7 +1224,7 @@ export const deleteExamPaper = (id: string, operatorId?: string, reason?: string
 
 export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
   const allQuestions = getBankQuestions();
-  const allResources = getResources();
+  const allResources = await getResources();
   
   const results: Question[] = [];
   
@@ -1184,7 +1254,7 @@ export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
 // Get questions with their resource info
 export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array<{ question: Question; resourceId?: string; resourceTitle?: string }>> => {
   const allQuestions = getBankQuestions();
-  const allResources = getResources();
+  const allResources = await getResources();
   
   const results: Array<{ question: Question; resourceId?: string; resourceTitle?: string }> = [];
   
@@ -1353,7 +1423,7 @@ export const logOperation = (params: {
 };
 
 // 清理超过30天的已删除记录
-export const cleanupOldDeletedRecords = () => {
+export const cleanupOldDeletedRecords = async () => {
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
   
   // 清理用户
@@ -1382,7 +1452,7 @@ export const cleanupOldDeletedRecords = () => {
   localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(activeChannels));
   
   // 清理资源
-  const resources = getResources(undefined, true);
+  const resources = await getResources(undefined, true);
   const activeResources = resources.filter(r => !r.isDeleted || (r.deletedAt && r.deletedAt > thirtyDaysAgo));
   localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(activeResources));
 
@@ -1500,8 +1570,8 @@ const restoreExamSessionsByStudentIds = (studentIds: string[]) => {
   if (changed) localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
 };
 
-const cascadeRestoreResourceInternal = (resourceId: string) => {
-  const resources = getResources(undefined, true);
+const cascadeRestoreResourceInternal = async (resourceId: string) => {
+  const resources = await getResources(undefined, true);
   const resource = resources.find(r => r.id === resourceId);
   if (resource && resource.isDeleted) {
     resource.isDeleted = false;
@@ -1514,7 +1584,7 @@ const cascadeRestoreResourceInternal = (resourceId: string) => {
   restoreStudentPracticeDataByResource(resourceId);
 };
 
-const cascadeRestoreChannelInternal = (channelId: string) => {
+const cascadeRestoreChannelInternal = async (channelId: string) => {
   const channels = getChannels(undefined, true);
   const channel = channels.find(c => c.id === channelId);
   if (channel && channel.isDeleted) {
@@ -1524,9 +1594,11 @@ const cascadeRestoreChannelInternal = (channelId: string) => {
     localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(channels));
   }
 
-  const resources = getResources(undefined, true)
-    .filter(r => r.channelId === channelId);
-  resources.forEach(r => cascadeRestoreResourceInternal(r.id));
+  const resources = await getResources(undefined, true)
+    .then(res => res.filter(r => r.channelId === channelId));
+  for (const r of resources) {
+    await cascadeRestoreResourceInternal(r.id);
+  }
 };
 
 const cascadeRestoreClassroomInternal = (classId: string) => {
@@ -1616,21 +1688,23 @@ const cascadeRestoreUserInternal = (userId: string) => {
     .forEach(c => cascadeRestoreSyllabusCourseInternal(c.id));
 };
 
-const cascadePermanentlyDeleteResourceInternal = (resourceId: string) => {
+const cascadePermanentlyDeleteResourceInternal = async (resourceId: string) => {
   permanentlyDeleteSubmissionsByResource(resourceId);
   permanentlyDeleteStudentPracticeDataByResource(resourceId);
 
-  const resources = getResources(undefined, true);
+  const resources = await getResources(undefined, true);
   const filtered = resources.filter(r => r.id !== resourceId);
   if (filtered.length !== resources.length) {
     localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(filtered));
   }
 };
 
-const cascadePermanentlyDeleteChannelInternal = (channelId: string) => {
-  const resources = getResources(undefined, true)
-    .filter(r => r.channelId === channelId);
-  resources.forEach(r => cascadePermanentlyDeleteResourceInternal(r.id));
+const cascadePermanentlyDeleteChannelInternal = async (channelId: string) => {
+  const resources = await getResources(undefined, true);
+  const channelResources = resources.filter(r => r.channelId === channelId);
+  for (const r of channelResources) {
+    await cascadePermanentlyDeleteResourceInternal(r.id);
+  }
 
   const channels = getChannels(undefined, true);
   const filtered = channels.filter(c => c.id !== channelId);
@@ -1854,7 +1928,7 @@ const calcDaysRemaining = (deletedAt: number) => {
   return Math.max(0, Math.ceil((expireAt - Date.now()) / (24 * 60 * 60 * 1000)));
 };
 
-export const getRecycleBinItems = (): RecycleBinItem[] => {
+export const getRecycleBinItems = async (): Promise<RecycleBinItem[]> => {
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
   const items: RecycleBinItem[] = [];
 
@@ -1892,7 +1966,7 @@ export const getRecycleBinItems = (): RecycleBinItem[] => {
       daysRemaining: calcDaysRemaining(c.deletedAt!),
     }));
 
-  getResources(undefined, true)
+  (await getResources(undefined, true))
     .filter(r => r.isDeleted && r.deletedAt && r.deletedAt > thirtyDaysAgo)
     .forEach(r => items.push({
       id: r.id,
@@ -2033,7 +2107,7 @@ export const permanentlyDeleteRecord = (type: RecycleBinItemType, id: string) =>
 };
 
 // 教师回收站：只返回该教师“自己名下”的内容，以及由该教师触发删除的 ExamSession
-export const getRecycleBinItemsForTeacher = (teacherId: string): RecycleBinItem[] => {
+export const getRecycleBinItemsForTeacher = async (teacherId: string): Promise<RecycleBinItem[]> => {
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
   const items: RecycleBinItem[] = [];
 
@@ -2059,7 +2133,7 @@ export const getRecycleBinItemsForTeacher = (teacherId: string): RecycleBinItem[
       daysRemaining: calcDaysRemaining(c.deletedAt!),
     }));
 
-  getResources(teacherId, true)
+  (await getResources(teacherId, true))
     .filter(r => r.isDeleted && r.deletedAt && r.deletedAt > thirtyDaysAgo)
     .forEach(r => items.push({
       id: r.id,
@@ -2170,7 +2244,7 @@ export interface DeleteCheckResult {
 }
 
 // 检查用户引用
-export const checkUserReferences = (userId: string): DeleteCheckResult => {
+export const checkUserReferences = async (userId: string): Promise<DeleteCheckResult> => {
   const references: ReferenceInfo[] = [];
   
   // 检查频道
@@ -2184,7 +2258,7 @@ export const checkUserReferences = (userId: string): DeleteCheckResult => {
   }
   
   // 检查资源
-  const resources = getResources(userId, false);
+  const resources = await getResources(userId, false);
   if (resources.length > 0) {
     references.push({
       type: 'MediaResource',
@@ -2375,11 +2449,11 @@ export const checkResourceReferences = (resourceId: string): DeleteCheckResult =
 };
 
 // 检查频道引用
-export const checkChannelReferences = (channelId: string): DeleteCheckResult => {
+export const checkChannelReferences = async (channelId: string): Promise<DeleteCheckResult> => {
   const references: ReferenceInfo[] = [];
   
   // 检查频道下的资源
-  const resources = getResources(undefined, false);
+  const resources = await getResources(undefined, false);
   const channelResources = resources.filter(r => r.channelId === channelId);
   
   if (channelResources.length > 0) {
@@ -2430,7 +2504,7 @@ export const checkExamPaperReferences = (examId: string): DeleteCheckResult => {
   };
 };
 
-export const cascadeDeleteClassroom = (classId: string, operatorId?: string) => {
+export const cascadeDeleteClassroom = async (classId: string, operatorId?: string) => {
   const classroom = getClassroomById(classId);
   if (!classroom) return;
   
@@ -2457,7 +2531,7 @@ export const cascadeDeleteClassroom = (classId: string, operatorId?: string) => 
   });
   
   // 只删除分配给该班级的资源产生的提交和练习数据
-  const resources = getResources(undefined, false);
+  const resources = await getResources(undefined, false);
   const classResourceIds = new Set(
     resources
       .filter(r => r.assignedClassIds?.includes(classId))
@@ -2516,9 +2590,9 @@ export const cascadeDeleteResource = (resourceId: string, operatorId?: string) =
   deleteResource(resourceId, operatorId, '级联删除');
 };
 
-export const cascadeDeleteChannel = (channelId: string, operatorId?: string) => {
+export const cascadeDeleteChannel = async (channelId: string, operatorId?: string) => {
   // 删除频道下的所有资源
-  const resources = getResources(undefined, false);
+  const resources = await getResources(undefined, false);
   const channelResources = resources.filter(r => r.channelId === channelId);
 
   channelResources.forEach(r => cascadeDeleteResource(r.id, operatorId));

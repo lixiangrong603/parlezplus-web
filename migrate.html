@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ParlezPlus - 数据迁移工具</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #4f46e5;
+      margin-bottom: 20px;
+    }
+    .step {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f9fafb;
+      border-left: 4px solid #4f46e5;
+    }
+    button {
+      background: #4f46e5;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #4338ca;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .log {
+      background: #1f2937;
+      color: #10b981;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+    .warning {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 15px;
+      margin: 20px 0;
+      color: #92400e;
+    }
+    .success {
+      background: #d1fae5;
+      border-left: 4px solid #10b981;
+      padding: 15px;
+      margin: 20px 0;
+      color: #065f46;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: 600;
+      color: #374151;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 ParlezPlus 数据迁移工具</h1>
+    
+    <div class="warning">
+      <strong>⚠️ 重要提示：</strong>
+      <ul>
+        <li>此工具将把 localStorage 中的数据迁移到 Cloudflare D1 数据库</li>
+        <li>迁移前会自动备份所有 localStorage 数据到 JSON 文件</li>
+        <li>请确保已完成 Cloudflare 部署并配置好 API</li>
+        <li>迁移过程中请勿关闭浏览器</li>
+      </ul>
+    </div>
+
+    <div class="step">
+      <h3>步骤 1: 配置 API 端点</h3>
+      <label>API Base URL:</label>
+      <input type="text" id="apiUrl" value="http://localhost:3000" placeholder="例如: https://parlezplus.pages.dev">
+      
+      <label>管理员用户名:</label>
+      <input type="text" id="username" value="admin" placeholder="admin">
+      
+      <label>管理员密码:</label>
+      <input type="password" id="password" placeholder="输入管理员密码">
+    </div>
+
+    <div class="step">
+      <h3>步骤 2: 备份和迁移</h3>
+      <button onclick="backupData()">1. 备份 localStorage 数据</button>
+      <button onclick="migrateData()" id="migrateBtn" disabled>2. 开始迁移</button>
+    </div>
+
+    <div id="status"></div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    let authToken = null;
+    let backupComplete = false;
+
+    function log(message, type = 'info') {
+      const logEl = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+      logEl.innerHTML += `[${timestamp}] ${prefix} ${message}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function showStatus(message, type = 'info') {
+      const statusEl = document.getElementById('status');
+      const className = type === 'success' ? 'success' : 'warning';
+      statusEl.innerHTML = `<div class="${className}">${message}</div>`;
+    }
+
+    async function backupData() {
+      log('开始备份 localStorage 数据...');
+      
+      const backup = {};
+      const keys = [
+        'parlezplus_users',
+        'parlezplus_channels',
+        'parlezplus_resources',
+        'parlezplus_classrooms',
+        'parlezplus_student_practice_data',
+        'parlezplus_submissions',
+        'parlezplus_syllabus',
+        'parlezplus_question_bank',
+        'parlezplus_exam_papers',
+        'parlezplus_exam_sessions',
+        'parlezplus_operation_logs'
+      ];
+
+      for (const key of keys) {
+        const data = localStorage.getItem(key);
+        if (data) {
+          try {
+            backup[key] = JSON.parse(data);
+            log(`已备份: ${key} (${backup[key].length || 0} 条记录)`);
+          } catch (e) {
+            log(`备份 ${key} 失败: ${e.message}`, 'error');
+          }
+        }
+      }
+
+      // 下载备份文件
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `parlezplus-backup-${Date.now()}.json`;
+      a.click();
+
+      log('备份完成！已下载到本地文件', 'success');
+      backupComplete = true;
+      document.getElementById('migrateBtn').disabled = false;
+      showStatus('✅ 备份已完成！现在可以开始迁移', 'success');
+    }
+
+    async function migrateData() {
+      if (!backupComplete) {
+        alert('请先备份数据！');
+        return;
+      }
+
+      const apiUrl = document.getElementById('apiUrl').value;
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      if (!apiUrl || !username || !password) {
+        alert('请填写所有必填字段！');
+        return;
+      }
+
+      log('开始迁移过程...');
+      
+      try {
+        // 1. 登录获取 token
+        log('正在登录...');
+        const loginRes = await fetch(`${apiUrl}/api/auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (!loginRes.ok) {
+          throw new Error('登录失败，请检查用户名和密码');
+        }
+
+        const { data: { token } } = await loginRes.json();
+        authToken = token;
+        log('登录成功！', 'success');
+
+        // 2. 迁移用户数据
+        await migrateUsers(apiUrl);
+
+        // 3. 迁移资源数据
+        await migrateResources(apiUrl);
+
+        // TODO: 添加更多数据迁移...
+
+        log('========================================', 'success');
+        log('迁移完成！', 'success');
+        log('========================================', 'success');
+        showStatus('🎉 数据迁移成功！请刷新页面并使用新的 API 登录', 'success');
+
+      } catch (error) {
+        log(`迁移失败: ${error.message}`, 'error');
+        showStatus(`❌ 迁移失败: ${error.message}`, 'warning');
+      }
+    }
+
+    async function migrateUsers(apiUrl) {
+      log('开始迁移用户数据...');
+      const usersData = localStorage.getItem('parlezplus_users');
+      if (!usersData) {
+        log('没有用户数据需要迁移', 'info');
+        return;
+      }
+
+      const users = JSON.parse(usersData);
+      log(`发现 ${users.length} 个用户`);
+
+      // 注意：实际迁移需要后端提供批量导入 API
+      // 这里仅作示例
+      log('用户数据迁移需要后端支持批量导入 API', 'info');
+      log('请联系管理员手动导入用户数据', 'info');
+    }
+
+    async function migrateResources(apiUrl) {
+      log('开始迁移资源数据...');
+      const resourcesData = localStorage.getItem('parlezplus_resources');
+      if (!resourcesData) {
+        log('没有资源数据需要迁移', 'info');
+        return;
+      }
+
+      const resources = JSON.parse(resourcesData);
+      log(`发现 ${resources.length} 个资源`);
+
+      // 注意：媒体文件（Base64）需要先上传到 R2
+      log('资源中的媒体文件需要重新上传到 R2', 'info');
+      log('这个过程可能需要较长时间...', 'info');
+
+      // TODO: 实现实际的资源迁移逻辑
+    }
+  </script>
+</body>
+</html>

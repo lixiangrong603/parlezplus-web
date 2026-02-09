@@ -76,7 +76,7 @@ export async function calculateExamAnalysis(params: {
   const allCourses = getSyllabusCourses(user.id);
   
   // Load all resources
-  const allResources = getResources(user.id);
+  const allResources = await getResources(user.id);
   
   // Create lookup maps
   const questionMap = new Map<string, Question>();

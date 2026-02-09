@@ -14,6 +14,7 @@ import {
   uploadResourceToMockCDN, getClassrooms,
   checkChannelReferences, cascadeDeleteChannel, cascadeDeleteResource, checkResourceReferences, ReferenceInfo
 } from '../utils/storage';
+import { uploadVideo, uploadAudio, uploadCover, getMediaUrl } from '../services/api/client';
 import { parseSubtitleJson } from '../utils/textAnalysis';
 import { extractVideoFrame, generateRandomCoverArt } from '../utils/mediaUtils';
 import SubtitleEditor from './SubtitleEditor';
@@ -59,15 +60,15 @@ const CustomConfirmModal = ({
   );
 };
 
-// Helper to convert File to Base64 (to ensure persistence in localStorage)
-const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-    });
-};
+// DEPRECATED: 不再使用 Base64 存储，改用 R2 上传
+// const fileToBase64 = (file: File): Promise<string> => {
+//     return new Promise((resolve, reject) => {
+//         const reader = new FileReader();
+//         reader.readAsDataURL(file);
+//         reader.onload = () => resolve(reader.result as string);
+//         reader.onerror = error => reject(error);
+//     });
+// };
 
 // --- MAIN CONTAINER ---
 export const ResourceManagement = ({ onExit, onPreview }: { onExit: () => void, onPreview: (resource: MediaResource) => void }) => {
@@ -140,16 +141,20 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
   } | null>(null);
 
   useEffect(() => {
-    if (user) {
-      const loadedChannels = getChannels(user.id);
-      setChannels(loadedChannels);
-      setResources(getResources(user.id));
-      
-      // 默认选中第一个频道
-      if (loadedChannels.length > 0) {
-        setActiveChannelId(loadedChannels[0].id);
+    const loadData = async () => {
+      if (user) {
+        const loadedChannels = getChannels(user.id);
+        setChannels(loadedChannels);
+        const loadedResources = await getResources(user.id);
+        setResources(loadedResources);
+        
+        // 默认选中第一个频道
+        if (loadedChannels.length > 0) {
+          setActiveChannelId(loadedChannels[0].id);
+        }
       }
-    }
+    };
+    loadData();
   }, [user]);
 
   const activeResources = resources.filter(r => r.channelId === activeChannelId);
@@ -203,7 +208,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
     const channel = channels.find(c => c.id === id);
     if (!channel) return;
 
-    const checkResult = checkChannelReferences(id);
+    const checkResult = await checkChannelReferences(id);
     setChannelDeleteConfirmState({
       channelId: id,
       channelName: channel.name,
@@ -211,18 +216,18 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
     });
   };
 
-  const executeDeleteChannel = () => {
+  const executeDeleteChannel = async () => {
     if (!user) return;
     if (!channelDeleteConfirmState) return;
 
-    cascadeDeleteChannel(channelDeleteConfirmState.channelId, user.id);
+    await cascadeDeleteChannel(channelDeleteConfirmState.channelId, user.id);
 
     const deletedId = channelDeleteConfirmState.channelId;
     setChannelDeleteConfirmState(null);
 
     const updatedChannels = getChannels(user.id);
     setChannels(updatedChannels);
-    const allResources = getResources(user.id);
+    const allResources = await getResources(user.id);
     setResources(allResources);
     if (activeChannelId === deletedId) setActiveChannelId(updatedChannels[0]?.id || '');
   };
@@ -479,7 +484,13 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                                 isOpen: true,
                                 title: "删除资源（级联软删除）",
                                 message: `确定要删除“${resource.title}”吗？\n\n将级联软删除该资源相关的提交记录与练习数据，可在回收站恢复，超过30天将自动清理。`,
-                                onConfirm: () => { if (user) { cascadeDeleteResource(resource.id, user.id); setResources(getResources(user.id)); } }
+                                onConfirm: async () => { 
+                                  if (user) { 
+                                    cascadeDeleteResource(resource.id, user.id); 
+                                    const updatedResources = await getResources(user.id);
+                                    setResources(updatedResources);
+                                  } 
+                                }
                               });
                             }} 
                             className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all" 
@@ -515,10 +526,13 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
         <UploadModal 
           channelId={activeChannelId} 
           onClose={() => setShowUploadModal(false)} 
-          onConfirm={(newResources) => {
+          onConfirm={async (newResources) => {
             onCreateWithFiles(newResources);
             setShowUploadModal(false);
-            if (user) setResources(getResources(user.id));
+            if (user) {
+              const updatedResources = await getResources(user.id);
+              setResources(updatedResources);
+            }
           }}
           userId={user?.id}
         />
@@ -528,9 +542,12 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
         <PublishToClassModal 
           resource={publishingResource}
           onClose={() => setPublishingResource(null)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setPublishingResource(null);
-            if (user) setResources(getResources(user.id));
+            if (user) {
+              const updatedResources = await getResources(user.id);
+              setResources(updatedResources);
+            }
           }}
           userId={user?.id}
         />
@@ -679,8 +696,23 @@ const UploadModal = ({ channelId, onClose, onConfirm, userId }: { channelId: str
         
         setProgress({ current: i + 1, total: total, message: `正在处理: ${name} (${i+1}/${total})` });
 
-        const resourceId = Date.now().toString() + i; 
-        const mainMediaUrl = group.video ? URL.createObjectURL(group.video) : group.audio ? URL.createObjectURL(group.audio) : '';
+        const resourceId = `temp-${Date.now()}-${i}`; // 使用临时 ID，保存时后端生成真实 ID
+        
+        // 上传视频/音频到 R2
+        let mainMediaUrl = '';
+        try {
+          if (group.video) {
+            setProgress({ current: i + 1, total: total, message: `上传视频: ${name}...` });
+            mainMediaUrl = await uploadVideo(group.video);
+          } else if (group.audio) {
+            setProgress({ current: i + 1, total: total, message: `上传音频: ${name}...` });
+            mainMediaUrl = await uploadAudio(group.audio);
+          }
+        } catch (err) {
+          console.error('Failed to upload media:', err);
+          // Fallback to Blob URL for preview
+          mainMediaUrl = group.video ? URL.createObjectURL(group.video) : group.audio ? URL.createObjectURL(group.audio) : '';
+        }
 
         let transcript: TranscriptSegment[] = [];
         let rawAzureWords: AzureWord[] = [];
@@ -696,14 +728,30 @@ const UploadModal = ({ channelId, onClose, onConfirm, userId }: { channelId: str
            } catch (e) { console.error(`Failed to parse JSON for ${name}`, e); }
         }
 
+        // 上传封面到 R2
         let coverImage = "";
-        if (group.image) {
-            coverImage = await fileToBase64(group.image);
-        } else if (group.video) {
-            try { coverImage = await extractVideoFrame(group.video); } catch (err) {}
+        try {
+          if (group.image) {
+            setProgress({ current: i + 1, total: total, message: `上传封面: ${name}...` });
+            coverImage = await uploadCover(group.image);
+          } else if (group.video) {
+            // 从视频提取帧，然后上传
+            try {
+              const frameDataUrl = await extractVideoFrame(group.video);
+              // 将 Data URL 转换为 File
+              const blob = await (await fetch(frameDataUrl)).blob();
+              const frameFile = new File([blob], `${name}-cover.jpg`, { type: 'image/jpeg' });
+              coverImage = await uploadCover(frameFile);
+            } catch (err) {
+              console.error('Failed to extract/upload video frame:', err);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to upload cover:', err);
         }
         
         if (!coverImage) {
+            // Fallback: 生成随机封面（Base64）
             coverImage = generateRandomCoverArt(name + resourceId);
         }
 
