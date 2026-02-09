@@ -33,13 +33,15 @@ jobs:
       - name: Build
         run: npm run build
 
-      # 使用 wrangler-action 部署（支持 D1 和 R2 绑定）
+      # 使用 pages-action 部署（自动创建项目）
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=parlezplus --branch=main --commit-dirty=true
+          projectName: parlezplus
+          directory: dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
       # 首次部署或 schema 变更时运行数据库迁移
       - name: Run D1 migrations (if schema changed)
