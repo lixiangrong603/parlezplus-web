@@ -73,17 +73,29 @@ npx wrangler d1 execute parlezplus_db --file=database/schema.sql
 
 ### 5. 设置环境密钥
 ```bash
-# JWT 签名密钥 (自己生成一个随机字符串)
+# JWT 签名密钥 (用于验证用户登录 token)
 npx wrangler secret put JWT_SECRET
 # 输入: 例如 your-super-secret-jwt-key-change-me
 
-# Gemini API 加密主密钥 (用于加密存储用户的 Gemini Key)
+# Gemini/Azure API 加密主密钥 (用于加密存储教师的个人 API Keys)
+# ⚠️ 重要: 每个教师使用自己的 API key，MASTER_KEY 仅用于加密/解密数据库中的密钥
 npx wrangler secret put GEMINI_MASTER_KEY
 # 输入: 例如 your-gemini-master-encryption-key
-
-# Azure API 加密主密钥 (可选)
+# 或者使用通用的主密钥：
 npx wrangler secret put AZURE_MASTER_KEY
 # 输入: 例如 your-azure-master-encryption-key
+```
+
+**密钥说明**:
+- `JWT_SECRET`: **必需**，用于签发和验证用户登录 token
+- `GEMINI_MASTER_KEY` / `AZURE_MASTER_KEY`: **可选**，用于加密用户的 API keys
+  - 如果设置：用户的 API keys 使用 AES-256-GCM 加密存储
+  - 如果不设置：用户的 API keys 以明文存储（不推荐生产环境）
+  - **架构设计**：每个教师在"设置"中添加自己的 Gemini/Azure Key，避免共享配额
+
+**生成随机密钥** (PowerShell):
+```powershell
+-join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
 ```
 
 ---

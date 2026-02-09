@@ -15,6 +15,7 @@ import {
   getResources, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass,
   checkClassroomReferences, cascadeDeleteClassroom, ReferenceInfo
 } from '../utils/storage';
+import { apiClient } from '../services/api/client';
 import { ResourceManagement } from './ResourceManagement';
 import PracticeStudio from './PracticeStudio';
 import { ThemeContext } from '../App';
@@ -1246,17 +1247,25 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
     setAvatarPreview(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!user?.id) return;
+    
     setIsSaving(true);
-    setTimeout(() => {
-      if (user?.id) {
-        localStorage.setItem(`${user.id}_azure_speech_key`, azureKey);
-        localStorage.setItem(`${user.id}_azure_speech_region`, azureRegion);
-        localStorage.setItem(`${user.id}_gemini_api_key`, geminiKey);
-      }
+    try {
+      // 保存 API Keys 到数据库（加密存储）
+      await apiClient.put(`/api/users/${user.id}/api-keys`, {
+        geminiKey: geminiKey || undefined,
+        azureKey: azureKey || undefined,
+        azureRegion: azureRegion || 'westeurope',
+      });
+      
+      // 同时保存到 localStorage 作为缓存（用于前端快速读取）
+      localStorage.setItem(`${user.id}_azure_speech_key`, azureKey);
+      localStorage.setItem(`${user.id}_azure_speech_region`, azureRegion);
+      localStorage.setItem(`${user.id}_gemini_api_key`, geminiKey);
       
       // 保存头像
-      if (user && avatarPreview !== user.avatar) {
+      if (avatarPreview !== user.avatar) {
         const updatedUser = { ...user, avatar: avatarPreview || undefined };
         saveUser(updatedUser);
       }
@@ -1264,7 +1273,11 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
       setIsSaving(false);
       onClose();
       window.location.reload(); // 刷新以更新头像显示
-    }, 800);
+    } catch (error) {
+      console.error('Save settings error:', error);
+      alert('保存失败，请检查网络连接');
+      setIsSaving(false);
+    }
   };
 
   return (

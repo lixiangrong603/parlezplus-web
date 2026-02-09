@@ -147,6 +147,71 @@ Authorization: Bearer <JWT_TOKEN>
 }
 ```
 
+### 6. 获取 API 密钥配置状态
+**GET** `/api/users/:id/api-keys`
+
+**权限**: 只能查看自己的配置（管理员除外）
+
+**响应**:
+```json
+{
+  "success": true,
+  "data": {
+    "hasGeminiKey": true,
+    "hasAzureKey": true,
+    "azureRegion": "westeurope"
+  }
+}
+```
+
+**注意**: 
+- 出于安全考虑，不返回实际密钥值，只返回是否已配置
+- 密钥在数据库中加密存储（使用 MASTER_KEY）
+
+### 7. 更新 API 密钥
+**PUT** `/api/users/:id/api-keys`
+
+**权限**: 只能修改自己的配置（管理员除外）
+
+**请求体**:
+```json
+{
+  "geminiKey": "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXX",
+  "azureKey": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "azureRegion": "eastasia"
+}
+```
+
+**参数说明**:
+- `geminiKey` (可选): Gemini API 密钥
+- `azureKey` (可选): Azure Speech API 密钥
+- `azureRegion` (可选): Azure 区域（默认: westeurope）
+
+**响应**:
+```json
+{
+  "success": true
+}
+```
+
+**安全机制**:
+1. 密钥使用 AES-256-GCM 加密存储在数据库中
+2. 加密密钥为环境变量 `GEMINI_MASTER_KEY` 或 `AZURE_MASTER_KEY`
+3. 每个教师使用自己的 API 密钥，避免共享配额
+4. 前端代理调用时自动解密并使用
+
+### 8. 删除 API 密钥
+**DELETE** `/api/users/:id/api-keys`
+
+**权限**: 只能删除自己的配置（管理员除外）
+
+**响应**:
+```json
+{
+  "success": true
+}
+```
+
 ---
 
 ## 班级管理
