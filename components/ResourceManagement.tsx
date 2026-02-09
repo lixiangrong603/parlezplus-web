@@ -14,7 +14,6 @@ import {
   uploadResourceToMockCDN, getClassrooms,
   checkChannelReferences, cascadeDeleteChannel, cascadeDeleteResource, checkResourceReferences, ReferenceInfo
 } from '../utils/storage';
-import { CURRENT_USER_ID } from '../constants'; 
 import { parseSubtitleJson } from '../utils/textAnalysis';
 import { extractVideoFrame, generateRandomCoverArt } from '../utils/mediaUtils';
 import SubtitleEditor from './SubtitleEditor';
@@ -710,7 +709,7 @@ const UploadModal = ({ channelId, onClose, onConfirm, userId }: { channelId: str
 
         const newResource: MediaResource = {
             id: resourceId,
-            userId: userId || CURRENT_USER_ID, 
+          userId: userId || '',
             teacherId: userId,
             channelId,
             title: name,

@@ -1,6 +1,5 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { CURRENT_USER_ID } from '../constants';
 import { RecorderState, MediaResource, Submission, TranscriptSegment } from '../types';
 import { fetchResourceFromCDN, saveStudentProgress, getStudentProgress, submitAssignment, getSubmissions } from '../utils/storage';
 import { encodeWAV, resampleAudio, stitchAudioSegments, mixAudio, dataURLtoBlob } from '../utils/audioUtils';
@@ -112,7 +111,7 @@ interface PracticeStudioProps {
 
 const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResource, onBack }) => {
   const { user } = useAuth();
-  const currentUserId = user?.id || CURRENT_USER_ID;
+  const currentUserId = user?.id || '';
   const { jobs, clearJob } = useJobs();
   
   const [resource, setResource] = useState<MediaResource>(initialResource);
@@ -137,6 +136,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
 
   // Determine initial phase based on content availability
   useEffect(() => {
+    if (!currentUserId) return;
     // 1. Check Submission Status First
     const allSubs = getSubmissions();
     const existingSub = allSubs.find(s => s.resourceId === initialResource.id && s.studentId === currentUserId);

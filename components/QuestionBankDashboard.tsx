@@ -13,7 +13,6 @@ import {
     checkQuestionReferences,
     ReferenceInfo
 } from '../utils/storage';
-import { CURRENT_USER_ID } from '../constants';
 import { Sparkles, BrainCircuit, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useJobs } from '../contexts/JobContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,9 +43,14 @@ const QuestionBankDashboard: React.FC = () => {
   const [editingOriginal, setEditingOriginal] = useState<Question | null>(null);
 
   useEffect(() => {
-        setCourses(getSyllabusCourses(CURRENT_USER_ID));
-        setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
-  }, []);
+      if (!user?.id) {
+          setCourses([]);
+          setBankQuestions([]);
+          return;
+      }
+      setCourses(getSyllabusCourses(user.id));
+      setBankQuestions(getBankQuestions(user.id));
+  }, [user?.id]);
 
   // Sync with context to find active job (persisted background job)
   useEffect(() => {
@@ -71,12 +75,17 @@ const QuestionBankDashboard: React.FC = () => {
 
   const handleUpdateCourse = (course: SyllabusCourse) => {
     saveSyllabusCourse(course);
-    setCourses(getSyllabusCourses(CURRENT_USER_ID));
+        if (user?.id) setCourses(getSyllabusCourses(user.id));
   };
 
     const refreshSyllabusAndQuestions = () => {
-        setCourses(getSyllabusCourses(CURRENT_USER_ID));
-        setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+        if (!user?.id) {
+            setCourses([]);
+            setBankQuestions([]);
+            return;
+        }
+        setCourses(getSyllabusCourses(user.id));
+        setBankQuestions(getBankQuestions(user.id));
     };
 
   const handleDeleteCourse = async (id: string) => {
@@ -95,8 +104,13 @@ const QuestionBankDashboard: React.FC = () => {
     const executeDeleteCourse = () => {
         if (!courseDeleteConfirmState) return;
         cascadeDeleteSyllabusCourse(courseDeleteConfirmState.courseId, user?.id);
-        setCourses(getSyllabusCourses(CURRENT_USER_ID));
-        setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+        if (user?.id) {
+            setCourses(getSyllabusCourses(user.id));
+            setBankQuestions(getBankQuestions(user.id));
+        } else {
+            setCourses([]);
+            setBankQuestions([]);
+        }
         setCourseDeleteConfirmState(null);
     };
 
@@ -108,7 +122,7 @@ const QuestionBankDashboard: React.FC = () => {
 
   const handleSaveGeneratedQuestions = (questions: Question[]) => {
       questions.forEach(q => saveBankQuestion(q));
-      setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+      if (user?.id) setBankQuestions(getBankQuestions(user.id));
       setShowWizard(false);
       // Clean up job on save
       if (activeJobId) clearJob(activeJobId);
@@ -126,7 +140,7 @@ const QuestionBankDashboard: React.FC = () => {
 
   const handleUpdateExistingQuestion = (q: Question) => {
       saveBankQuestion(q);
-      setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+      if (user?.id) setBankQuestions(getBankQuestions(user.id));
       // FIXED: Do not close the editor (setEditingQId(null)) here. 
       // This allows continuous editing. The "Finish" button handles closing.
   };
@@ -147,13 +161,13 @@ const QuestionBankDashboard: React.FC = () => {
     });
     if (!ok) return;
     deleteBankQuestion(id, user?.id, '教师删除题目');
-    setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+        if (user?.id) setBankQuestions(getBankQuestions(user.id));
   };
 
   const handleCancelEdit = () => {
       if (editingOriginal) {
           saveBankQuestion(editingOriginal);
-          setBankQuestions(getBankQuestions(user?.id || CURRENT_USER_ID));
+          if (user?.id) setBankQuestions(getBankQuestions(user.id));
       }
       setEditingQId(null);
       setEditingOriginal(null);

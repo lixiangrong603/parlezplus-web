@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Question } from '../types';
 import { CheckCircle, XCircle, ArrowLeft, Type, AlertCircle } from 'lucide-react';
 import { saveStudentProgress } from '../utils/storage';
-import { CURRENT_USER_ID } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import { getOptionGridColumns } from '../utils/optionLayout';
 
@@ -24,7 +23,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
     initialScore 
 }) => {
     const { user } = useAuth();
-    const currentUserId = user?.id || CURRENT_USER_ID;
+    const currentUserId = user?.id;
     
     // Filter for single-choice only as requested (defaults to 'multiple-choice' if undefined)
     const validQuestions = useMemo(() => {
@@ -74,6 +73,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
 
     const handleSubmit = () => {
         setIsSubmitted(true);
+        if (!currentUserId) return;
         saveStudentProgress({
             userId: currentUserId,
             resourceId: resourceId,

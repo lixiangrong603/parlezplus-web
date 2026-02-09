@@ -1,6 +1,5 @@
 
 import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession, OperationLog } from '../types';
-import { CURRENT_USER_ID, MOCK_RESOURCES } from '../constants';
 
 const STORAGE_KEYS = {
   CHANNELS: 'parlezplus_channels',
@@ -304,9 +303,9 @@ export const getBankQuestions = (teacherId?: string, includeDeleted: boolean = f
     questions = questions.filter(q => !q.isDeleted);
   }
 
-  // 如果提供了 teacherId，只返回该教师的题目；兼容旧题目：如果题目没有 teacherId，将其视为属于 CURRENT_USER_ID
+  // 如果提供了 teacherId，只返回该教师的题目
   if (teacherId) {
-    questions = questions.filter(q => (q.teacherId || CURRENT_USER_ID) === teacherId);
+    questions = questions.filter(q => q.teacherId === teacherId);
   }
 
   return questions;
@@ -317,7 +316,7 @@ export const saveBankQuestion = (question: Question, teacherId?: string) => {
   // 确保保存时关联 teacherId
   const questionToSave = {
     ...question,
-    teacherId: teacherId || question.teacherId || CURRENT_USER_ID
+    teacherId: teacherId || question.teacherId || ''
   };
   const index = questions.findIndex(q => q.id === question.id);
   if (index >= 0) {
@@ -670,7 +669,7 @@ const permanentlyDeleteQuestionsByKnowledgePointIds = (teacherId: string | undef
   const kpSet = new Set(knowledgePointIds);
   const questions = getBankQuestions(undefined, true);
   const filtered = questions.filter(q => {
-    const owner = (q.teacherId || CURRENT_USER_ID) === teacherId;
+    const owner = q.teacherId === teacherId;
     if (!owner) return true;
     const ids = q.knowledgePointIds || [];
     return !ids.some(id => kpSet.has(id));
@@ -845,19 +844,16 @@ export const getChannels = (userId?: string, includeDeleted: boolean = false): C
   const data = localStorage.getItem(STORAGE_KEYS.CHANNELS);
   let allChannels: Channel[] = data ? JSON.parse(data) : [];
   
-  if (allChannels.length === 0) {
-      const defaultChannel = { id: 'default', userId: CURRENT_USER_ID, name: '法语基础资源', createdAt: Date.now() };
-      return userId ? (defaultChannel.userId === userId ? [defaultChannel] : []) : [defaultChannel];
-  }
+  if (allChannels.length === 0) return [];
   
   // 过滤已删除数据
   if (!includeDeleted) {
     allChannels = allChannels.filter(c => !c.isDeleted);
   }
   
-  // 添加 userId 过滤，兼容旧频道：如果没有 userId，默认归属于 CURRENT_USER_ID
+  // 添加 userId 过滤
   return userId 
-    ? allChannels.filter(c => (c.userId || CURRENT_USER_ID) === userId) 
+    ? allChannels.filter(c => c.userId === userId) 
     : allChannels;
 };
 
@@ -868,7 +864,7 @@ export const saveChannel = (channel: Channel, userId?: string) => {
   // 确保 channel 有 userId
   const channelToSave = {
     ...channel,
-    userId: userId || channel.userId || CURRENT_USER_ID
+    userId: userId || channel.userId || ''
   };
   const index = allChannels.findIndex((c: Channel) => c.id === channel.id);
   if (index >= 0) {
@@ -910,13 +906,8 @@ export const getResources = (teacherId?: string, includeDeleted: boolean = false
   let resources: MediaResource[] = [];
   
   if (!data) {
-    const seeded = MOCK_RESOURCES.map(r => ({
-       ...r,
-       assignedClassIds: ['default-class'],
-       channelId: r.channelId || 'default'
-    }));
-    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(seeded));
-    resources = seeded;
+    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify([]));
+    resources = [];
   } else {
     resources = JSON.parse(data);
   }
@@ -962,7 +953,7 @@ export const saveResource = (resource: MediaResource, teacherId?: string) => {
   // 确保 resource 有 teacherId（通过 channelId 所属教师推导）
   const resourceToSave = {
     ...resource,
-    teacherId: teacherId || resource.teacherId || CURRENT_USER_ID
+    teacherId: teacherId || resource.teacherId || ''
   };
 
   const index = allResources.findIndex(r => r.id === resource.id);
@@ -1621,7 +1612,7 @@ const cascadeRestoreUserInternal = (userId: string) => {
 
   // 课程
   getSyllabusCourses(undefined, true)
-    .filter(c => (c.userId || CURRENT_USER_ID) === userId)
+    .filter(c => c.userId === userId)
     .forEach(c => cascadeRestoreSyllabusCourseInternal(c.id));
 };
 
@@ -1748,14 +1739,14 @@ const cascadePermanentlyDeleteUserInternal = (userId: string) => {
 
     // 题库题目：按 teacherId 物理删除
     const questions = getBankQuestions(undefined, true);
-    const filteredQuestions = questions.filter(q => (q.teacherId || CURRENT_USER_ID) !== userId);
+    const filteredQuestions = questions.filter(q => q.teacherId !== userId);
     if (filteredQuestions.length !== questions.length) {
       localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(filteredQuestions));
     }
 
     // 课程：物理删除课程 + 关联题目
     getSyllabusCourses(undefined, true)
-      .filter(c => (c.userId || CURRENT_USER_ID) === userId)
+      .filter(c => c.userId === userId)
       .forEach(c => cascadePermanentlyDeleteSyllabusCourseInternal(c.id));
   }
 
@@ -2591,7 +2582,7 @@ export const cascadeDeleteUser = (userId: string, operatorId?: string) => {
 
   // 课程：级联删除课程 + 关联题库题目
   const courses = getSyllabusCourses(undefined, true)
-    .filter(c => (c.userId || CURRENT_USER_ID) === userId && !c.isDeleted);
+    .filter(c => c.userId === userId && !c.isDeleted);
   courses.forEach(c => cascadeDeleteSyllabusCourse(c.id, operatorId));
 
   // 最后删除用户

@@ -15,7 +15,6 @@ import {
   getResources, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass,
   checkClassroomReferences, cascadeDeleteClassroom, ReferenceInfo
 } from '../utils/storage';
-import { MOCK_RESOURCES, CURRENT_USER_ID } from '../constants'; 
 import { ResourceManagement } from './ResourceManagement';
 import PracticeStudio from './PracticeStudio';
 import { ThemeContext } from '../App';

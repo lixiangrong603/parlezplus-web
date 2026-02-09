@@ -12,7 +12,6 @@ import { getInitials, getColorFromString } from '../utils/mediaUtils';
 import { useJobs } from '../contexts/JobContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useModal } from '../contexts/ModalContext';
-import { CURRENT_USER_ID } from '../constants';
 import MediaPlayer from './MediaPlayer';
 
 // --- SHARED MODAL COMPONENT ---

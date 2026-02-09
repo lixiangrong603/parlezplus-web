@@ -8,10 +8,10 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MediaResource, TranscriptSegment, AzureWord, WordTiming, Question } from '../types';
 import { useJobs } from '../contexts/JobContext';
 import { useAuth } from '../contexts/AuthContext';
-import { DEFAULT_COVERS } from '../constants';
 import ResourceTagger from './ResourceTagger';
 import QuizEditor from './QuizEditor';
 import { useModal } from '../contexts/ModalContext';
+import { generateRandomCoverArt } from '../utils/mediaUtils';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -53,9 +53,8 @@ const CustomConfirmModal = ({
   );
 };
 
-// Helper to get a random cover
-const getRandomCover = () => {
-  return DEFAULT_COVERS[Math.floor(Math.random() * DEFAULT_COVERS.length)];
+const getFallbackCover = (seed: string) => {
+  return generateRandomCoverArt(seed || 'cover');
 };
 
 // --- CORE LOGIC: Reconcile Text Edits with Timestamps ---
@@ -414,7 +413,7 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                                         <div className="absolute inset-0 rounded-full opacity-40 mix-blend-screen" style={{ background: `conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,0.08) 10%, transparent 20%, transparent 45%, rgba(255,255,255,0.12) 50%, transparent 55%, transparent 80%, rgba(255,255,255,0.08) 90%, transparent 100%)` }}></div>
                                         <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-30"></div>
                                         <div className="absolute w-[65%] h-[65%] rounded-full overflow-hidden border-4 border-[#18181b] z-10 bg-slate-800 shadow-md">
-                                            <img src={resource.coverImage || getRandomCover()} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.classList.add('bg-slate-700'); }} />
+                                            <img src={resource.coverImage || getFallbackCover(resource.id)} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.classList.add('bg-slate-700'); }} />
                                         </div>
                                         <div className="absolute w-3.5 h-3.5 bg-slate-200 rounded-full z-20 shadow-inner border border-slate-400">
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-black/50 rounded-full"></div>
