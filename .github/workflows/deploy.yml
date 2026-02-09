@@ -39,7 +39,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=parlezplus
+          command: pages deploy dist --project-name=parlezplus --branch=main --commit-dirty=true
 
       # 首次部署或 schema 变更时运行数据库迁移
       - name: Run D1 migrations (if schema changed)
