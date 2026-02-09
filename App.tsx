@@ -62,6 +62,9 @@ function AppContent() {
     loadResources();
   }, [isLoading, user, selectedResource]);
 
+  // [DEBUG] 输出状态
+  console.log('AppContent state:', { isLoading, user: user?.username || 'null' });
+
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-indigo-50 dark:bg-slate-950">
@@ -71,6 +74,7 @@ function AppContent() {
   }
 
   if (!user) {
+    console.log('Rendering LoginPage');
     return <LoginPage />;
   }
 

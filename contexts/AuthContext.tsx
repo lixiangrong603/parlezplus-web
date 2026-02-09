@@ -25,11 +25,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 尝试从 API 恢复会话
     const token = localStorage.getItem('auth_token');
     if (token) {
+      // [FIX] 在开发环境下添加超时处理，避免 API 调用卡住
+      const timeoutId = setTimeout(() => {
+        console.warn('Session restore timeout, clearing token');
+        localStorage.removeItem('auth_token');
+        setIsLoading(false);
+      }, 3000); // 3秒超时
+
       getCurrentUser()
         .then(currentUser => {
+          clearTimeout(timeoutId);
           setUser(currentUser);
         })
         .catch(err => {
+          clearTimeout(timeoutId);
           console.error('Failed to restore session:', err);
           // Token 无效，清除
           localStorage.removeItem('auth_token');

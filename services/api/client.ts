@@ -2,8 +2,10 @@
 
 import type { User } from '../../types/worker';
 
-// API 基础 URL (开发环境自动切换)
-const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:3000' : '';
+// API 基础 URL (生产环境和开发环境都使用相对路径)
+// 开发环境：Vite dev server 会返回 404，立即失败，不会卡住
+// 生产环境：Cloudflare Pages Functions 处理 API 请求
+const API_BASE_URL = '';
 
 // ============================================
 // HTTP 客户端

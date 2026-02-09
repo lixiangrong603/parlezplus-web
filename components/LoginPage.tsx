@@ -10,6 +10,9 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // [DEBUG] 确认组件已渲染
+  console.log('LoginPage rendered');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
