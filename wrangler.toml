@@ -9,19 +9,19 @@ pages_build_output_dir = "dist"
 # D1 数据库绑定
 # 创建命令: npx wrangler d1 create parlezplus_db
 # ============================================
-[[d1_databases]]
-binding = "DB"
-database_name = "parlezplus_db"
-database_id = "c7b9d675-cfb5-4d16-b836-d0dc5c7ba24b"
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "parlezplus_db"
+# database_id = "c7b9d675-cfb5-4d16-b836-d0dc5c7ba24b"
 
 # ============================================
 # R2 存储桶绑定
 # 需要在 Dashboard 启用 R2: https://dash.cloudflare.com/?to=/:account/r2
 # 创建命令: npx wrangler r2 bucket create parlezplus-media
 # ============================================
-[[r2_buckets]]
-binding = "R2_BUCKET"
-bucket_name = "parlezplus-media"
+# [[r2_buckets]]
+# binding = "R2_BUCKET"
+# bucket_name = "parlezplus-media"
 
 # ============================================
 # KV 命名空间 (可选，用于缓存)

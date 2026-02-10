@@ -11,7 +11,7 @@
     "db:create": "npx wrangler d1 create parlezplus_db",
     "db:migrate": "npx wrangler d1 execute parlezplus_db --file=database/schema.sql",
     "db:query": "npx wrangler d1 execute parlezplus_db --command",
-    "pages:dev": "npx wrangler pages dev dist",
+    "pages:dev": "npx wrangler pages dev dist --d1 DB --r2 R2_BUCKET",
     "login": "npx wrangler login"
   },
   "dependencies": {
