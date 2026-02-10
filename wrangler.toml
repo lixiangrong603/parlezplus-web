@@ -45,6 +45,18 @@ ENVIRONMENT = "development"
 # npx wrangler secret put AZURE_MASTER_KEY
 # npx wrangler secret put JWT_SECRET
 
+[env.production.vars]
+ENVIRONMENT = "production"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "parlezplus_db"
+database_id = "c7b9d675-cfb5-4d16-b836-d0dc5c7ba24b"
+
+[[env.production.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "parlezplus-media"
+
 # ============================================
 # 预览环境配置 (用于测试分支)
 # ============================================
