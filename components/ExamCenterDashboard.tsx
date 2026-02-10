@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ExamPaper, User, ExamSection, Question, Classroom } from '../types';
-import { getExamPapers, deleteExamPaper, getQuestionsByIds, updateExamPaper, getClassrooms, checkExamPaperReferences, cascadeDeleteExamPaper, ReferenceInfo } from '../utils/storage';
+import { ExamPaper, User, ExamSection, Question, Classroom, ExamFolder } from '../types';
+import { 
+  getExamPapers, saveExamPaper, deleteExamPaper, getQuestionsByIds, updateExamPaper, 
+  getClassrooms, checkExamPaperReferences, cascadeDeleteExamPaper, 
+  getExamFolders, saveExamFolder, deleteExamFolder,
+  ReferenceInfo 
+} from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   FileText, Plus, Archive, FolderOpen, Edit3, Trash2, Calendar, CheckCircle, Eye, 
@@ -21,14 +26,7 @@ interface DraftData {
   savedAt?: number;
 }
 
-interface ExamFolder {
-  id: string;
-  name: string;
-  createdAt: number;
-}
-
 const DRAFT_KEY = 'parlezplus_exam_builder_draft';
-const FOLDERS_KEY = 'parlezplus_exam_folders';
 
 // Classroom Assignment Modal Component
 const ClassroomAssignmentModal: React.FC<{
@@ -37,8 +35,21 @@ const ClassroomAssignmentModal: React.FC<{
   onClose: () => void;
   onSave: (selectedClassIds: string[]) => void;
 }> = ({ exam, teacherId, onClose, onSave }) => {
-  const classrooms = getClassrooms().filter(c => c.userId === teacherId);
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>(exam.assignedClassIds || []);
+
+  useEffect(() => {
+    let active = true;
+    const loadClassrooms = async () => {
+      const all = await getClassrooms();
+      if (!active) return;
+      setClassrooms(all.filter(c => c.userId === teacherId));
+    };
+    loadClassrooms();
+    return () => {
+      active = false;
+    };
+  }, [teacherId]);
 
   const handleToggleClass = (classId: string) => {
     setSelectedClassIds(prev =>
@@ -144,7 +155,7 @@ const ExamPlagiarismModal: React.FC<{
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const allPapers = getExamPapers();
+      const allPapers = await getExamPapers();
       const selectedExams = allPapers.filter(p => examIds.includes(p.id));
       setExams(selectedExams);
 
@@ -345,48 +356,51 @@ const ExamCenterDashboard: React.FC = () => {
     loadFolders();
   }, [user?.id]);
 
-  const loadFolders = () => {
+  const loadFolders = async () => {
     if (!user?.id) return;
     try {
-      const userFoldersKey = `${FOLDERS_KEY}_${user.id}`;
-      const foldersStr = localStorage.getItem(userFoldersKey);
-      if (foldersStr) {
-        setFolders(JSON.parse(foldersStr));
-      }
+      const userFolders = await getExamFolders(user.id);
+      setFolders(userFolders);
     } catch (e) {
       console.error('Failed to load folders', e);
     }
   };
 
-  const saveFolders = (newFolders: ExamFolder[]) => {
+  const handleCreateFolder = async () => {
     if (!user?.id) return;
-    const userFoldersKey = `${FOLDERS_KEY}_${user.id}`;
-    localStorage.setItem(userFoldersKey, JSON.stringify(newFolders));
-    setFolders(newFolders);
-  };
-
-  const handleCreateFolder = () => {
     const newFolder: ExamFolder = {
-      id: `folder_${Date.now()}`,
+      id: `temp-${Date.now()}`,
+      userId: user.id,
       name: '新建文件夹',
       createdAt: Date.now()
     };
-    saveFolders([...folders, newFolder]);
-    // 自动进入编辑模式
-    setEditingFolderId(newFolder.id);
-    setEditingFolderName('新建文件夹');
+    try {
+      const saved = await saveExamFolder(newFolder, user.id);
+      setFolders([...folders, saved]);
+      // 自动进入编辑模式
+      setEditingFolderId(saved.id);
+      setEditingFolderName('新建文件夹');
+    } catch (e) {
+      console.error('Failed to create folder', e);
+    }
   };
 
-  const handleRenameFolder = (folderId: string, newName: string) => {
-    if (!newName.trim()) {
+  const handleRenameFolder = async (folderId: string, newName: string) => {
+    if (!newName.trim() || !user?.id) {
       setEditingFolderId(null);
       return;
     }
-    const updatedFolders = folders.map(f => 
-      f.id === folderId ? { ...f, name: newName.trim() } : f
-    );
-    saveFolders(updatedFolders);
-    setEditingFolderId(null);
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) return;
+    
+    try {
+      const updated = await saveExamFolder({ ...folder, name: newName.trim() }, user.id);
+      setFolders(folders.map(f => f.id === folderId ? updated : f));
+      setEditingFolderId(null);
+    } catch (e) {
+      console.error('Failed to rename folder', e);
+      setEditingFolderId(null);
+    }
   };
 
   const startEditingFolder = (folderId: string, currentName: string) => {
@@ -395,6 +409,7 @@ const ExamCenterDashboard: React.FC = () => {
   };
 
   const handleDeleteFolder = async (folderId: string) => {
+    if (!user?.id) return;
     const ok = await modal.confirm({
       title: '确认删除',
       message: '确认删除该文件夹？文件夹内的试卷将移至未分类。',
@@ -403,38 +418,34 @@ const ExamCenterDashboard: React.FC = () => {
     });
     if (!ok) return;
 
-    saveFolders(folders.filter(f => f.id !== folderId));
-    if (selectedFolderId === folderId) {
-      setSelectedFolderId(null);
-    }
-    // Remove folderId from all exams
-    const updatedPapers = examPapers.map(exam => ({
-      ...exam,
-      folderId: exam.folderId === folderId ? undefined : exam.folderId
-    }));
-    updatedPapers.forEach(exam => {
-      const allPapers = getExamPapers(user?.id);
-      const index = allPapers.findIndex(p => p.id === exam.id);
-      if (index !== -1) {
-        allPapers[index] = exam;
-        localStorage.setItem('parlezplus_exam_papers', JSON.stringify(allPapers));
+    try {
+      await deleteExamFolder(folderId, user.id);
+      setFolders(folders.filter(f => f.id !== folderId));
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId(null);
       }
-    });
-    loadExamPapers();
-  };
-
-  const handleMoveToFolder = (examId: string, folderId: string | null) => {
-    const allPapers = getExamPapers(user?.id);
-    const examIndex = allPapers.findIndex(p => p.id === examId);
-    if (examIndex !== -1) {
-      allPapers[examIndex] = { ...allPapers[examIndex], folderId };
-      localStorage.setItem('parlezplus_exam_papers', JSON.stringify(allPapers));
-      loadExamPapers();
+      // 注意：删除文件夹时，API后端会自动清除exam_papers中的folder_id
+      // 这里重新加载exam papers以反映变化
+      await loadExamPapers();
+    } catch (e) {
+      console.error('Failed to delete folder', e);
     }
   };
 
-  const loadExamPapers = () => {
-    setExamPapers(getExamPapers(user?.id));
+  const handleMoveToFolder = async (examId: string, folderId: string | null) => {
+    const exam = examPapers.find(p => p.id === examId);
+    if (!exam) return;
+    try {
+      await saveExamPaper({ ...exam, folderId: folderId || undefined });
+      await loadExamPapers();
+    } catch (e) {
+      console.error('Failed to move exam', e);
+    }
+  };
+
+  const loadExamPapers = async () => {
+    const papers = await getExamPapers(user?.id);
+    setExamPapers(papers);
   };
 
   const loadDraft = () => {
@@ -474,17 +485,17 @@ const ExamCenterDashboard: React.FC = () => {
     });
   };
 
-  const executeDeleteExam = (cascade: boolean) => {
+  const executeDeleteExam = async (cascade: boolean) => {
     if (!examDeleteConfirmState) return;
 
     if (cascade) {
-      cascadeDeleteExamPaper(examDeleteConfirmState.examId, user?.id);
+      await cascadeDeleteExamPaper(examDeleteConfirmState.examId, user?.id);
     } else {
-      deleteExamPaper(examDeleteConfirmState.examId, user?.id, '教师删除试卷');
+      await deleteExamPaper(examDeleteConfirmState.examId, user?.id, '教师删除试卷');
     }
 
     setExamDeleteConfirmState(null);
-    loadExamPapers();
+    await loadExamPapers();
   };
 
   const handleNavigateBack = () => {
@@ -511,18 +522,15 @@ const ExamCenterDashboard: React.FC = () => {
     setDraft(null);
   };
 
-  const handleDuplicateExam = (exam: ExamPaper) => {
+  const handleDuplicateExam = async (exam: ExamPaper) => {
     const duplicatedExam: ExamPaper = {
       ...exam,
-      id: `exam_${Date.now()}`,
+      id: `temp-${Date.now()}`,
       title: `${exam.title} (副本)`,
       createdAt: Date.now(),
     };
-    // Save directly to storage
-    const allPapers = getExamPapers(user?.id);
-    allPapers.push(duplicatedExam);
-    localStorage.setItem('parlezplus_exam_papers', JSON.stringify(allPapers));
-    loadExamPapers();
+    await saveExamPaper(duplicatedExam);
+    await loadExamPapers();
   };
 
   const handleExportWord = async (exam: ExamPaper, version: 'STUDENT' | 'TEACHER') => {
@@ -543,7 +551,7 @@ const ExamCenterDashboard: React.FC = () => {
     setAssigningExam(exam);
   };
 
-  const handleSaveAssignment = (selectedClassIds: string[]) => {
+  const handleSaveAssignment = async (selectedClassIds: string[]) => {
     if (assigningExam) {
       const prevDeadlines = assigningExam.assignedClassDeadlines || {};
       const nextDeadlines: Record<string, number> = {};
@@ -551,13 +559,13 @@ const ExamCenterDashboard: React.FC = () => {
         const v = prevDeadlines[id];
         if (typeof v === 'number') nextDeadlines[id] = v;
       });
-      updateExamPaper({
+      await updateExamPaper({
         ...assigningExam,
         assignedClassIds: selectedClassIds,
         assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
       });
       setAssigningExam(null);
-      loadExamPapers();
+      await loadExamPapers();
     }
   };
 

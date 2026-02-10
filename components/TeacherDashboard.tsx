@@ -9,7 +9,7 @@ import {
   AlertTriangle, Upload, Camera
 } from 'lucide-react';
 import AvatarEditor from './AvatarEditor';
-import { Classroom, Student, Submission, MediaResource, User as UserType, ExamPaper } from '../types';
+import { Classroom, Student, Submission, MediaResource, User as UserType, ExamPaper, ExamSession } from '../types';
 import { 
   getClassrooms, saveClassroom, saveUser, getUsers, getUserById, 
   getResources, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass,
@@ -251,30 +251,35 @@ const ClassManager = ({
     references: ReferenceInfo[];
   } | null>(null);
 
-  useEffect(() => {
-    const classes = getClassrooms(teacherId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const loadClassrooms = async () => {
+    const classes = await getClassrooms(teacherId);
+    classes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     setClassrooms(classes);
     // Default to first class if none selected
     if (classes.length > 0 && !selectedClassId) {
       onSelectClass(classes[0].id);
     }
+  };
+
+  useEffect(() => {
+    loadClassrooms();
   }, [teacherId]);
 
-  const handleAddClass = () => {
+  const handleAddClass = async () => {
     if (!newClassName.trim()) return;
-    const newClass: Classroom = { id: Date.now().toString(), userId: teacherId, name: newClassName, studentCount: 0, students: [] };
-    saveClassroom(newClass);
-    setClassrooms(getClassrooms(teacherId));
+    const newClass: Classroom = { id: '', userId: teacherId, name: newClassName, studentCount: 0, students: [] };
+    await saveClassroom(newClass);
+    await loadClassrooms();
     setNewClassName('');
     setShowAddClass(false);
   };
 
-  const handleEditClass = (id: string, newName: string) => {
+  const handleEditClass = async (id: string, newName: string) => {
     const cls = classrooms.find(c => c.id === id);
     if (cls) {
       cls.name = newName;
-      saveClassroom(cls);
-      setClassrooms(getClassrooms(teacherId));
+      await saveClassroom(cls);
+      await loadClassrooms();
     }
   };
 
@@ -292,13 +297,13 @@ const ClassManager = ({
     });
   };
 
-  const executeDeleteClass = () => {
+  const executeDeleteClass = async () => {
     if (!confirmState) return;
     const id = confirmState.classId;
 
-    cascadeDeleteClassroom(id, teacherId);
+    await cascadeDeleteClassroom(id, teacherId);
     
-    setClassrooms(getClassrooms(teacherId));
+    await loadClassrooms();
     if (selectedClassId === id) onSelectClass(null);
     setConfirmState(null);
   };
@@ -323,7 +328,7 @@ const ClassManager = ({
           onBack={() => onSelectClass(null)} 
           onOpenGradingTask={onOpenGradingTask}
           onOpenGradingExam={onOpenGradingExam}
-          onRefreshClassrooms={() => setClassrooms(getClassrooms(teacherId))}
+          onRefreshClassrooms={loadClassrooms}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center text-slate-400">
@@ -446,6 +451,7 @@ const ClassDetailView = ({
   const [classroom, setClassroom] = useState<Classroom | null>(null);
   const [assignedResources, setAssignedResources] = useState<MediaResource[]>([]);
   const [assignedExams, setAssignedExams] = useState<ExamPaper[]>([]);
+  const [examSessionsByExamId, setExamSessionsByExamId] = useState<Record<string, ExamSession[]>>({});
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
@@ -465,12 +471,22 @@ const ClassDetailView = ({
   } | null>(null);
 
   const loadData = async () => {
-    const cls = getClassrooms(teacherId).find(c => c.id === classId);
+    const classes = await getClassrooms(teacherId);
+    const cls = classes.find(c => c.id === classId);
     if (cls) setClassroom(cls);
     const allResources = await getResources(teacherId);
     setAssignedResources(allResources.filter(r => r.assignedClassIds?.includes(classId)).sort((a, b) => b.createdAt - a.createdAt));
-    const allExams = getExamPapers(teacherId);
-    setAssignedExams(allExams.filter(e => e.assignedClassIds?.includes(classId)));
+    const allExams = await getExamPapers(teacherId);
+    const assigned = allExams.filter(e => e.assignedClassIds?.includes(classId));
+    setAssignedExams(assigned);
+
+    const sessionsByExamId: Record<string, ExamSession[]> = {};
+    await Promise.all(
+      assigned.map(async (exam) => {
+        sessionsByExamId[exam.id] = await getExamSessionsByExamAndClass(exam.id, classId);
+      })
+    );
+    setExamSessionsByExamId(sessionsByExamId);
   };
 
   useEffect(() => { loadData(); }, [classId, teacherId]);
@@ -500,7 +516,7 @@ const ClassDetailView = ({
         }
         // 如果学生存在但不在班级中，更新班级 ID
         existingUser.classId = classId;
-        saveUser(existingUser);
+        await saveUser(existingUser);
         
         const newStudent: Student = { 
             id: `s-${Date.now()}`, 
@@ -510,7 +526,7 @@ const ClassDetailView = ({
             overallProgress: 0 
         };
         const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
-        saveClassroom(updatedClass);
+        await saveClassroom(updatedClass);
         setConfirmConfig({
           isOpen: true,
           title: "导入成功",
@@ -545,11 +561,11 @@ const ClassDetailView = ({
             classId: classId,
             needsPasswordChange: true,
           };
-          saveUser(newUser);
+          await saveUser(newUser);
 
           const newStudent: Student = { id: `s-${Date.now()}`, userId: created.id, name, overallProgress: 0 };
           const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
-          saveClassroom(updatedClass);
+          await saveClassroom(updatedClass);
         } catch (e: any) {
           setConfirmConfig({
             isOpen: true,
@@ -562,7 +578,7 @@ const ClassDetailView = ({
         }
     }
     
-    loadData();
+    await loadData();
     setNewStudentData({ name: '', username: '' });
     setShowAddStudent(false);
   };
@@ -593,7 +609,7 @@ const ClassDetailView = ({
       if (existingUser) {
         // 账号存在，关联班级（本地）
         existingUser.classId = classId;
-        saveUser(existingUser);
+        await saveUser(existingUser);
         newStudents.push({
           id: `s-${Date.now()}-${username}`,
           userId: existingUser.id,
@@ -629,7 +645,7 @@ const ClassDetailView = ({
           classId: classId,
           needsPasswordChange: true,
         };
-        saveUser(newUser);
+        await saveUser(newUser);
         newStudents.push({
           id: `s-${Date.now()}-${username}`,
           userId: created.id,
@@ -644,7 +660,7 @@ const ClassDetailView = ({
     }
 
     const updatedClass = { ...classroom, students: newStudents, studentCount: newStudents.length };
-    saveClassroom(updatedClass);
+    await saveClassroom(updatedClass);
     await loadData();
 
     const errorText = resultsErrors.length > 0
@@ -669,9 +685,9 @@ const ClassDetailView = ({
               isOpen: true,
               title: "重置密码",
               message: `确定要将学生 ${user.name} 的密码重置为默认值 (123456) 吗？`,
-              onConfirm: () => {
+              onConfirm: async () => {
                 user.password = '123456';
-                saveUser(user);
+                await saveUser(user);
                 setConfirmConfig({ isOpen: true, title: "完成", message: "密码已成功重置为 123456", onConfirm: () => {}, type: "info" });
               }
             });
@@ -684,18 +700,18 @@ const ClassDetailView = ({
       isOpen: true,
       title: "移除学生",
       message: "确定要从该班级移除该学生吗？该学生的作业提交记录仍将保留，但不再出现在此班级名册。",
-      onConfirm: () => {
+      onConfirm: async () => {
         const student = classroom?.students.find(s => s.id === studentId);
         if (student && student.userId) {
             const user = getUserById(student.userId);
             if (user) {
                 user.classId = undefined;
-                saveUser(user);
+                await saveUser(user);
             }
         }
         const updatedClass = { ...classroom!, students: classroom!.students.filter(s => s.id !== studentId), studentCount: classroom!.students.length - 1 };
-        saveClassroom(updatedClass);
-        loadData();
+        await saveClassroom(updatedClass);
+        await loadData();
       }
     });
   };
@@ -722,8 +738,9 @@ const ClassDetailView = ({
       isOpen: true,
       title: "撤回试卷",
       message: "确定要从该班级撤回此试卷吗？学生将无法再看到该试卷任务。",
-      onConfirm: () => {
-        const exam = getExamPapers(teacherId).find(e => e.id === examId);
+      onConfirm: async () => {
+        const exams = await getExamPapers(teacherId);
+        const exam = exams.find(e => e.id === examId);
         if (exam) {
           const nextAssigned = (exam.assignedClassIds || []).filter(id => id !== classId);
           const nextDeadlines = { ...(exam.assignedClassDeadlines || {}) };
@@ -733,18 +750,18 @@ const ClassDetailView = ({
             assignedClassIds: nextAssigned,
             assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
           };
-          updateExamPaper(updated);
-          loadData();
+          await updateExamPaper(updated);
+          await loadData();
         }
       }
     });
   };
 
-  const handleUpdateDeadline = () => {
+  const handleUpdateDeadline = async () => {
     if (editingDeadlineResource) {
       const updated = { ...editingDeadlineResource, deadline: newDeadline ? new Date(newDeadline).getTime() : undefined };
-      saveResource(updated);
-      loadData();
+      await saveResource(updated);
+      await loadData();
       setEditingDeadlineResource(null);
     } else if (editingDeadlineExam) {
       const nextDeadlines = { ...(editingDeadlineExam.assignedClassDeadlines || {}) };
@@ -759,8 +776,8 @@ const ClassDetailView = ({
         assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
       };
       
-      updateExamPaper(updated);
-      loadData();
+      await updateExamPaper(updated);
+      await loadData();
       setEditingDeadlineExam(null);
     }
   };
@@ -934,7 +951,7 @@ const ClassDetailView = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {assignedExams.map(exam => {
-                        const sessions = getExamSessionsByExamAndClass(exam.id, classId);
+                        const sessions = examSessionsByExamId[exam.id] || [];
                         const submitted = sessions.filter(s => s.isSubmitted).length;
                         const total = classroom.students.length;
                         const deadline = exam.assignedClassDeadlines?.[classId];
@@ -1062,8 +1079,9 @@ const ClassDetailView = ({
             await loadData();
             setShowAddTask(false);
           }}
-          onAssignExam={(examId, d) => {
-            const exam = getExamPapers(teacherId).find(e => e.id === examId);
+          onAssignExam={async (examId, d) => {
+            const exams = await getExamPapers(teacherId);
+            const exam = exams.find(e => e.id === examId);
             if (exam) {
               const nextClassIds = Array.from(new Set([...(exam.assignedClassIds || []), classId]));
               const nextDeadlines = { ...(exam.assignedClassDeadlines || {}) };
@@ -1072,13 +1090,13 @@ const ClassDetailView = ({
               } else {
                 delete nextDeadlines[classId];
               }
-              updateExamPaper({
+              await updateExamPaper({
                 ...exam,
                 assignedClassIds: nextClassIds,
                 assignedClassDeadlines: Object.keys(nextDeadlines).length > 0 ? nextDeadlines : undefined
               });
             }
-            loadData();
+            await loadData();
             setShowAddTask(false);
           }}
           alreadyAssignedResourceIds={assignedResources.map(r => r.id)}
@@ -1178,7 +1196,7 @@ const AddTaskModal = ({
   alreadyAssignedExamIds: string[];
 }) => {
   const [resources, setResources] = useState<MediaResource[]>([]);
-  const [exams, setExams] = useState<any[]>([]);
+  const [exams, setExams] = useState<ExamPaper[]>([]);
   const [activeTab, setActiveTab] = useState<'resources' | 'exams'>('resources');
   const [selectedDeadline, setSelectedDeadline] = useState<string>('');
   const [selectedExamDeadline, setSelectedExamDeadline] = useState<string>('');
@@ -1187,7 +1205,7 @@ const AddTaskModal = ({
     const loadData = async () => {
       const allResources = await getResources(teacherId);
       setResources(allResources.filter(r => !alreadyAssignedResourceIds.includes(r.id)));
-      const allExams = getExamPapers(teacherId);
+      const allExams = await getExamPapers(teacherId);
       setExams(allExams.filter(e => !alreadyAssignedExamIds.includes(e.id)));
     };
     loadData();

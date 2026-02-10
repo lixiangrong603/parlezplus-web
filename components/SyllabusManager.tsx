@@ -153,9 +153,9 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({
   const handleAddCourse = () => {
     if (!newItemName.trim()) return;
     const newCourse: SyllabusCourse = {
-      id: `course-${Date.now()}`,
+      id: `temp-course-${Date.now()}`,
       name: newItemName,
-      userId: 'current', 
+      userId: operatorId || 'current', 
       createdAt: Date.now(),
       units: []
     };

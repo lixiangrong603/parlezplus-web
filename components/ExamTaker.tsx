@@ -55,7 +55,20 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   const [currentSession, setCurrentSession] = useState<ExamSession | null>(null);
   
   // Load syllabuses for knowledge points
-  const syllabuses = useMemo(() => getSyllabusCourses(), []);
+  const [syllabuses, setSyllabuses] = useState<SyllabusCourse[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const loadSyllabuses = async () => {
+      const data = await getSyllabusCourses();
+      if (!active) return;
+      setSyllabuses(data);
+    };
+    loadSyllabuses();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Auto-close sidebar on mobile
   useEffect(() => {
@@ -112,10 +125,16 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   });
   // Load latest persisted settings (teacher may have saved them on the exam paper)
   useEffect(() => {
-    const fresh = getExamPaperById(exam.id);
-    if (fresh?.examTakerSettings) {
+    let active = true;
+    const loadSettings = async () => {
+      const fresh = await getExamPaperById(exam.id);
+      if (!active || !fresh?.examTakerSettings) return;
       setExamTakerSettings(fresh.examTakerSettings);
-    }
+    };
+    loadSettings();
+    return () => {
+      active = false;
+    };
   }, [exam.id]);
 
   // Auto-restore student's latest session (draft or submitted)
@@ -123,31 +142,39 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     if (isTeacherView) return;
     if (restoreAttemptedRef.current) return;
     restoreAttemptedRef.current = true;
+    let active = true;
 
-    const existing = getExamSessionById(sessionId);
-    if (!existing) return;
+    const restoreSession = async () => {
+      const existing = await getExamSessionById(sessionId);
+      if (!existing || !active) return;
 
-    // Store current session for accessing teacher feedback and manual score
-    setCurrentSession(existing);
+      // Store current session for accessing teacher feedback and manual score
+      setCurrentSession(existing);
 
-    const restoredAnswers = existing.answers || {};
-    setAnswers(restoredAnswers);
+      const restoredAnswers = existing.answers || {};
+      setAnswers(restoredAnswers);
 
-    const restoredElapsed = typeof existing.elapsedTime === 'number' ? existing.elapsedTime : 0;
-    setElapsedTime(restoredElapsed);
+      const restoredElapsed = typeof existing.elapsedTime === 'number' ? existing.elapsedTime : 0;
+      setElapsedTime(restoredElapsed);
 
-    // Resume timer without counting time away from page
-    const resumedStart = Date.now() - Math.max(0, restoredElapsed);
-    setStartTime(resumedStart);
+      // Resume timer without counting time away from page
+      const resumedStart = Date.now() - Math.max(0, restoredElapsed);
+      setStartTime(resumedStart);
 
-    if (existing.isSubmitted) {
-      setIsSubmitted(true);
-      setViewMode('result');
-    } else {
-      // Draft: jump back into exam automatically
-      setIsSubmitted(false);
-      setViewMode('exam');
-    }
+      if (existing.isSubmitted) {
+        setIsSubmitted(true);
+        setViewMode('result');
+      } else {
+        // Draft: jump back into exam automatically
+        setIsSubmitted(false);
+        setViewMode('exam');
+      }
+    };
+
+    restoreSession();
+    return () => {
+      active = false;
+    };
   }, [isTeacherView, sessionId]);
 
   // Load resources on mount
@@ -308,11 +335,11 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   // Check if all questions are answered
   const answeredCount = Object.keys(answers).length;
 
-  const persistExamTakerSettings = (next: ExamTakerSettings) => {
+  const persistExamTakerSettings = async (next: ExamTakerSettings) => {
     setExamTakerSettings(next);
     if (!isTeacherView) return;
-    const fresh = getExamPaperById(exam.id) || exam;
-    updateExamPaper({ ...fresh, examTakerSettings: next });
+    const fresh = (await getExamPaperById(exam.id)) || exam;
+    await updateExamPaper({ ...fresh, examTakerSettings: next });
   };
 
   const saveResourcePlaybackSettings = (resourceId: string, nextSettings: ExamTakerResourcePlaybackSettings) => {
@@ -1302,7 +1329,7 @@ const ExamMediaPlayer: React.FC<{
       if (isPlaying) {
         videoRef.current.pause();
       } else {
-        videoRef.current.play();
+        videoRef.current.play().catch(e => console.warn('Play interrupted', e));
       }
       setIsPlaying(!isPlaying);
     }
@@ -1568,7 +1595,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
               ? isCorrect
                 ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-50/40'
                 : 'border-red-500 text-red-700 dark:text-red-300 bg-red-50/40'
-              : 'border-slate-400/70 dark:border-slate-600 focus:border-indigo-500 text-indigo-700 dark:text-indigo-300'
+              : 'border-slate-200 dark:border-slate-600 focus:border-indigo-500 text-indigo-700 dark:text-indigo-300'
           }`}
           style={{ 
             width: `${Math.max(80, Math.min(400, (userAnswer || '').length * 12 + 30))}px`,
@@ -1855,7 +1882,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                   ? isCorrect
                     ? 'border-emerald-500 bg-emerald-50/40 text-emerald-700 dark:text-emerald-300'
                     : 'border-red-500 bg-red-50/40 text-red-700 dark:text-red-300'
-                  : 'border-slate-400/70 dark:border-slate-600 focus:border-indigo-500 bg-white/50 dark:bg-slate-800/50 text-indigo-700 dark:text-indigo-300'
+                  : 'border-slate-200 dark:border-slate-600 focus:border-indigo-500 bg-white/50 dark:bg-slate-800/50 text-indigo-700 dark:text-indigo-300'
               }`}
             >
               <option value="">--</option>
@@ -1924,7 +1951,7 @@ const RenderSection: React.FC<RenderSectionProps> = ({
                   ? isCorrect
                     ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-50/40'
                     : 'border-red-500 text-red-700 dark:text-red-300 bg-red-50/40'
-                  : 'border-slate-400/70 dark:border-slate-600 focus:border-indigo-500 text-indigo-700 dark:text-indigo-300'
+                  : 'border-slate-200 dark:border-slate-600 focus:border-indigo-500 text-indigo-700 dark:text-indigo-300'
               }`}
               style={{ width: `${Math.max(80, Math.min(300, userAnswer.length * 12 + 30))}px`, maxWidth: '100%' }}
               autoComplete="off"

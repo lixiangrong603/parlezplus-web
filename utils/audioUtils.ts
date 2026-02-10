@@ -200,14 +200,25 @@ export const mixAudio = async (mainAudioBlob: Blob, bgmAudioBlob: Blob): Promise
 
 // [NEW] Helper to convert Data URL to Blob
 export const dataURLtoBlob = (dataurl: string): Blob => {
+    // Guard: if the input is a URL (not a data URI), fetch it instead
+    if (!dataurl.startsWith('data:')) {
+        // Return an empty blob; the caller should use the URL directly
+        console.warn('dataURLtoBlob called with non-data URL, returning empty blob');
+        return new Blob([], { type: 'audio/wav' });
+    }
     const arr = dataurl.split(',');
     const match = arr[0].match(/:(.*?);/);
     const mime = match ? match[1] : 'audio/wav';
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
+    try {
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+    } catch (e) {
+        console.error('dataURLtoBlob: failed to decode base64', e);
+        return new Blob([], { type: mime });
     }
-    return new Blob([u8arr], { type: mime });
 };

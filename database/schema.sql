@@ -226,14 +226,32 @@ CREATE TABLE IF NOT EXISTS exam_papers (
     assigned_class_ids TEXT DEFAULT '[]', -- JSON 数组
     assigned_class_deadlines TEXT DEFAULT '{}', -- JSON 对象
     exam_taker_settings TEXT, -- JSON
+    folder_id TEXT, -- 文件夹ID（可选）
     created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
     is_deleted INTEGER DEFAULT 0,
     deleted_at INTEGER,
     deleted_by TEXT,
-    FOREIGN KEY (teacher_id) REFERENCES users(id)
+    FOREIGN KEY (teacher_id) REFERENCES users(id),
+    FOREIGN KEY (folder_id) REFERENCES exam_folders(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_exams_teacher ON exam_papers(teacher_id, is_deleted);
+
+-- ============================================
+-- 试卷文件夹表
+-- ============================================
+CREATE TABLE IF NOT EXISTS exam_folders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+    is_deleted INTEGER DEFAULT 0,
+    deleted_at INTEGER,
+    deleted_by TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exam_folders_user ON exam_folders(user_id, is_deleted);
 
 -- ============================================
 -- 考试会话表

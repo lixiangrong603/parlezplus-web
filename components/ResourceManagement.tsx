@@ -7,7 +7,7 @@ import {
   FileAudio, ImageIcon,
   Users, Check, Loader2, AlertTriangle
 } from 'lucide-react';
-import { MediaResource, TranscriptSegment, Channel, AzureWord } from '../types';
+import { MediaResource, TranscriptSegment, Channel, AzureWord, Classroom } from '../types';
 import { 
   getChannels, saveChannel,
   getResources, saveResource,
@@ -80,10 +80,10 @@ export const ResourceManagement = ({ onExit, onPreview }: { onExit: () => void, 
     setView('editor');
   };
 
-  const handleCreateResources = (newResources: MediaResource[]) => {
-    newResources.forEach(r => saveResource(r));
-    if (newResources.length === 1) {
-        setEditingResource(newResources[0]);
+  const handleCreateResources = async (newResources: MediaResource[]) => {
+    const savedResources = await Promise.all(newResources.map(r => saveResource(r)));
+    if (savedResources.length === 1) {
+        setEditingResource(savedResources[0]);
         setView('editor');
     } else {
         setView('list');
@@ -95,7 +95,11 @@ export const ResourceManagement = ({ onExit, onPreview }: { onExit: () => void, 
       <SubtitleEditor 
         resource={editingResource} 
         onBack={() => setView('list')} 
-        onSave={(r) => { saveResource(r); setView('list'); }} 
+        onSave={async (r) => { 
+          const saved = await saveResource(r); 
+          setEditingResource(saved);
+          setView('list'); 
+        }} 
       />
     );
   }
@@ -143,7 +147,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
   useEffect(() => {
     const loadData = async () => {
       if (user) {
-        const loadedChannels = getChannels(user.id);
+        const loadedChannels = await getChannels(user.id);
         setChannels(loadedChannels);
         const loadedResources = await getResources(user.id);
         setResources(loadedResources);
@@ -186,19 +190,21 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
       return;
     }
 
-    saveChannel({ ...channel, name: nextName }, user.id);
-    setChannels(getChannels(user.id));
+    await saveChannel({ ...channel, name: nextName }, user.id);
+    const updatedChannels = await getChannels(user.id);
+    setChannels(updatedChannels);
     cancelRenameChannel();
   };
 
-  const handleAddChannel = () => {
+  const handleAddChannel = async () => {
     if (!newChannelName || !user) return;
-    const nc: Channel = { id: Date.now().toString(), userId: user.id, name: newChannelName, createdAt: Date.now() };
-    saveChannel(nc, user.id);
-    setChannels(getChannels(user.id));
+    const nc: Channel = { id: `temp-channel-${Date.now()}`, userId: user.id, name: newChannelName, createdAt: Date.now() };
+    const saved = await saveChannel(nc, user.id);
+    const updatedChannels = await getChannels(user.id);
+    setChannels(updatedChannels);
     setNewChannelName('');
     setShowAddChannel(false);
-    setActiveChannelId(nc.id);
+    setActiveChannelId(saved.id);
   };
 
   const handleDeleteChannel = async (id: string, e: React.MouseEvent) => {
@@ -225,7 +231,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
     const deletedId = channelDeleteConfirmState.channelId;
     setChannelDeleteConfirmState(null);
 
-    const updatedChannels = getChannels(user.id);
+    const updatedChannels = await getChannels(user.id);
     setChannels(updatedChannels);
     const allResources = await getResources(user.id);
     setResources(allResources);
@@ -565,9 +571,26 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
 };
 
 const PublishToClassModal = ({ resource, onClose, onSuccess, userId }: { resource: MediaResource, onClose: () => void, onSuccess: () => void, userId?: string }) => {
-  const classrooms = userId ? getClassrooms(userId) : [];
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>(resource.assignedClassIds || []);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!userId) {
+      setClassrooms([]);
+      return;
+    }
+    let active = true;
+    const loadClassrooms = async () => {
+      const data = await getClassrooms(userId);
+      if (!active) return;
+      setClassrooms(data);
+    };
+    loadClassrooms();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   const toggleClass = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -581,7 +604,7 @@ const PublishToClassModal = ({ resource, onClose, onSuccess, userId }: { resourc
       status: selectedIds.length > 0 ? 'ready' : 'draft',
       assignedClassIds: selectedIds
     };
-    saveResource(updated, userId);
+    await saveResource(updated, userId);
     if (updated.status === 'ready' && !updated.transcriptUrl) {
       await uploadResourceToMockCDN(updated);
     }

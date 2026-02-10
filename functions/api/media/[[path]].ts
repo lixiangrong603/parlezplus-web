@@ -16,64 +16,68 @@ export async function onRequest(context: any): Promise<Response> {
     const url = new URL(request.url);
     const pathParts = url.pathname.split('/api/media/');
     
-    if (pathParts.length < 2) {
+    if (pathParts.length < 2 || !pathParts[1]) {
       return errorResponse('无效的文件路径', 400);
     }
     
-    const r2Key = pathParts[1];
+    const r2Key = decodeURIComponent(pathParts[1]);
+    
+    // 先获取对象元数据以得到总大小
+    const headObject = await env.R2_BUCKET.head(r2Key);
+    if (!headObject) {
+      return errorResponse('文件不存在', 404);
+    }
+    
+    const totalSize = headObject.size;
+    const contentType = headObject.httpMetadata?.contentType || 'application/octet-stream';
     
     // 检查 Range 请求头
     const range = request.headers.get('range');
     
-    let object: R2ObjectBody | null;
+    const headers = new Headers();
+    headers.set('Content-Type', contentType);
+    headers.set('Accept-Ranges', 'bytes');
+    
+    // 设置缓存策略
+    const folder = r2Key.split('/')[0];
+    if (folder === 'avatars' || folder === 'covers') {
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (folder === 'videos' || folder === 'audios') {
+      headers.set('Cache-Control', 'public, max-age=86400');
+    } else {
+      headers.set('Cache-Control', 'public, max-age=3600');
+    }
     
     if (range) {
-      // Range 请求 - 用于视频流式播放
+      // Range 请求 - 用于视频/音频流式播放
       const rangeMatch = range.match(/bytes=(\d+)-(\d*)/);
       if (!rangeMatch) {
         return errorResponse('无效的 Range 请求', 400);
       }
       
       const start = parseInt(rangeMatch[1]);
-      const end = rangeMatch[2] ? parseInt(rangeMatch[2]) : undefined;
+      // 如果没有指定 end，则默认为文件末尾
+      const end = rangeMatch[2] ? parseInt(rangeMatch[2]) : totalSize - 1;
       
-      object = await env.R2_BUCKET.get(r2Key, {
-        range: { offset: start, length: end ? end - start + 1 : undefined },
+      // 确保范围有效
+      if (start >= totalSize || end >= totalSize || start > end) {
+        headers.set('Content-Range', `bytes */${totalSize}`);
+        return new Response(null, { status: 416, headers });
+      }
+      
+      const chunkSize = end - start + 1;
+      
+      // 获取指定范围的内容
+      const object = await env.R2_BUCKET.get(r2Key, {
+        range: { offset: start, length: chunkSize },
       });
-    } else {
-      // 普通请求
-      object = await env.R2_BUCKET.get(r2Key);
-    }
-    
-    if (!object) {
-      return errorResponse('文件不存在', 404);
-    }
-    
-    const headers = new Headers();
-    
-    // 设置 Content-Type
-    if (object.httpMetadata?.contentType) {
-      headers.set('Content-Type', object.httpMetadata.contentType);
-    }
-    
-    // 设置缓存策略
-    const folder = r2Key.split('/')[0];
-    if (folder === 'avatars' || folder === 'covers') {
-      // 头像和封面 - 长时间缓存
-      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-    } else if (folder === 'videos' || folder === 'audios') {
-      // 视频和音频 - 中等缓存
-      headers.set('Cache-Control', 'public, max-age=86400');
-    } else {
-      // 其他文件 - 短期缓存
-      headers.set('Cache-Control', 'public, max-age=3600');
-    }
-    
-    // Range 响应
-    if (range && object.range && 'offset' in object.range) {
-      headers.set('Content-Range', `bytes ${object.range.offset}-${object.range.offset + (object.size || 0) - 1}/${object.size || 0}`);
-      headers.set('Content-Length', (object.size || 0).toString());
-      headers.set('Accept-Ranges', 'bytes');
+      
+      if (!object) {
+        return errorResponse('无法读取文件内容', 500);
+      }
+      
+      headers.set('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+      headers.set('Content-Length', chunkSize.toString());
       
       return new Response(object.body, {
         status: 206, // Partial Content
@@ -81,9 +85,13 @@ export async function onRequest(context: any): Promise<Response> {
       });
     }
     
-    // 普通响应
-    headers.set('Content-Length', (object.size || 0).toString());
-    headers.set('Accept-Ranges', 'bytes');
+    // 普通请求 - 返回完整文件
+    const object = await env.R2_BUCKET.get(r2Key);
+    if (!object) {
+      return errorResponse('无法读取文件内容', 500);
+    }
+    
+    headers.set('Content-Length', totalSize.toString());
     
     return new Response(object.body, {
       status: 200,

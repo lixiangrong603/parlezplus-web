@@ -71,9 +71,18 @@ export async function onRequestPost(context: any): Promise<Response> {
     const resource = await request.json() as Partial<Resource>;
     
     // 验证必填字段
-    if (!resource.channel_id || !resource.title || !resource.level || 
-        !resource.video_r2_key || !resource.cover_r2_key) {
-      return errorResponse('缺少必填字段', 400);
+    const hasMedia = !!resource.video_r2_key || !!resource.audio_r2_key;
+    if (!resource.channel_id || !resource.title || !resource.level || !hasMedia) {
+      console.error('Resource validation failed:', {
+        channel_id: resource.channel_id,
+        title: resource.title,
+        level: resource.level,
+        hasMedia,
+        video_r2_key: resource.video_r2_key,
+        audio_r2_key: resource.audio_r2_key,
+        cover_r2_key: resource.cover_r2_key,
+      });
+      return errorResponse('缺少必填字段: channel_id, title, level, 以及 video 或 audio', 400);
     }
     
     const id = `res-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -123,7 +132,7 @@ export async function onRequestPost(context: any): Promise<Response> {
 // PUT /api/resources/:id - 更新资源
 // ============================================
 export async function onRequestPut(context: any): Promise<Response> {
-  const { request, env, params } = context as { request: Request; env: Env; params: { id: string } };
+  const { request, env, params } = context as { request: Request; env: Env; params: { id: string[] } };
   
   try {
     const user = await getUserFromRequest(request, env);
@@ -131,7 +140,8 @@ export async function onRequestPut(context: any): Promise<Response> {
       return errorResponse('仅教师可更新资源', 403);
     }
     
-    const resourceId = params.id;
+    // [[id]] catch-all returns an array
+    const resourceId = Array.isArray(params.id) ? params.id.join('/') : params.id;
     const updates = await request.json() as Partial<Resource>;
     
     // 验证资源是否存在且属于当前教师
@@ -164,6 +174,10 @@ export async function onRequestPut(context: any): Promise<Response> {
       updateFields.push('transcript = ?');
       values.push(JSON.stringify(updates.transcript));
     }
+    if (updates.raw_azure_words !== undefined) {
+      updateFields.push('raw_azure_words = ?');
+      values.push(updates.raw_azure_words ? JSON.stringify(updates.raw_azure_words) : null);
+    }
     if (updates.questions !== undefined) {
       updateFields.push('questions = ?');
       values.push(JSON.stringify(updates.questions));
@@ -171,6 +185,34 @@ export async function onRequestPut(context: any): Promise<Response> {
     if (updates.status !== undefined) {
       updateFields.push('status = ?');
       values.push(updates.status);
+    }
+    if (updates.deadline !== undefined) {
+      updateFields.push('deadline = ?');
+      values.push(updates.deadline);
+    }
+    if (updates.assigned_class_ids !== undefined) {
+      updateFields.push('assigned_class_ids = ?');
+      values.push(JSON.stringify(updates.assigned_class_ids));
+    }
+    if (updates.grammar_tags !== undefined) {
+      updateFields.push('grammar_tags = ?');
+      values.push(JSON.stringify(updates.grammar_tags));
+    }
+    if (updates.vocab_tags !== undefined) {
+      updateFields.push('vocab_tags = ?');
+      values.push(JSON.stringify(updates.vocab_tags));
+    }
+    if (updates.video_r2_key !== undefined) {
+      updateFields.push('video_r2_key = ?');
+      values.push(updates.video_r2_key);
+    }
+    if (updates.audio_r2_key !== undefined) {
+      updateFields.push('audio_r2_key = ?');
+      values.push(updates.audio_r2_key);
+    }
+    if (updates.cover_r2_key !== undefined) {
+      updateFields.push('cover_r2_key = ?');
+      values.push(updates.cover_r2_key);
     }
     
     if (updateFields.length === 0) {
@@ -195,15 +237,16 @@ export async function onRequestPut(context: any): Promise<Response> {
 // DELETE /api/resources/:id - 删除资源 (软删除)
 // ============================================
 export async function onRequestDelete(context: any): Promise<Response> {
-  const { request, env, params } = context as { request: Request; env: Env; params: { id: string } };
+  const { request, env, params } = context as { request: Request; env: Env; params: { id: string[] } };
   
   try {
     const user = await getUserFromRequest(request, env);
-    if (!user || user.role !== 'teacher') {
-      return errorResponse('仅教师可删除资源', 403);
+    if (!user || (user.role !== 'teacher' && user.role !== 'admin')) {
+      return errorResponse('仅教师和管理员可删除资源', 403);
     }
     
-    const resourceId = params.id;
+    // [[id]] catch-all returns an array
+    const resourceId = Array.isArray(params.id) ? params.id.join('/') : params.id;
     
     await env.DB
       .prepare('UPDATE resources SET is_deleted = 1, deleted_at = ?, deleted_by = ? WHERE id = ?')

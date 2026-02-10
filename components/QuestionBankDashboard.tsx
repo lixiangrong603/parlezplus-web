@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import SyllabusManager from './SyllabusManager';
 import { SyllabusCourse, Question, KnowledgePoint, User } from '../types';
@@ -48,8 +47,15 @@ const QuestionBankDashboard: React.FC = () => {
           setBankQuestions([]);
           return;
       }
-      setCourses(getSyllabusCourses(user.id));
-      setBankQuestions(getBankQuestions(user.id));
+      const loadData = async () => {
+          const [coursesData, questionsData] = await Promise.all([
+              getSyllabusCourses(user.id),
+              getBankQuestions(user.id)
+          ]);
+          setCourses(coursesData);
+          setBankQuestions(questionsData);
+      };
+      loadData();
   }, [user?.id]);
 
   // Sync with context to find active job (persisted background job)
@@ -73,19 +79,26 @@ const QuestionBankDashboard: React.FC = () => {
 
   const activeJob = activeJobId ? jobs[activeJobId] : null;
 
-  const handleUpdateCourse = (course: SyllabusCourse) => {
-    saveSyllabusCourse(course);
-        if (user?.id) setCourses(getSyllabusCourses(user.id));
+  const handleUpdateCourse = async (course: SyllabusCourse) => {
+    await saveSyllabusCourse(course);
+    if (user?.id) {
+        const coursesData = await getSyllabusCourses(user.id);
+        setCourses(coursesData);
+    }
   };
 
-    const refreshSyllabusAndQuestions = () => {
+    const refreshSyllabusAndQuestions = async () => {
         if (!user?.id) {
             setCourses([]);
             setBankQuestions([]);
             return;
         }
-        setCourses(getSyllabusCourses(user.id));
-        setBankQuestions(getBankQuestions(user.id));
+        const [coursesData, questionsData] = await Promise.all([
+            getSyllabusCourses(user.id),
+            getBankQuestions(user.id)
+        ]);
+        setCourses(coursesData);
+        setBankQuestions(questionsData);
     };
 
   const handleDeleteCourse = async (id: string) => {
@@ -101,12 +114,16 @@ const QuestionBankDashboard: React.FC = () => {
         });
   };
 
-    const executeDeleteCourse = () => {
+    const executeDeleteCourse = async () => {
         if (!courseDeleteConfirmState) return;
-        cascadeDeleteSyllabusCourse(courseDeleteConfirmState.courseId, user?.id);
+        await cascadeDeleteSyllabusCourse(courseDeleteConfirmState.courseId, user?.id);
         if (user?.id) {
-            setCourses(getSyllabusCourses(user.id));
-            setBankQuestions(getBankQuestions(user.id));
+            const [coursesData, questionsData] = await Promise.all([
+                getSyllabusCourses(user.id),
+                getBankQuestions(user.id)
+            ]);
+            setCourses(coursesData);
+            setBankQuestions(questionsData);
         } else {
             setCourses([]);
             setBankQuestions([]);
@@ -120,9 +137,12 @@ const QuestionBankDashboard: React.FC = () => {
       return allPoints.filter(p => selectedIds.includes(p.id));
   };
 
-  const handleSaveGeneratedQuestions = (questions: Question[]) => {
-      questions.forEach(q => saveBankQuestion(q));
-      if (user?.id) setBankQuestions(getBankQuestions(user.id));
+  const handleSaveGeneratedQuestions = async (questions: Question[]) => {
+      await Promise.all(questions.map(q => saveBankQuestion(q)));
+      if (user?.id) {
+          const questionsData = await getBankQuestions(user.id);
+          setBankQuestions(questionsData);
+      }
       setShowWizard(false);
       // Clean up job on save
       if (activeJobId) clearJob(activeJobId);
@@ -138,14 +158,17 @@ const QuestionBankDashboard: React.FC = () => {
       }
   };
 
-  const handleUpdateExistingQuestion = (q: Question) => {
-      saveBankQuestion(q);
-      if (user?.id) setBankQuestions(getBankQuestions(user.id));
+  const handleUpdateExistingQuestion = async (q: Question) => {
+      await saveBankQuestion(q);
+      if (user?.id) {
+          const questionsData = await getBankQuestions(user.id);
+          setBankQuestions(questionsData);
+      }
       // FIXED: Do not close the editor (setEditingQId(null)) here. 
       // This allows continuous editing. The "Finish" button handles closing.
   };
 
-  const handleDeleteExistingQuestion = async (id: string) => {
+    const handleDeleteExistingQuestion = async (id: string) => {
     // 检查引用
     const checkResult = checkQuestionReferences(id);
     
@@ -160,14 +183,20 @@ const QuestionBankDashboard: React.FC = () => {
         confirmText: '删除'
     });
     if (!ok) return;
-    deleteBankQuestion(id, user?.id, '教师删除题目');
-        if (user?.id) setBankQuestions(getBankQuestions(user.id));
+    await deleteBankQuestion(id, user?.id, '教师删除题目');
+    if (user?.id) {
+        const questionsData = await getBankQuestions(user.id);
+        setBankQuestions(questionsData);
+    }
   };
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = async () => {
       if (editingOriginal) {
-          saveBankQuestion(editingOriginal);
-          if (user?.id) setBankQuestions(getBankQuestions(user.id));
+          await saveBankQuestion(editingOriginal);
+          if (user?.id) {
+              const questionsData = await getBankQuestions(user.id);
+              setBankQuestions(questionsData);
+          }
       }
       setEditingQId(null);
       setEditingOriginal(null);

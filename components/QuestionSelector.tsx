@@ -46,11 +46,16 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
 
   useEffect(() => {
     const loadData = async () => {
-      setBankQuestions(getBankQuestions(user.id));
-      const loadedResources = await getResources(user.id);
-      setResources(loadedResources);
-      setCourses(getSyllabusCourses(user.id));
-      setChannels(getChannels(user.id));
+      const [questionsData, resourcesData, coursesData, channelsData] = await Promise.all([
+        getBankQuestions(user.id),
+        getResources(user.id),
+        getSyllabusCourses(user.id),
+        getChannels(user.id)
+      ]);
+      setBankQuestions(questionsData);
+      setResources(resourcesData);
+      setCourses(coursesData);
+      setChannels(channelsData);
     };
     loadData();
   }, [user.id]);

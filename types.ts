@@ -242,6 +242,17 @@ export interface SegmentAnalysisResult {
 }
 
 // --- Exam Paper Types ---
+export interface ExamFolder {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: number;
+  // 软删除字段
+  isDeleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
+}
+
 export interface ExamItem {
   questionId?: string; // Optional for consignes
   points: number;
@@ -327,6 +338,7 @@ export type OperationType =
   | 'delete_user' 
   | 'delete_classroom' 
   | 'delete_exam' 
+  | 'delete_exam_folder'
   | 'delete_resource'
   | 'delete_channel'
   | 'delete_question'

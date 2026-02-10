@@ -97,10 +97,10 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
       const res = allResources.find(r => r.id === taskId);
       if (res) setResource(res);
       
-      const cls = getClassroomById(classId);
+            const cls = await getClassroomById(classId);
       if (cls) {
           setClassroom(cls);
-          refreshSubmissions();
+                    await refreshSubmissions();
       }
     };
     loadData();
@@ -108,19 +108,19 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
 
     // Refresh classroom data when storage is updated (e.g., student avatar changed)
     useEffect(() => {
-        const handleDataChanged = () => {
-            const cls = getClassroomById(classId);
-            if (cls) setClassroom(cls);
-        };
+                const handleDataChanged = async () => {
+                        const cls = await getClassroomById(classId);
+                        if (cls) setClassroom(cls);
+                };
         window.addEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
         return () => window.removeEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
     }, [classId]);
 
-  const refreshSubmissions = () => {
-    const allSubmissions = getSubmissions();
-    const relevantSubmissions = allSubmissions.filter(s => s.resourceId === taskId);
-    setSubmissions(relevantSubmissions);
-  };
+    const refreshSubmissions = async () => {
+        const allSubmissions = await getSubmissions();
+        const relevantSubmissions = allSubmissions.filter(s => s.resourceId === taskId);
+        setSubmissions(relevantSubmissions);
+    };
 
   const currentStudent = classroom?.students.find(s => s.id === selectedStudentId);
   const currentSubmission = submissions.find(s => 
@@ -363,7 +363,7 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
           </div>
       )}
 
-      <header className="h-14 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-6 flex items-center justify-between shrink-0 z-10 shadow-sm transition-colors">
+      <header className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0 z-10 shadow-sm transition-colors">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500 hover:text-indigo-600 transition-all">
             <ChevronLeft size={18} />
@@ -396,8 +396,8 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-60 border-r dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0">
-          <div className="p-3 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+        <div className="w-60 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0">
+          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
             <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">待批改列表</h3>
           </div>
           <div className="flex-1 overflow-y-auto p-1.5 space-y-1 no-scrollbar">
@@ -570,7 +570,7 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
                 </div>
 
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border dark:border-slate-800 shadow-sm overflow-hidden">
-                    <div className="px-5 py-2.5 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex justify-between items-center">
+                    <div className="px-5 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <Sparkles size={14} className="text-indigo-500" />
                             <h4 className="text-[10px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">词级发音评估 {currentSubmission?.clozeResult && "& 填空详情"}</h4>
@@ -640,7 +640,7 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><MessageSquare size={12} className="text-indigo-500" /> 教师批改评语</label>
                         <textarea className="w-full h-20 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all resize-none dark:text-white" placeholder="请输入纠音建议或鼓励..." value={feedback} onChange={e => setFeedback(e.target.value)} />
                     </div>
-                    <div className="w-full md:w-80 flex flex-col justify-between border-l dark:border-slate-800 pl-6">
+                    <div className="w-full md:w-80 flex flex-col justify-between border-l border-slate-200 dark:border-slate-800 pl-6">
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Star size={12} className="text-amber-400" /> 最终综合评分</label>
                             <div className="flex items-center gap-4">

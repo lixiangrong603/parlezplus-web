@@ -77,6 +77,18 @@ export interface Channel {
   deleted_by: string | null;
 }
 
+// 课程大纲对象
+export interface SyllabusCourse {
+  id: string;
+  user_id: string;
+  name: string;
+  units: string; // JSON
+  created_at: number;
+  is_deleted: number;
+  deleted_at: number | null;
+  deleted_by: string | null;
+}
+
 // 资源对象
 export interface Resource {
   id: string;
@@ -125,6 +137,17 @@ export interface Question {
   deleted_by: string | null;
 }
 
+// 试卷文件夹对象
+export interface ExamFolder {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: number;
+  is_deleted: number;
+  deleted_at: number | null;
+  deleted_by: string | null;
+}
+
 // 试卷对象
 export interface ExamPaper {
   id: string;
@@ -135,6 +158,7 @@ export interface ExamPaper {
   assigned_class_ids: string; // JSON
   assigned_class_deadlines: string; // JSON
   exam_taker_settings: string | null; // JSON
+  folder_id: string | null; // 文件夹ID
   created_at: number;
   is_deleted: number;
   deleted_at: number | null;
@@ -202,6 +226,20 @@ export interface Submission {
   is_deleted: number;
   deleted_at: number | null;
   deleted_by: string | null;
+}
+
+// 操作日志对象
+export interface OperationLog {
+  id: string;
+  operator_id: string;
+  operator_name: string;
+  operation_type: string;
+  target_id: string;
+  target_type: string;
+  target_name?: string;
+  reason?: string;
+  details?: string;
+  timestamp: number;
 }
 
 // R2 上传结果

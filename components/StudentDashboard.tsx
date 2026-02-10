@@ -85,14 +85,27 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
 
   useEffect(() => {
     if (user) {
-        // 学生只能看到包含他们的班级
-        const allClasses = getClassrooms();
-        const myClassrooms = allClasses.filter(classroom => 
-          classroom.students.some(student => student.userId === user.id)
-        );
-        setAllClassrooms(myClassrooms);
-        setSubmissions(getSubmissions());
-        setExamSessions(getExamSessions(user.id));
+        let active = true;
+        const loadStudentData = async () => {
+          const allClasses = await getClassrooms();
+          if (!active) return;
+          // 学生只能看到包含他们的班级
+          const myClassrooms = allClasses.filter(classroom => 
+            classroom.students.some(student => student.userId === user.id)
+          );
+          setAllClassrooms(myClassrooms);
+          const [subs, sessions] = await Promise.all([
+            getSubmissions(),
+            getExamSessions(user.id)
+          ]);
+          if (!active) return;
+          setSubmissions(subs);
+          setExamSessions(sessions);
+        };
+        loadStudentData();
+        return () => {
+          active = false;
+        };
     }
   }, [user]);
 
@@ -133,17 +146,33 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   // [FIX] 监控 activeClass 变化，动态加载分配给该班级的考试
   useEffect(() => {
     if (activeClass) {
-        const allExams = getExamPapers();
-        const assigned = allExams.filter(exam => 
-          exam.assignedClassIds && exam.assignedClassIds.includes(activeClass.id)
-        );
-        setAssignedExams(assigned);
+        let active = true;
+        const loadAssigned = async () => {
+          const allExams = await getExamPapers();
+          if (!active) return;
+          const assigned = allExams.filter(exam => 
+            exam.assignedClassIds && exam.assignedClassIds.includes(activeClass.id)
+          );
+          setAssignedExams(assigned);
+        };
+        loadAssigned();
+        return () => {
+          active = false;
+        };
     } else if (user?.classId) {
-        // 初始加载：如果没有 activeClass 但用户有 classId，先设置它
-        const assignedClass = getClassroomById(user.classId);
-        if (assignedClass) {
-            setActiveClass(assignedClass);
-        }
+        let active = true;
+        const loadClassroom = async () => {
+          // 初始加载：如果没有 activeClass 但用户有 classId，先设置它
+          const assignedClass = await getClassroomById(user.classId);
+          if (!active) return;
+          if (assignedClass) {
+              setActiveClass(assignedClass);
+          }
+        };
+        loadClassroom();
+        return () => {
+          active = false;
+        };
     }
   }, [user?.classId, activeClass?.id]);
 
@@ -207,7 +236,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
         user={user}
         onExit={() => {
           setTakingExam(null);
-          setExamSessions(getExamSessions(user.id));
+          getExamSessions(user.id).then(setExamSessions);
         }}
       />
     );

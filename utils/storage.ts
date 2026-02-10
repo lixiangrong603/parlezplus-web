@@ -1,10 +1,62 @@
 
-import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession, OperationLog } from '../types';
+import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession, OperationLog, ExamFolder } from '../types';
 import { 
   getResources as apiGetResources, 
   createResource as apiCreateResource, 
   updateResource as apiUpdateResource, 
-  deleteResource as apiDeleteResource 
+  deleteResource as apiDeleteResource,
+  permanentlyDeleteWithR2Cleanup,
+  // 班级 API
+  getClassrooms as apiGetClassrooms,
+  createClassroom as apiCreateClassroom,
+  updateClassroom as apiUpdateClassroom,
+  deleteClassroom as apiDeleteClassroom,
+  // 频道 API
+  getChannels as apiGetChannels,
+  createChannel as apiCreateChannel,
+  updateChannel as apiUpdateChannel,
+  deleteChannel as apiDeleteChannel,
+  // 课程大纲 API
+  getSyllabusCourses as apiGetSyllabusCourses,
+  createSyllabusCourse as apiCreateSyllabusCourse,
+  updateSyllabusCourse as apiUpdateSyllabusCourse,
+  deleteSyllabusCourse as apiDeleteSyllabusCourse,
+  // 题库 API
+  getQuestions as apiGetQuestions,
+  createQuestion as apiCreateQuestion,
+  updateQuestion as apiUpdateQuestion,
+  deleteQuestion as apiDeleteQuestion,
+  // 试卷 API
+  getExamPapers as apiGetExamPapers,
+  createExamPaper as apiCreateExamPaper,
+  updateExamPaper as apiUpdateExamPaper,
+  deleteExamPaper as apiDeleteExamPaper,
+  // 试卷文件夹 API
+  getExamFolders as apiGetExamFolders,
+  createExamFolder as apiCreateExamFolder,
+  updateExamFolder as apiUpdateExamFolder,
+  deleteExamFolder as apiDeleteExamFolder,
+  // 考试会话 API
+  getExamSessions as apiGetExamSessions,
+  createExamSession as apiCreateExamSession,
+  updateExamSession as apiUpdateExamSession,
+  deleteExamSession as apiDeleteExamSession,
+  // 练习数据 API
+  getPracticeData as apiGetPracticeData,
+  savePracticeData as apiSavePracticeData,
+  // 作业提交 API
+  getSubmissions as apiGetSubmissions,
+  createSubmission as apiCreateSubmission,
+  updateSubmission as apiUpdateSubmission,
+  deleteSubmission as apiDeleteSubmission,
+  // 用户 API
+  getUsers as apiGetUsers,
+  createUser as apiCreateUser,
+  updateUser as apiUpdateUser,
+  deleteUser as apiDeleteUser,
+  // 操作日志 API
+  getOperationLogs as apiGetOperationLogs,
+  createOperationLog as apiCreateOperationLog,
 } from '../services/api/client';
 
 const STORAGE_KEYS = {
@@ -18,6 +70,7 @@ const STORAGE_KEYS = {
   SYLLABUS: 'parlezplus_syllabus',
   QUESTION_BANK: 'parlezplus_question_bank',
   EXAM_PAPERS: 'parlezplus_exam_papers',
+  EXAM_FOLDERS: 'parlezplus_exam_folders',
   EXAM_SESSIONS: 'parlezplus_exam_sessions',
   OPERATION_LOGS: 'parlezplus_operation_logs'
 };
@@ -29,21 +82,196 @@ const INITIAL_CLASSROOMS: Classroom[] = [];
 
 const INITIAL_SYLLABUS: SyllabusCourse[] = [];
 
+// --- API Response → Frontend Type Mapping Helpers ---
+// D1 returns snake_case, frontend types use camelCase
+
+const mapApiToChannel = (raw: any): Channel => ({
+  id: raw.id,
+  name: raw.name,
+  userId: raw.user_id ?? raw.userId ?? '',
+  createdAt: raw.created_at ?? raw.createdAt ?? 0,
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+});
+
+const mapApiToSyllabusCourse = (raw: any): SyllabusCourse => ({
+  id: raw.id,
+  name: raw.name,
+  units: raw.units || [],
+  userId: raw.user_id ?? raw.userId ?? '',
+  createdAt: raw.created_at ?? raw.createdAt ?? 0,
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+});
+
+const mapApiToQuestion = (raw: any): Question => ({
+  id: raw.id,
+  text: raw.text,
+  imageUrl: raw.image_r2_key ?? raw.imageUrl ?? undefined,
+  options: raw.options || [],
+  correctOptionId: raw.correct_option_id ?? raw.correctOptionId ?? '',
+  explanation: raw.explanation ?? undefined,
+  type: raw.type ?? 'multiple-choice',
+  level: raw.level ?? undefined,
+  knowledgePointIds: raw.knowledge_point_ids ?? raw.knowledgePointIds ?? [],
+  tags: raw.tags ?? [],
+  readingPassage: raw.reading_passage ?? raw.readingPassage ?? undefined,
+  subQuestions: raw.sub_questions ?? raw.subQuestions ?? undefined,
+  createdAt: raw.created_at ?? raw.createdAt,
+  createdBy: raw.created_by ?? raw.createdBy,
+  teacherId: raw.teacher_id ?? raw.teacherId,
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+});
+
+const mapApiToMediaResource = (raw: any): MediaResource => ({
+  id: raw.id,
+  userId: raw.user_id ?? raw.userId ?? undefined,
+  teacherId: raw.teacher_id ?? raw.teacherId ?? undefined,
+  channelId: raw.channel_id ?? raw.channelId ?? '',
+  title: raw.title ?? '',
+  level: raw.level ?? 'A1',
+  videoUrl: raw.video_r2_key ?? raw.videoUrl ?? '',
+  audioUrl: raw.audio_r2_key ?? raw.audioUrl ?? undefined,
+  backingTrackUrl: raw.backing_track_r2_key ?? raw.backingTrackUrl ?? undefined,
+  vocalTrackUrl: raw.vocal_track_r2_key ?? raw.vocalTrackUrl ?? undefined,
+  coverImage: raw.cover_r2_key ?? raw.coverImage ?? '',
+  transcript: raw.transcript ?? [],
+  rawAzureWords: raw.raw_azure_words ?? raw.rawAzureWords ?? undefined,
+  questions: raw.questions ?? [],
+  status: raw.status ?? 'draft',
+  createdAt: raw.created_at ?? raw.createdAt ?? 0,
+  deadline: raw.deadline ?? undefined,
+  assignedClassIds: raw.assigned_class_ids ?? raw.assignedClassIds ?? [],
+  grammarTags: raw.grammar_tags ?? raw.grammarTags ?? [],
+  vocabTags: raw.vocab_tags ?? raw.vocabTags ?? [],
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+});
+
+const mapApiToClassroom = (raw: any): Classroom => ({
+  id: raw.id,
+  userId: raw.user_id ?? raw.userId ?? '',
+  name: raw.name ?? '',
+  studentCount: raw.student_count ?? raw.studentCount ?? 0,
+  students: raw.students || [],
+  createdAt: raw.created_at ?? raw.createdAt,
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+});
+
+const mapApiToExamPaper = (raw: any): ExamPaper => ({
+  id: raw.id,
+  title: raw.title ?? '',
+  sections: raw.sections || [],
+  totalScore: raw.total_score ?? raw.totalScore ?? 0,
+  teacherId: raw.teacher_id ?? raw.teacherId ?? '',
+  createdAt: raw.created_at ?? raw.createdAt ?? 0,
+  folderId: raw.folder_id ?? raw.folderId ?? undefined,
+  assignedClassIds: raw.assigned_class_ids ?? raw.assignedClassIds ?? [],
+  assignedClassDeadlines: raw.assigned_class_deadlines ?? raw.assignedClassDeadlines ?? {},
+  examTakerSettings: raw.exam_taker_settings ?? raw.examTakerSettings ?? undefined,
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+});
+
+const mapApiToExamFolder = (raw: any): ExamFolder => ({
+  id: raw.id,
+  userId: raw.user_id ?? raw.userId ?? '',
+  name: raw.name ?? '',
+  createdAt: raw.created_at ?? raw.createdAt ?? 0,
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+});
+
+const mapApiToExamSession = (raw: any): ExamSession => ({
+  id: raw.id,
+  examPaperId: raw.exam_paper_id ?? raw.examPaperId ?? '',
+  examTitle: raw.exam_title ?? raw.examTitle ?? '',
+  studentId: raw.student_id ?? raw.studentId ?? '',
+  studentName: raw.student_name ?? raw.studentName ?? '',
+  answers: raw.answers || {},
+  startTime: raw.start_time ?? raw.startTime ?? 0,
+  submitTime: raw.submit_time ?? raw.submitTime,
+  elapsedTime: raw.elapsed_time ?? raw.elapsedTime ?? 0,
+  score: raw.score ?? undefined,
+  totalScore: raw.total_score ?? raw.totalScore ?? 0,
+  isSubmitted: !!(raw.is_submitted ?? raw.isSubmitted),
+  teacherFeedback: raw.teacher_feedback ?? raw.teacherFeedback,
+  manualScore: raw.manual_score ?? raw.manualScore,
+  itemScores: raw.item_scores ?? raw.itemScores,
+  gradedBy: raw.graded_by ?? raw.gradedBy,
+  gradedAt: raw.graded_at ?? raw.gradedAt,
+  status: raw.status,
+  isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
+  deletedAt: raw.deleted_at ?? raw.deletedAt,
+  deletedBy: raw.deleted_by ?? raw.deletedBy,
+  deletedReason: raw.deleted_reason ?? raw.deletedReason,
+});
+
 // --- QUESTION BANK & SYLLABUS ---
 
-export const getSyllabusCourses = (teacherId?: string, includeDeleted: boolean = false): SyllabusCourse[] => {
+export const getSyllabusCourses = async (teacherId?: string, includeDeleted: boolean = false): Promise<SyllabusCourse[]> => {
+  try {
+    const raw = await apiGetSyllabusCourses(teacherId);
+    const courses = raw.map(mapApiToSyllabusCourse);
+    
+    // 更新本地缓存
+    localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(courses));
+    
+    // 过滤已删除数据（如果后端未过滤）
+    if (!includeDeleted) {
+      return courses.filter(c => !c.isDeleted);
+    }
+    
+    return courses;
+  } catch (error) {
+    console.error('Failed to fetch syllabus courses from API:', error);
+    // Fallback to localStorage
+    const data = localStorage.getItem(STORAGE_KEYS.SYLLABUS);
+    if (!data) {
+      localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(INITIAL_SYLLABUS));
+      return INITIAL_SYLLABUS;
+    }
+    let courses: SyllabusCourse[] = JSON.parse(data);
+    
+    // 过滤已删除数据
+    if (!includeDeleted) {
+      courses = courses.filter(c => !c.isDeleted);
+
+      // 进一步过滤课程内被软删除的单元/知识点（避免 UI 直接硬删除造成不可恢复）
+      courses = courses.map(c => ({
+        ...c,
+        units: (c.units || [])
+          .filter(u => !(u as any).isDeleted)
+          .map(u => ({
+            ...u,
+            knowledgePoints: (u.knowledgePoints || []).filter(p => !(p as any).isDeleted)
+          }))
+      }));
+    }
+    
+    return teacherId ? courses.filter(c => c.userId === teacherId) : courses;
+  }
+};
+
+// 同步版本用于需要同步调用的地方（使用 localStorage 缓存）
+export const getSyllabusCoursesSync = (teacherId?: string, includeDeleted: boolean = false): SyllabusCourse[] => {
   const data = localStorage.getItem(STORAGE_KEYS.SYLLABUS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(INITIAL_SYLLABUS));
-    return INITIAL_SYLLABUS;
+    return [];
   }
   let courses: SyllabusCourse[] = JSON.parse(data);
   
-  // 过滤已删除数据
   if (!includeDeleted) {
     courses = courses.filter(c => !c.isDeleted);
-
-    // 进一步过滤课程内被软删除的单元/知识点（避免 UI 直接硬删除造成不可恢复）
     courses = courses.map(c => ({
       ...c,
       units: (c.units || [])
@@ -58,43 +286,88 @@ export const getSyllabusCourses = (teacherId?: string, includeDeleted: boolean =
   return teacherId ? courses.filter(c => c.userId === teacherId) : courses;
 };
 
-export const saveSyllabusCourse = (course: SyllabusCourse) => {
-  const courses = getSyllabusCourses();
-  const index = courses.findIndex(c => c.id === course.id);
-  if (index >= 0) {
-    courses[index] = course;
-  } else {
-    courses.push(course);
+export const saveSyllabusCourse = async (course: SyllabusCourse): Promise<void> => {
+  try {
+    const isNew = !course.id || course.id.startsWith('temp-');
+    
+    if (isNew) {
+      const result = await apiCreateSyllabusCourse({
+        name: course.name,
+        units: course.units
+      });
+      course.id = result.id;
+    } else {
+      await apiUpdateSyllabusCourse(course.id, {
+        name: course.name,
+        units: course.units
+      });
+    }
+    
+    // 更新本地缓存
+    const courses = getSyllabusCoursesSync(undefined, true);
+    const index = courses.findIndex(c => c.id === course.id);
+    if (index >= 0) {
+      courses[index] = course;
+    } else {
+      courses.push(course);
+    }
+    localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(courses));
+  } catch (error) {
+    console.error('Failed to save syllabus course via API:', error);
+    // Fallback to localStorage only
+    const courses = getSyllabusCoursesSync(undefined, true);
+    const index = courses.findIndex(c => c.id === course.id);
+    if (index >= 0) {
+      courses[index] = course;
+    } else {
+      courses.push(course);
+    }
+    localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(courses));
   }
-  localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(courses));
 };
 
-export const deleteSyllabusCourse = (id: string, operatorId?: string, reason?: string) => {
-  const courses = getSyllabusCourses(undefined, true);
-  const courseIndex = courses.findIndex(c => c.id === id);
-  if (courseIndex >= 0) {
-    courses[courseIndex].isDeleted = true;
-    courses[courseIndex].deletedAt = Date.now();
-    courses[courseIndex].deletedBy = operatorId;
-    localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(courses));
+export const deleteSyllabusCourse = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteSyllabusCourse(id);
     
-    // 记录操作日志
-    if (operatorId) {
-      logOperation({
-        operatorId,
-        operationType: 'delete_question',
-        targetId: id,
-        targetType: 'SyllabusCourse',
-        targetName: courses[courseIndex].name,
-        reason
-      });
+    // 更新本地缓存
+    const courses = getSyllabusCoursesSync(undefined, true);
+    const courseIndex = courses.findIndex(c => c.id === id);
+    if (courseIndex >= 0) {
+      courses[courseIndex].isDeleted = true;
+      courses[courseIndex].deletedAt = Date.now();
+      courses[courseIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(courses));
+    }
+  } catch (error) {
+    console.error('Failed to delete syllabus course via API:', error);
+    // Fallback to localStorage
+    const courses = getSyllabusCoursesSync(undefined, true);
+    const courseIndex = courses.findIndex(c => c.id === id);
+    if (courseIndex >= 0) {
+      courses[courseIndex].isDeleted = true;
+      courses[courseIndex].deletedAt = Date.now();
+      courses[courseIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(courses));
+      
+      // 记录操作日志
+      if (operatorId) {
+        logOperation({
+          operatorId,
+          operationType: 'delete_question',
+          targetId: id,
+          targetType: 'SyllabusCourse',
+          targetName: courses[courseIndex].name,
+          reason
+        });
+      }
     }
   }
 };
 
 // 课程引用检查：找出该课程下知识点关联到的题库题目
 export const checkSyllabusCourseQuestionReferences = (courseId: string): DeleteCheckResult => {
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) {
     return { canDelete: true, references: [], hasReferences: false };
@@ -108,7 +381,7 @@ export const checkSyllabusCourseQuestionReferences = (courseId: string): DeleteC
     return { canDelete: true, references: [], hasReferences: false };
   }
 
-  const questions = getBankQuestions(course.userId, false);
+  const questions = getBankQuestionsSync(course.userId, false);
   const related = questions.filter(q =>
     Array.isArray(q.knowledgePointIds) && q.knowledgePointIds.some(id => knowledgePointIds.has(id))
   );
@@ -134,7 +407,7 @@ export const checkSyllabusCourseQuestionReferences = (courseId: string): DeleteC
 
 // 级联删除课程：软删除课程，同时软删除关联题库题目（通过知识点关联）
 export const cascadeDeleteSyllabusCourse = (courseId: string, operatorId?: string) => {
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
 
@@ -143,7 +416,7 @@ export const cascadeDeleteSyllabusCourse = (courseId: string, operatorId?: strin
   );
 
   if (knowledgePointIds.size > 0) {
-    const questions = getBankQuestions(course.userId, true);
+    const questions = getBankQuestionsSync(course.userId, true);
     const related = questions.filter(q =>
       !q.isDeleted && Array.isArray(q.knowledgePointIds) && q.knowledgePointIds.some(id => knowledgePointIds.has(id))
     );
@@ -168,7 +441,7 @@ const parseKnowledgePointId = (compositeId: string) => {
 const softDeleteQuestionsByKnowledgePointIds = (teacherId: string, knowledgePointIds: string[], operatorId?: string, reason?: string) => {
   if (knowledgePointIds.length === 0) return;
   const kpSet = new Set(knowledgePointIds);
-  const questions = getBankQuestions(teacherId, true);
+  const questions = getBankQuestionsSync(teacherId, true);
   questions
     .filter(q => !q.isDeleted && Array.isArray(q.knowledgePointIds) && q.knowledgePointIds.some(id => kpSet.has(id)))
     .forEach(q => deleteBankQuestion(q.id, operatorId, reason));
@@ -177,7 +450,7 @@ const softDeleteQuestionsByKnowledgePointIds = (teacherId: string, knowledgePoin
 const restoreQuestionsByKnowledgePointIds = (teacherId: string, knowledgePointIds: string[]) => {
   if (knowledgePointIds.length === 0) return;
   const kpSet = new Set(knowledgePointIds);
-  const questions = getBankQuestions(teacherId, true);
+  const questions = getBankQuestionsSync(teacherId, true);
   let changed = false;
   questions.forEach(q => {
     if (!q.isDeleted) return;
@@ -193,7 +466,7 @@ const restoreQuestionsByKnowledgePointIds = (teacherId: string, knowledgePointId
 };
 
 export const cascadeDeleteSyllabusUnit = (courseId: string, unitId: string, operatorId?: string) => {
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
   const unit = course.units.find(u => u.id === unitId);
@@ -211,7 +484,7 @@ export const cascadeDeleteSyllabusUnit = (courseId: string, unitId: string, oper
 };
 
 export const cascadeDeleteSyllabusKnowledgePoint = (courseId: string, unitId: string, knowledgePointId: string, operatorId?: string) => {
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
   const unit = course.units.find(u => u.id === unitId);
@@ -231,7 +504,7 @@ export const cascadeDeleteSyllabusKnowledgePoint = (courseId: string, unitId: st
 const restoreSyllabusUnitByCompositeId = (compositeId: string) => {
   const { courseId, unitId } = parseSyllabusUnitId(compositeId);
   if (!courseId || !unitId) return;
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
   const unit = course.units.find(u => u.id === unitId);
@@ -250,7 +523,7 @@ const restoreSyllabusUnitByCompositeId = (compositeId: string) => {
 const restoreKnowledgePointByCompositeId = (compositeId: string) => {
   const { courseId, unitId, knowledgePointId } = parseKnowledgePointId(compositeId);
   if (!courseId || !unitId || !knowledgePointId) return;
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
   const unit = course.units.find(u => u.id === unitId);
@@ -270,7 +543,7 @@ const restoreKnowledgePointByCompositeId = (compositeId: string) => {
 const permanentlyDeleteSyllabusUnitByCompositeId = (compositeId: string) => {
   const { courseId, unitId } = parseSyllabusUnitId(compositeId);
   if (!courseId || !unitId) return;
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
   const unit = course.units.find(u => u.id === unitId);
@@ -284,7 +557,7 @@ const permanentlyDeleteSyllabusUnitByCompositeId = (compositeId: string) => {
 const permanentlyDeleteKnowledgePointByCompositeId = (compositeId: string) => {
   const { courseId, unitId, knowledgePointId } = parseKnowledgePointId(compositeId);
   if (!courseId || !unitId || !knowledgePointId) return;
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
   const unit = course.units.find(u => u.id === unitId);
@@ -295,21 +568,50 @@ const permanentlyDeleteKnowledgePointByCompositeId = (compositeId: string) => {
   permanentlyDeleteQuestionsByKnowledgePointIds(course.userId, [knowledgePointId]);
 };
 
-// 内部函数：读取所有题目（不过滤）
+// 内部函数：读取所有题目（不过滤）- 同步版本用于本地缓存
 const getAllBankQuestionsRaw = (): Question[] => {
   const data = localStorage.getItem(STORAGE_KEYS.QUESTION_BANK);
   return data ? JSON.parse(data) : [];
 };
 
-export const getBankQuestions = (teacherId?: string, includeDeleted: boolean = false): Question[] => {
+export const getBankQuestions = async (teacherId?: string, includeDeleted: boolean = false): Promise<Question[]> => {
+  try {
+    const raw = await apiGetQuestions(teacherId);
+    const questions = raw.map(mapApiToQuestion);
+    
+    // 过滤已删除数据（如果后端未过滤）
+    if (!includeDeleted) {
+      return questions.filter(q => !q.isDeleted);
+    }
+    
+    return questions;
+  } catch (error) {
+    console.error('Failed to fetch questions from API:', error);
+    // Fallback to localStorage
+    let questions = getAllBankQuestionsRaw();
+
+    // 过滤已删除数据
+    if (!includeDeleted) {
+      questions = questions.filter(q => !q.isDeleted);
+    }
+
+    // 如果提供了 teacherId，只返回该教师的题目
+    if (teacherId) {
+      questions = questions.filter(q => q.teacherId === teacherId);
+    }
+
+    return questions;
+  }
+};
+
+// 同步版本用于需要同步调用的地方
+export const getBankQuestionsSync = (teacherId?: string, includeDeleted: boolean = false): Question[] => {
   let questions = getAllBankQuestionsRaw();
 
-  // 过滤已删除数据
   if (!includeDeleted) {
     questions = questions.filter(q => !q.isDeleted);
   }
 
-  // 如果提供了 teacherId，只返回该教师的题目
   if (teacherId) {
     questions = questions.filter(q => q.teacherId === teacherId);
   }
@@ -317,54 +619,120 @@ export const getBankQuestions = (teacherId?: string, includeDeleted: boolean = f
   return questions;
 };
 
-export const saveBankQuestion = (question: Question, teacherId?: string) => {
-  const questions = getAllBankQuestionsRaw();
-  // 确保保存时关联 teacherId
-  const questionToSave = {
-    ...question,
-    teacherId: teacherId || question.teacherId || ''
-  };
-  const index = questions.findIndex(q => q.id === question.id);
-  if (index >= 0) {
-    questions[index] = questionToSave;
-  } else {
-    questions.push(questionToSave);
+export const saveBankQuestion = async (question: Question, teacherId?: string): Promise<void> => {
+  try {
+    const isNew = !question.id || question.id.startsWith('temp-');
+    
+    if (isNew) {
+      const result = await apiCreateQuestion({
+        text: question.text,
+        image_r2_key: question.imageUrl,
+        options: question.options,
+        correct_option_id: question.correctOptionId,
+        explanation: question.explanation,
+        type: question.type,
+        level: question.level,
+        knowledge_point_ids: question.knowledgePointIds,
+        tags: question.tags,
+        reading_passage: question.readingPassage,
+        sub_questions: question.subQuestions,
+        created_by: question.createdBy
+      });
+      question.id = result.id;
+    } else {
+      await apiUpdateQuestion(question.id, {
+        text: question.text,
+        image_r2_key: question.imageUrl,
+        options: question.options,
+        correct_option_id: question.correctOptionId,
+        explanation: question.explanation,
+        type: question.type,
+        level: question.level,
+        knowledge_point_ids: question.knowledgePointIds,
+        tags: question.tags,
+        reading_passage: question.readingPassage,
+        sub_questions: question.subQuestions
+      });
+    }
+    
+    // 更新本地缓存
+    const questions = getAllBankQuestionsRaw();
+    const questionToSave = {
+      ...question,
+      teacherId: teacherId || question.teacherId || ''
+    };
+    const index = questions.findIndex(q => q.id === question.id);
+    if (index >= 0) {
+      questions[index] = questionToSave;
+    } else {
+      questions.push(questionToSave);
+    }
+    localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
+  } catch (error) {
+    console.error('Failed to save question via API:', error);
+    // Fallback to localStorage
+    const questions = getAllBankQuestionsRaw();
+    const questionToSave = {
+      ...question,
+      teacherId: teacherId || question.teacherId || ''
+    };
+    const index = questions.findIndex(q => q.id === question.id);
+    if (index >= 0) {
+      questions[index] = questionToSave;
+    } else {
+      questions.push(questionToSave);
+    }
+    localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
   }
-  localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
 };
 
-export const deleteBankQuestion = (id: string, operatorId?: string, reason?: string) => {
-  const questions = getBankQuestions(undefined, true);
-  const questionIndex = questions.findIndex(q => q.id === id);
-  if (questionIndex >= 0) {
-    questions[questionIndex].isDeleted = true;
-    questions[questionIndex].deletedAt = Date.now();
-    questions[questionIndex].deletedBy = operatorId;
-    localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
+export const deleteBankQuestion = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteQuestion(id);
     
-    // 记录操作日志
-    if (operatorId) {
-      logOperation({
-        operatorId,
-        operationType: 'delete_question',
-        targetId: id,
-        targetType: 'Question',
-        targetName: questions[questionIndex].text.substring(0, 50),
-        reason
-      });
+    // 更新本地缓存
+    const questions = getBankQuestionsSync(undefined, true);
+    const questionIndex = questions.findIndex(q => q.id === id);
+    if (questionIndex >= 0) {
+      questions[questionIndex].isDeleted = true;
+      questions[questionIndex].deletedAt = Date.now();
+      questions[questionIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
+    }
+  } catch (error) {
+    console.error('Failed to delete question via API:', error);
+    // Fallback to localStorage
+    const questions = getBankQuestionsSync(undefined, true);
+    const questionIndex = questions.findIndex(q => q.id === id);
+    if (questionIndex >= 0) {
+      questions[questionIndex].isDeleted = true;
+      questions[questionIndex].deletedAt = Date.now();
+      questions[questionIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
+      
+      // 记录操作日志
+      if (operatorId) {
+        logOperation({
+          operatorId,
+          operationType: 'delete_question',
+          targetId: id,
+          targetType: 'Question',
+          targetName: questions[questionIndex].text.substring(0, 50),
+          reason
+        });
+      }
     }
   }
 };
 
 // --- SUBMISSIONS ---
-export const submitAssignment = (submission: Submission) => {
+// Sync version for internal use
+const submitAssignmentSync = (submission: Submission) => {
   const allSubmissions: Submission[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUBMISSIONS) || '[]');
   
-  // Replace existing submission for same student+resource if exists
   const index = allSubmissions.findIndex(s => s.studentId === submission.studentId && s.resourceId === submission.resourceId);
   
   if (index >= 0) {
-    // 如果之前软删除过该提交，重新提交视为恢复/覆盖
     allSubmissions[index] = {
       ...submission,
       isDeleted: false,
@@ -385,14 +753,78 @@ export const submitAssignment = (submission: Submission) => {
   localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(allSubmissions));
 };
 
-export const getSubmissions = (includeDeleted: boolean = false): Submission[] => {
+// Async version with API
+export const submitAssignment = async (submission: Submission): Promise<void> => {
+  try {
+    // Convert to API format
+    const apiSubmission = {
+      student_id: submission.studentId,
+      resource_id: submission.resourceId,
+      audio_r2_key: submission.audioUrl,
+      ai_score: submission.aiScore,
+      ai_segment_evals: submission.aiSegmentEvals,
+      quiz_result: submission.quizResult,
+      cloze_result: submission.clozeResult
+    };
+    
+    await apiCreateSubmission(apiSubmission);
+    submitAssignmentSync(submission);
+  } catch (error) {
+    console.error('Failed to submit assignment to API:', error);
+    submitAssignmentSync(submission);
+  }
+};
+
+// Sync version for internal use
+const getSubmissionsSync = (includeDeleted: boolean = false): Submission[] => {
   const subs: Submission[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUBMISSIONS) || '[]');
   if (includeDeleted) return subs;
   return subs.filter(s => !s.isDeleted);
 };
 
-export const deleteSubmission = (id: string, operatorId?: string, reason?: string) => {
-  const subs = getSubmissions(true);
+// Async version with API
+export const getSubmissions = async (includeDeleted: boolean = false): Promise<Submission[]> => {
+  try {
+    const submissions = await apiGetSubmissions();
+    
+    // Convert from API format to local format
+    const converted: Submission[] = submissions.map((s: any) => ({
+      id: s.id,
+      studentId: s.student_id,
+      resourceId: s.resource_id,
+      submittedAt: typeof s.submitted_at === 'number'
+        ? new Date(s.submitted_at).toLocaleString()
+        : String(s.submitted_at || ''),
+      audioUrl: s.audio_r2_key,
+      aiScore: s.ai_score || undefined,
+      aiSegmentEvals: s.ai_segment_evals || undefined,
+      teacherFeedback: s.teacher_feedback || undefined,
+      quizResult: s.quiz_result || undefined,
+      clozeResult: s.cloze_result || undefined,
+      status: s.status || 'pending_review',
+      isDeleted: s.is_deleted === 1,
+      deletedAt: s.deleted_at || undefined,
+      deletedBy: s.deleted_by || undefined,
+      deletedReason: s.deleted_reason || undefined
+    }));
+    
+    // Update localStorage cache
+    localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(converted));
+    
+    if (!includeDeleted) {
+      return converted.filter(s => !s.isDeleted);
+    }
+    
+    return converted;
+  } catch (error) {
+    console.error('Failed to fetch submissions from API:', error);
+    return getSubmissionsSync(includeDeleted);
+  }
+};
+
+// Sync version for internal delete operations
+const deleteSubmissionSync = (id: string, operatorId?: string, reason?: string) => {
+  const subs = getSubmissionsSync(true);
   const idx = subs.findIndex(s => s.id === id);
   if (idx < 0) return;
   if (subs[idx].isDeleted) return;
@@ -414,8 +846,19 @@ export const deleteSubmission = (id: string, operatorId?: string, reason?: strin
   }
 };
 
+// Async version with API
+export const deleteSubmission = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteSubmission(id, operatorId, reason);
+    deleteSubmissionSync(id, operatorId, reason);
+  } catch (error) {
+    console.error('Failed to delete submission from API:', error);
+    deleteSubmissionSync(id, operatorId, reason);
+  }
+};
+
 const restoreSubmissionById = (id: string) => {
-  const subs = getSubmissions(true);
+  const subs = getSubmissionsSync(true);
   const s = subs.find(x => x.id === id);
   if (!s || !s.isDeleted) return;
   s.isDeleted = false;
@@ -426,7 +869,7 @@ const restoreSubmissionById = (id: string) => {
 };
 
 const deleteSubmissionsByResource = (resourceId: string, operatorId?: string, reason?: string) => {
-  const subs = getSubmissions(true);
+  const subs = getSubmissionsSync(true);
   let changed = false;
   subs.forEach(s => {
     if (s.resourceId !== resourceId) return;
@@ -441,7 +884,7 @@ const deleteSubmissionsByResource = (resourceId: string, operatorId?: string, re
 };
 
 const restoreSubmissionsByResource = (resourceId: string) => {
-  const subs = getSubmissions(true);
+  const subs = getSubmissionsSync(true);
   let changed = false;
   subs.forEach(s => {
     if (s.resourceId !== resourceId) return;
@@ -458,7 +901,7 @@ const restoreSubmissionsByResource = (resourceId: string) => {
 const deleteSubmissionsByStudentIds = (studentIds: string[], operatorId?: string, reason?: string) => {
   if (studentIds.length === 0) return;
   const set = new Set(studentIds);
-  const subs = getSubmissions(true);
+  const subs = getSubmissionsSync(true);
   let changed = false;
   subs.forEach(s => {
     if (!set.has(s.studentId)) return;
@@ -475,7 +918,7 @@ const deleteSubmissionsByStudentIds = (studentIds: string[], operatorId?: string
 const restoreSubmissionsByStudentIds = (studentIds: string[]) => {
   if (studentIds.length === 0) return;
   const set = new Set(studentIds);
-  const subs = getSubmissions(true);
+  const subs = getSubmissionsSync(true);
   let changed = false;
   subs.forEach(s => {
     if (!set.has(s.studentId)) return;
@@ -604,7 +1047,7 @@ const restoreStudentPracticeDataByUserIds = (userIds: string[]) => {
 
 // --- PERMANENT DELETE HELPERS (物理级联删除) ---
 const permanentlyDeleteSubmissionsByResource = (resourceId: string) => {
-  const subs = getSubmissions(true);
+  const subs = getSubmissionsSync(true);
   const filtered = subs.filter(s => s.resourceId !== resourceId);
   if (filtered.length !== subs.length) {
     localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(filtered));
@@ -614,7 +1057,7 @@ const permanentlyDeleteSubmissionsByResource = (resourceId: string) => {
 const permanentlyDeleteSubmissionsByStudentIds = (studentIds: string[]) => {
   if (studentIds.length === 0) return;
   const set = new Set(studentIds);
-  const subs = getSubmissions(true);
+  const subs = getSubmissionsSync(true);
   const filtered = subs.filter(s => !set.has(s.studentId));
   if (filtered.length !== subs.length) {
     localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(filtered));
@@ -652,7 +1095,7 @@ const permanentlyDeleteStudentPracticeDataByUserIds = (userIds: string[]) => {
 };
 
 const permanentlyDeleteExamSessionsByExamPaperId = (examPaperId: string) => {
-  const sessions = getExamSessions(undefined, true);
+  const sessions = getExamSessionsSync(undefined, true);
   const filtered = sessions.filter(s => s.examPaperId !== examPaperId);
   if (filtered.length !== sessions.length) {
     localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(filtered));
@@ -662,7 +1105,7 @@ const permanentlyDeleteExamSessionsByExamPaperId = (examPaperId: string) => {
 const permanentlyDeleteExamSessionsByStudentIds = (studentIds: string[]) => {
   if (studentIds.length === 0) return;
   const set = new Set(studentIds);
-  const sessions = getExamSessions(undefined, true);
+  const sessions = getExamSessionsSync(undefined, true);
   const filtered = sessions.filter(s => !set.has(s.studentId));
   if (filtered.length !== sessions.length) {
     localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(filtered));
@@ -673,7 +1116,7 @@ const permanentlyDeleteQuestionsByKnowledgePointIds = (teacherId: string | undef
   if (!teacherId) return;
   if (knowledgePointIds.length === 0) return;
   const kpSet = new Set(knowledgePointIds);
-  const questions = getBankQuestions(undefined, true);
+  const questions = getBankQuestionsSync(undefined, true);
   const filtered = questions.filter(q => {
     const owner = q.teacherId === teacherId;
     if (!owner) return true;
@@ -685,7 +1128,8 @@ const permanentlyDeleteQuestionsByKnowledgePointIds = (teacherId: string | undef
   }
 };
 
-export const saveStudentProgress = (data: StudentPracticeData) => {
+// Sync version for internal use
+const saveStudentProgressSync = (data: StudentPracticeData) => {
   const allData = JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENT_DATA) || '{}');
   const key = `${data.userId}_${data.resourceId}`;
   
@@ -734,13 +1178,73 @@ export const saveStudentProgress = (data: StudentPracticeData) => {
   }
 };
 
-export const getStudentProgress = (userId: string, resourceId: string): StudentPracticeData | null => {
+// Async version with API
+export const saveStudentProgress = async (data: StudentPracticeData): Promise<void> => {
+  try {
+    // Convert to API format
+    const apiData = {
+      resource_id: data.resourceId,
+      quiz_answers: data.quizAnswers,
+      quiz_score: data.quizScore,
+      cloze_answers: data.clozeAnswers,
+      cloze_score: data.clozeScore,
+      segment_recordings: data.segmentRecordings,
+      segment_scores: data.segmentScores,
+      overall_score: data.overallScore
+    };
+    
+    await apiSavePracticeData(apiData);
+    saveStudentProgressSync(data);
+  } catch (error) {
+    console.error('Failed to save student progress to API:', error);
+    saveStudentProgressSync(data);
+  }
+};
+
+// Sync version for internal use
+const getStudentProgressSync = (userId: string, resourceId: string): StudentPracticeData | null => {
   const allData = JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENT_DATA) || '{}');
   const key = `${userId}_${resourceId}`;
   return allData[key] || null;
 };
 
+// Async version with API
+export const getStudentProgress = async (userId: string, resourceId: string): Promise<StudentPracticeData | null> => {
+  try {
+    const results = await apiGetPracticeData(userId, resourceId);
+    
+    if (results && results.length > 0) {
+      const practice = results[0];
+      // Convert from API format to local format
+      const data: StudentPracticeData = {
+        userId: practice.user_id,
+        resourceId: practice.resource_id,
+        quizAnswers: practice.quiz_answers,
+        quizScore: practice.quiz_score,
+        clozeAnswers: practice.cloze_answers,
+        clozeScore: practice.cloze_score,
+        segmentRecordings: practice.segment_recordings || {},
+        segmentScores: practice.segment_scores || {},
+        overallScore: practice.overall_score,
+        lastUpdated: practice.last_updated
+      };
+      
+      // Update localStorage cache
+      saveStudentProgressSync(data);
+      
+      return data;
+    }
+    
+    // Fallback to localStorage
+    return getStudentProgressSync(userId, resourceId);
+  } catch (error) {
+    console.error('Failed to get student progress from API:', error);
+    return getStudentProgressSync(userId, resourceId);
+  }
+};
+
 // --- USERS (ADMIN FUNCTIONS) ---
+// Sync versions for internal use and backward compatibility
 export const getUsers = (includeDeleted: boolean = false): User[] => {
   const data = localStorage.getItem(STORAGE_KEYS.USERS);
   if (!data) {
@@ -749,6 +1253,51 @@ export const getUsers = (includeDeleted: boolean = false): User[] => {
   }
   const users: User[] = JSON.parse(data);
   return includeDeleted ? users : users.filter(u => !u.isDeleted);
+};
+
+// Async version with API
+export const getUsersAsync = async (includeDeleted: boolean = false): Promise<User[]> => {
+  try {
+    const users = await apiGetUsers();
+    
+    // Convert from API format to local format
+    const converted = users.map((u: any) => ({
+      id: u.id,
+      username: u.username,
+      role: u.role,
+      name: u.name,
+      avatar: u.avatar_r2_key,
+      classId: u.class_id,
+      needsPasswordChange: u.needs_password_change === 1,
+      isBlocked: u.is_blocked === 1,
+      isDeleted: u.is_deleted === 1,
+      deletedAt: u.deleted_at,
+      deletedBy: u.deleted_by,
+      createdAt: u.created_at
+    }));
+    
+    // Update localStorage cache
+    const existingUsers = getUsers(true);
+    const merged = [...existingUsers];
+    for (const user of converted) {
+      const index = merged.findIndex(u => u.id === user.id);
+      if (index >= 0) {
+        merged[index] = user;
+      } else {
+        merged.push(user);
+      }
+    }
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(merged));
+    
+    if (!includeDeleted) {
+      return converted.filter((u: User) => !u.isDeleted);
+    }
+    
+    return converted;
+  } catch (error) {
+    console.error('Failed to fetch users from API:', error);
+    return getUsers(includeDeleted);
+  }
 };
 
 export const getUserById = (id: string): User | undefined => {
@@ -761,7 +1310,7 @@ const emitDataChanged = () => {
 };
 
 const syncUserAvatarToClassrooms = (user: User): boolean => {
-  const classrooms = getClassrooms(undefined, true);
+  const classrooms = getClassroomsSync(undefined, true);
   let changed = false;
 
   const updated = classrooms.map(cls => {
@@ -791,7 +1340,8 @@ const syncUserAvatarToClassrooms = (user: User): boolean => {
   return true;
 };
 
-export const saveUser = (user: User) => {
+// Sync version for internal use
+const saveUserSync = (user: User) => {
   const users = getUsers();
   const index = users.findIndex(u => u.id === user.id);
   if (index >= 0) {
@@ -801,13 +1351,44 @@ export const saveUser = (user: User) => {
   }
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
 
-  // Keep classroom student records in sync (student lists read from Classroom.students)
   syncUserAvatarToClassrooms(user);
   emitDataChanged();
 };
 
-export const deleteUser = (id: string, operatorId?: string, reason?: string) => {
-  const users = getUsers(true); // 包含已删除数据
+// Async version with API
+export const saveUser = async (user: User): Promise<void> => {
+  try {
+    const apiUser = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      name: user.name,
+      avatar_r2_key: user.avatar,
+      class_id: user.classId,
+      needs_password_change: user.needsPasswordChange,
+      is_blocked: user.isBlocked
+    };
+    
+    // Check if user exists
+    const existingUsers = getUsers(true);
+    const exists = existingUsers.some(u => u.id === user.id);
+    
+    if (exists) {
+      await apiUpdateUser(user.id, apiUser);
+    } else {
+      await apiCreateUser(apiUser);
+    }
+    
+    saveUserSync(user);
+  } catch (error) {
+    console.error('Failed to save user to API:', error);
+    saveUserSync(user);
+  }
+};
+
+// Sync version for internal use
+const deleteUserSync = (id: string, operatorId?: string, reason?: string) => {
+  const users = getUsers(true);
   const userIndex = users.findIndex(u => u.id === id);
   if (userIndex >= 0) {
     users[userIndex].isDeleted = true;
@@ -815,7 +1396,6 @@ export const deleteUser = (id: string, operatorId?: string, reason?: string) => 
     users[userIndex].deletedBy = operatorId;
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
     
-    // 记录操作日志
     if (operatorId) {
       logOperation({
         operatorId,
@@ -826,6 +1406,17 @@ export const deleteUser = (id: string, operatorId?: string, reason?: string) => 
         reason
       });
     }
+  }
+};
+
+// Async version with API
+export const deleteUser = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteUser(id);
+    deleteUserSync(id, operatorId, reason);
+  } catch (error) {
+    console.error('Failed to delete user from API:', error);
+    deleteUserSync(id, operatorId, reason);
   }
 };
 
@@ -846,28 +1437,47 @@ export const toggleBlockUser = (id: string) => {
 };
 
 // --- CHANNELS ---
-export const getChannels = (userId?: string, includeDeleted: boolean = false): Channel[] => {
+// Sync version for internal use
+const getChannelsSync = (userId?: string, includeDeleted: boolean = false): Channel[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CHANNELS);
   let allChannels: Channel[] = data ? JSON.parse(data) : [];
   
   if (allChannels.length === 0) return [];
   
-  // 过滤已删除数据
   if (!includeDeleted) {
     allChannels = allChannels.filter(c => !c.isDeleted);
   }
   
-  // 添加 userId 过滤
   return userId 
     ? allChannels.filter(c => c.userId === userId) 
     : allChannels;
 };
 
-export const saveChannel = (channel: Channel, userId?: string) => {
+// Async version with API
+export const getChannels = async (userId?: string, includeDeleted: boolean = false): Promise<Channel[]> => {
+  try {
+    const raw = await apiGetChannels(userId);
+    const channels = raw.map(mapApiToChannel);
+    
+    // Update localStorage cache
+    localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(channels));
+    
+    if (!includeDeleted) {
+      return channels.filter(c => !c.isDeleted);
+    }
+    
+    return channels;
+  } catch (error) {
+    console.error('Failed to fetch channels from API:', error);
+    return getChannelsSync(userId, includeDeleted);
+  }
+};
+
+// Sync version for internal use
+const saveChannelSync = (channel: Channel, userId?: string) => {
   const allChannels = localStorage.getItem(STORAGE_KEYS.CHANNELS) 
       ? JSON.parse(localStorage.getItem(STORAGE_KEYS.CHANNELS)!) 
       : [];
-  // 确保 channel 有 userId
   const channelToSave = {
     ...channel,
     userId: userId || channel.userId || ''
@@ -881,7 +1491,35 @@ export const saveChannel = (channel: Channel, userId?: string) => {
   localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(allChannels));
 };
 
-export const deleteChannel = (id: string, operatorId?: string, reason?: string) => {
+// Async version with API
+export const saveChannel = async (channel: Channel, userId?: string): Promise<Channel> => {
+  const channelToSave: Channel = {
+    ...channel,
+    userId: userId || channel.userId || ''
+  };
+
+  try {
+    const isNew = !channelToSave.id || channelToSave.id.startsWith('temp-');
+    if (isNew) {
+      const created = await apiCreateChannel({ name: channelToSave.name });
+      channelToSave.id = created.id;
+      channelToSave.createdAt = created.created_at ?? channelToSave.createdAt;
+      channelToSave.userId = created.user_id ?? channelToSave.userId;
+    } else {
+      await apiUpdateChannel(channelToSave.id, { name: channelToSave.name });
+    }
+
+    saveChannelSync(channelToSave, userId);
+    return channelToSave;
+  } catch (error) {
+    console.error('Failed to save channel to API:', error);
+    saveChannelSync(channelToSave, userId);
+    return channelToSave;
+  }
+};
+
+// Sync version for internal use
+const deleteChannelSync = (id: string, operatorId?: string, reason?: string) => {
   const data = localStorage.getItem(STORAGE_KEYS.CHANNELS);
   if (!data) return;
   const allChannels: Channel[] = JSON.parse(data);
@@ -892,7 +1530,6 @@ export const deleteChannel = (id: string, operatorId?: string, reason?: string) 
     allChannels[channelIndex].deletedBy = operatorId;
     localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(allChannels));
     
-    // 记录操作日志
     if (operatorId) {
       logOperation({
         operatorId,
@@ -906,15 +1543,30 @@ export const deleteChannel = (id: string, operatorId?: string, reason?: string) 
   }
 };
 
+// Async version with API
+export const deleteChannel = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteChannel(id, operatorId, reason);
+    deleteChannelSync(id, operatorId, reason);
+  } catch (error) {
+    console.error('Failed to delete channel from API:', error);
+    deleteChannelSync(id, operatorId, reason);
+  }
+};
+
 // --- MEDIA RESOURCES ---
 // 重构：使用 Cloudflare D1 数据库 + R2 存储
 export const getResources = async (teacherId?: string, includeDeleted: boolean = false): Promise<MediaResource[]> => {
   try {
-    const resources = await apiGetResources(teacherId);
+    const raw = await apiGetResources(teacherId);
+    const resources = raw.map(mapApiToMediaResource);
+    
+    // 更新本地缓存
+    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(resources));
     
     // 过滤已删除数据（如果后端未过滤）
     if (!includeDeleted) {
-      return resources.filter((r: any) => !r.is_deleted);
+      return resources.filter(r => !r.isDeleted);
     }
     
     return resources;
@@ -938,7 +1590,7 @@ export const getResources = async (teacherId?: string, includeDeleted: boolean =
     
     // 如果提供了 teacherId，过滤该教师的频道下的资源
     if (teacherId) {
-      const channels = getChannels(teacherId);
+      const channels = getChannelsSync(teacherId);
       const channelIds = channels.map(c => c.id);
       return resources.filter(r => {
         if (channelIds.includes(r.channelId || 'default')) return true;
@@ -951,10 +1603,18 @@ export const getResources = async (teacherId?: string, includeDeleted: boolean =
   }
 };
 
-export const saveResource = async (resource: MediaResource, teacherId?: string): Promise<void> => {
+export const saveResource = async (resource: MediaResource, teacherId?: string): Promise<MediaResource> => {
   try {
     // 检查是否是新建还是更新
     const isNew = !resource.id || resource.id.startsWith('temp-');
+    const mediaUrl = resource.videoUrl || '';
+    const isAudioOnly = !!mediaUrl && /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(mediaUrl);
+    // 注意：D1 schema 中 video_r2_key 为 NOT NULL，音频资源也需要填充该字段（可复用同一个 URL/key）
+    const videoKey = mediaUrl || null;
+    const audioKey = resource.audioUrl || (isAudioOnly ? mediaUrl : null);
+    const level = resource.level || 'A1';
+    
+    let savedResource = { ...resource };
     
     if (isNew) {
       // 创建新资源
@@ -963,56 +1623,108 @@ export const saveResource = async (resource: MediaResource, teacherId?: string):
         teacher_id: teacherId || resource.teacherId || '',
         classroom_id: resource.assignedClassIds?.[0] || '',
         channel_id: resource.channelId,
-        video_r2_key: resource.videoUrl, // 需要转换为 R2 key
-        audio_r2_key: resource.audioUrl,
+        level,
+        video_r2_key: videoKey,
+        audio_r2_key: audioKey,
         cover_r2_key: resource.coverImage || '',
-        transcript: JSON.stringify(resource.transcript),
-        questions: JSON.stringify(resource.questions),
-        tags: JSON.stringify([...(resource.grammarTags || []), ...(resource.vocabTags || [])]),
+        transcript: resource.transcript || [],
+        raw_azure_words: (resource as any).rawAzureWords || null,
+        questions: resource.questions || [],
+        status: resource.status || 'draft',
+        deadline: resource.deadline || null,
+        assigned_class_ids: resource.assignedClassIds || [],
+        grammar_tags: resource.grammarTags || [],
+        vocab_tags: resource.vocabTags || [],
       });
       
       console.log('Resource created:', result);
+      // 更新资源ID为服务器返回的ID
+      savedResource.id = result.id;
+      savedResource.createdAt = result.created_at;
     } else {
       // 更新现有资源
       await apiUpdateResource(resource.id, {
         title: resource.title,
-        transcript: JSON.stringify(resource.transcript),
-        questions: JSON.stringify(resource.questions),
-        tags: JSON.stringify([...(resource.grammarTags || []), ...(resource.vocabTags || [])]),
+        level,
+        video_r2_key: videoKey,
+        audio_r2_key: audioKey,
+        cover_r2_key: resource.coverImage || '',
+        transcript: resource.transcript || [],
+        raw_azure_words: (resource as any).rawAzureWords || null,
+        questions: resource.questions || [],
+        status: resource.status || 'draft',
+        deadline: resource.deadline || null,
+        assigned_class_ids: resource.assignedClassIds || [],
+        grammar_tags: resource.grammarTags || [],
+        vocab_tags: resource.vocabTags || [],
       });
       
       console.log('Resource updated:', resource.id);
     }
+    
+    // 更新本地缓存（使用新ID）
+    const rawData = localStorage.getItem(STORAGE_KEYS.RESOURCES);
+    let allResources: MediaResource[] = rawData ? JSON.parse(rawData) : [];
+    
+    // 如果是新建，删除旧的temp-ID记录
+    if (isNew && resource.id.startsWith('temp-')) {
+      allResources = allResources.filter(r => r.id !== resource.id);
+    }
+    
+    const resourceToSave = {
+      ...savedResource,
+      teacherId: teacherId || savedResource.teacherId || ''
+    };
+    
+    const index = allResources.findIndex(r => r.id === savedResource.id);
+    if (index >= 0) {
+      allResources[index] = resourceToSave;
+    } else {
+      allResources.push(resourceToSave);
+    }
+    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(allResources));
+    
+    return savedResource;
   } catch (error) {
     console.error('Failed to save resource via API:', error);
     // Fallback to localStorage
     const rawData = localStorage.getItem(STORAGE_KEYS.RESOURCES);
     let allResources: MediaResource[] = rawData ? JSON.parse(rawData) : [];
     
+    let savedResource = { ...resource };
     const isNew = !allResources.some(r => r.id === resource.id);
+    
     if (isNew) {
+        // 生成新ID（fallback情况）
+        if (!savedResource.id || savedResource.id.startsWith('temp-')) {
+          savedResource.id = `res-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          savedResource.createdAt = Date.now();
+        }
+        
         const siblings = allResources.filter(r => r.channelId === resource.channelId);
-        let newTitle = resource.title;
+        let newTitle = savedResource.title;
         let counter = 1;
         while (siblings.some(r => r.title === newTitle)) {
-            newTitle = `${resource.title} (${counter})`;
+            newTitle = `${savedResource.title} (${counter})`;
             counter++;
         }
-        resource.title = newTitle;
+        savedResource.title = newTitle;
     }
 
     const resourceToSave = {
-      ...resource,
-      teacherId: teacherId || resource.teacherId || ''
+      ...savedResource,
+      teacherId: teacherId || savedResource.teacherId || ''
     };
 
-    const index = allResources.findIndex(r => r.id === resource.id);
+    const index = allResources.findIndex(r => r.id === savedResource.id);
     if (index >= 0) {
         allResources[index] = resourceToSave;
     } else {
         allResources.push(resourceToSave);
     }
     localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(allResources));
+    
+    return savedResource;
   }
 };
 
@@ -1096,16 +1808,52 @@ export const fetchResourceFromCDN = async (url: string): Promise<Partial<MediaRe
 
 // --- CLASSROOMS ---
 
-export const getClassrooms = (teacherId?: string, includeDeleted: boolean = false): Classroom[] => {
+export const getClassrooms = async (teacherId?: string, includeDeleted: boolean = false): Promise<Classroom[]> => {
+  try {
+    const raw = await apiGetClassrooms(teacherId);
+    const classrooms = raw.map(mapApiToClassroom);
+    
+    // 更新本地缓存
+    localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classrooms));
+    
+    // 过滤已删除数据（如果后端未过滤）
+    if (!includeDeleted) {
+      return classrooms.filter(c => !c.isDeleted);
+    }
+    
+    return classrooms;
+  } catch (error) {
+    console.error('Failed to fetch classrooms from API:', error);
+    // Fallback to localStorage
+    const data = localStorage.getItem(STORAGE_KEYS.CLASSROOMS);
+    if (!data) {
+      localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(INITIAL_CLASSROOMS));
+      return teacherId ? INITIAL_CLASSROOMS.filter(c => c.userId === teacherId) : INITIAL_CLASSROOMS;
+    }
+    
+    let allClassrooms: Classroom[] = JSON.parse(data);
+    
+    // 过滤已删除数据
+    if (!includeDeleted) {
+      allClassrooms = allClassrooms.filter(c => !c.isDeleted);
+    }
+    
+    if (teacherId) {
+      return allClassrooms.filter(c => c.userId === teacherId);
+    }
+    return allClassrooms;
+  }
+};
+
+// 同步版本用于需要同步调用的地方
+export const getClassroomsSync = (teacherId?: string, includeDeleted: boolean = false): Classroom[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CLASSROOMS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(INITIAL_CLASSROOMS));
-    return teacherId ? INITIAL_CLASSROOMS.filter(c => c.userId === teacherId) : INITIAL_CLASSROOMS;
+    return [];
   }
   
   let allClassrooms: Classroom[] = JSON.parse(data);
   
-  // 过滤已删除数据
   if (!includeDeleted) {
     allClassrooms = allClassrooms.filter(c => !c.isDeleted);
   }
@@ -1116,54 +1864,137 @@ export const getClassrooms = (teacherId?: string, includeDeleted: boolean = fals
   return allClassrooms;
 };
 
-export const getClassroomById = (classId: string): Classroom | undefined => {
-  const classes = getClassrooms();
+export const getClassroomById = async (classId: string): Promise<Classroom | undefined> => {
+  const classes = await getClassrooms();
   return classes.find(c => c.id === classId);
 };
 
-export const saveClassroom = (classroom: Classroom) => {
-  const classes = getClassrooms();
-  const index = classes.findIndex(c => c.id === classroom.id);
-  if (index >= 0) {
-      classes[index] = classroom;
-  } else {
-      classes.push(classroom);
-  }
-  localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classes));
-
-  emitDataChanged();
+// 同步版本
+export const getClassroomByIdSync = (classId: string): Classroom | undefined => {
+  const classes = getClassroomsSync();
+  return classes.find(c => c.id === classId);
 };
 
-export const deleteClassroom = (id: string, operatorId?: string, reason?: string) => {
-  const classes = getClassrooms(undefined, true); // 包含已删除数据
-  const classIndex = classes.findIndex(c => c.id === id);
-  if (classIndex >= 0) {
-    classes[classIndex].isDeleted = true;
-    classes[classIndex].deletedAt = Date.now();
-    classes[classIndex].deletedBy = operatorId;
-    localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classes));
+export const saveClassroom = async (classroom: Classroom): Promise<void> => {
+  try {
+    const isNew = !classroom.id || classroom.id.startsWith('temp-');
     
-    // 记录操作日志
-    if (operatorId) {
-      logOperation({
-        operatorId,
-        operationType: 'delete_classroom',
-        targetId: id,
-        targetType: 'Classroom',
-        targetName: classes[classIndex].name,
-        reason
+    if (isNew) {
+      const result = await apiCreateClassroom({
+        name: classroom.name,
+        teacherId: classroom.userId
       });
+      classroom.id = result.id;
+    } else {
+      await apiUpdateClassroom(classroom.id, {
+        name: classroom.name,
+        students: classroom.students
+      });
+    }
+    
+    // 更新本地缓存
+    const classes = getClassroomsSync(undefined, true);
+    const index = classes.findIndex(c => c.id === classroom.id);
+    if (index >= 0) {
+        classes[index] = classroom;
+    } else {
+        classes.push(classroom);
+    }
+    localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classes));
+
+    emitDataChanged();
+  } catch (error) {
+    console.error('Failed to save classroom via API:', error);
+    // Fallback to localStorage
+    const classes = getClassroomsSync();
+    const index = classes.findIndex(c => c.id === classroom.id);
+    if (index >= 0) {
+        classes[index] = classroom;
+    } else {
+        classes.push(classroom);
+    }
+    localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classes));
+
+    emitDataChanged();
+  }
+};
+
+export const deleteClassroom = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteClassroom(id);
+    
+    // 更新本地缓存
+    const classes = getClassroomsSync(undefined, true);
+    const classIndex = classes.findIndex(c => c.id === id);
+    if (classIndex >= 0) {
+      classes[classIndex].isDeleted = true;
+      classes[classIndex].deletedAt = Date.now();
+      classes[classIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classes));
+    }
+  } catch (error) {
+    console.error('Failed to delete classroom via API:', error);
+    // Fallback to localStorage
+    const classes = getClassroomsSync(undefined, true);
+    const classIndex = classes.findIndex(c => c.id === id);
+    if (classIndex >= 0) {
+      classes[classIndex].isDeleted = true;
+      classes[classIndex].deletedAt = Date.now();
+      classes[classIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(classes));
+      
+      // 记录操作日志
+      if (operatorId) {
+        logOperation({
+          operatorId,
+          operationType: 'delete_classroom',
+          targetId: id,
+          targetType: 'Classroom',
+          targetName: classes[classIndex].name,
+          reason
+        });
+      }
     }
   }
 };
 
 // --- EXAM PAPERS ---
-export const getExamPapers = (teacherId?: string, includeDeleted: boolean = false): ExamPaper[] => {
+export const getExamPapers = async (teacherId?: string, includeDeleted: boolean = false): Promise<ExamPaper[]> => {
+  try {
+    const raw = await apiGetExamPapers(teacherId);
+    const papers = raw.map(mapApiToExamPaper);
+    
+    // 更新本地缓存
+    localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(papers));
+    
+    // 过滤已删除数据（如果后端未过滤）
+    if (!includeDeleted) {
+      return papers.filter(p => !p.isDeleted);
+    }
+    
+    return papers;
+  } catch (error) {
+    console.error('Failed to fetch exam papers from API:', error);
+    // Fallback to localStorage
+    const data = localStorage.getItem(STORAGE_KEYS.EXAM_PAPERS);
+    if (!data) return [];
+    let allPapers: ExamPaper[] = JSON.parse(data);
+    
+    // 过滤已删除数据
+    if (!includeDeleted) {
+      allPapers = allPapers.filter(p => !p.isDeleted);
+    }
+    
+    return teacherId ? allPapers.filter(p => p.teacherId === teacherId) : allPapers;
+  }
+};
+
+// 同步版本
+export const getExamPapersSync = (teacherId?: string, includeDeleted: boolean = false): ExamPaper[] => {
   const data = localStorage.getItem(STORAGE_KEYS.EXAM_PAPERS);
   if (!data) return [];
   let allPapers: ExamPaper[] = JSON.parse(data);
   
-  // 过滤已删除数据
   if (!includeDeleted) {
     allPapers = allPapers.filter(p => !p.isDeleted);
   }
@@ -1171,59 +2002,264 @@ export const getExamPapers = (teacherId?: string, includeDeleted: boolean = fals
   return teacherId ? allPapers.filter(p => p.teacherId === teacherId) : allPapers;
 };
 
-export const getExamPaperById = (id: string): ExamPaper | undefined => {
-  const papers = getExamPapers();
+export const getExamPaperById = async (id: string): Promise<ExamPaper | undefined> => {
+  const papers = await getExamPapers();
   return papers.find(p => p.id === id);
 };
 
-export const saveExamPaper = (exam: ExamPaper): ExamPaper => {
-  const papers = getExamPapers();
-  const index = papers.findIndex(p => p.id === exam.id);
-  
-  const examToSave = {
-    ...exam,
-    id: exam.id || `exam-${Date.now()}`,
-    createdAt: exam.createdAt || Date.now()
-  };
-  
-  if (index >= 0) {
-    papers[index] = examToSave;
-  } else {
-    papers.push(examToSave);
-  }
-  localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(papers));
-  return examToSave;
+// 同步版本
+export const getExamPaperByIdSync = (id: string): ExamPaper | undefined => {
+  const papers = getExamPapersSync();
+  return papers.find(p => p.id === id);
 };
 
-export const updateExamPaper = (exam: ExamPaper) => {
-  saveExamPaper(exam);
-};
-
-export const deleteExamPaper = (id: string, operatorId?: string, reason?: string) => {
-  const papers = getExamPapers(undefined, true); // 包含已删除数据
-  const paperIndex = papers.findIndex(p => p.id === id);
-  if (paperIndex >= 0) {
-    papers[paperIndex].isDeleted = true;
-    papers[paperIndex].deletedAt = Date.now();
-    papers[paperIndex].deletedBy = operatorId;
-    localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(papers));
+export const saveExamPaper = async (exam: ExamPaper): Promise<ExamPaper> => {
+  try {
+    const isNew = !exam.id || exam.id.startsWith('temp-');
     
-    // 记录操作日志
-    if (operatorId) {
-      logOperation({
-        operatorId,
-        operationType: 'delete_exam',
-        targetId: id,
-        targetType: 'ExamPaper',
-        targetName: papers[paperIndex].title,
-        reason
+    const examToSave = {
+      ...exam,
+      id: exam.id || `exam-${Date.now()}`,
+      createdAt: exam.createdAt || Date.now()
+    };
+    
+    if (isNew) {
+      const result = await apiCreateExamPaper({
+        title: examToSave.title,
+        sections: examToSave.sections,
+        total_score: examToSave.totalScore,
+        folder_id: examToSave.folderId,
+        assigned_class_ids: examToSave.assignedClassIds,
+        assigned_class_deadlines: examToSave.assignedClassDeadlines,
+        exam_taker_settings: examToSave.examTakerSettings
       });
+      examToSave.id = result.id;
+    } else {
+      await apiUpdateExamPaper(examToSave.id, {
+        title: examToSave.title,
+        sections: examToSave.sections,
+        total_score: examToSave.totalScore,
+        folder_id: examToSave.folderId,
+        assigned_class_ids: examToSave.assignedClassIds,
+        assigned_class_deadlines: examToSave.assignedClassDeadlines,
+        exam_taker_settings: examToSave.examTakerSettings
+      });
+    }
+    
+    // 更新本地缓存
+    const papers = getExamPapersSync();
+    const index = papers.findIndex(p => p.id === examToSave.id);
+    if (index >= 0) {
+      papers[index] = examToSave;
+    } else {
+      papers.push(examToSave);
+    }
+    localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(papers));
+    return examToSave;
+  } catch (error) {
+    console.error('Failed to save exam paper via API:', error);
+    // Fallback to localStorage
+    const papers = getExamPapersSync();
+    const index = papers.findIndex(p => p.id === exam.id);
+    
+    const examToSave = {
+      ...exam,
+      id: exam.id || `exam-${Date.now()}`,
+      createdAt: exam.createdAt || Date.now()
+    };
+    
+    if (index >= 0) {
+      papers[index] = examToSave;
+    } else {
+      papers.push(examToSave);
+    }
+    localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(papers));
+    return examToSave;
+  }
+};
+
+export const updateExamPaper = async (exam: ExamPaper): Promise<void> => {
+  await saveExamPaper(exam);
+};
+
+export const deleteExamPaper = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteExamPaper(id);
+    
+    // 更新本地缓存
+    const papers = getExamPapersSync(undefined, true);
+    const paperIndex = papers.findIndex(p => p.id === id);
+    if (paperIndex >= 0) {
+      papers[paperIndex].isDeleted = true;
+      papers[paperIndex].deletedAt = Date.now();
+      papers[paperIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(papers));
+    }
+  } catch (error) {
+    console.error('Failed to delete exam paper via API:', error);
+    // Fallback to localStorage
+    const papers = getExamPapersSync(undefined, true);
+    const paperIndex = papers.findIndex(p => p.id === id);
+    if (paperIndex >= 0) {
+      papers[paperIndex].isDeleted = true;
+      papers[paperIndex].deletedAt = Date.now();
+      papers[paperIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(papers));
+      
+      // 记录操作日志
+      if (operatorId) {
+        logOperation({
+          operatorId,
+          operationType: 'delete_exam',
+          targetId: id,
+          targetType: 'ExamPaper',
+          targetName: papers[paperIndex].title,
+          reason
+        });
+      }
+    }
+  }
+};
+
+// ===== Exam Folders =====
+export const getExamFolders = async (userId?: string, includeDeleted: boolean = false): Promise<ExamFolder[]> => {
+  try {
+    const data = await apiGetExamFolders(userId);
+    const folders = data.map(mapApiToExamFolder);
+    
+    // 更新本地缓存
+    localStorage.setItem(STORAGE_KEYS.EXAM_FOLDERS, JSON.stringify(folders));
+    
+    return includeDeleted ? folders : folders.filter(f => !f.isDeleted);
+  } catch (error) {
+    console.error('Failed to fetch exam folders from API:', error);
+    // Fallback to localStorage
+    const cached = localStorage.getItem(STORAGE_KEYS.EXAM_FOLDERS);
+    if (cached) {
+      const folders: ExamFolder[] = JSON.parse(cached);
+      return includeDeleted ? folders : folders.filter(f => !f.isDeleted);
+    }
+    return [];
+  }
+};
+
+export const getExamFoldersSync = (userId?: string, includeDeleted: boolean = false): ExamFolder[] => {
+  const cached = localStorage.getItem(STORAGE_KEYS.EXAM_FOLDERS);
+  if (!cached) return [];
+  
+  try {
+    const folders: ExamFolder[] = JSON.parse(cached);
+    let filtered = folders;
+    
+    if (userId) {
+      filtered = filtered.filter(f => f.userId === userId);
+    }
+    
+    if (!includeDeleted) {
+      filtered = filtered.filter(f => !f.isDeleted);
+    }
+    
+    return filtered;
+  } catch {
+    return [];
+  }
+};
+
+export const saveExamFolder = async (folder: ExamFolder, userId?: string): Promise<ExamFolder> => {
+  try {
+    const isNew = folder.id.startsWith('temp-');
+    
+    let saved: any;
+    if (isNew) {
+      const payload = {
+        name: folder.name
+      };
+      saved = await apiCreateExamFolder(payload);
+    } else {
+      const payload = {
+        name: folder.name
+      };
+      saved = await apiUpdateExamFolder(folder.id, payload);
+    }
+    
+    const mappedFolder = mapApiToExamFolder(saved);
+    
+    // 更新本地缓存
+    const folders = getExamFoldersSync(undefined, true);
+    const index = folders.findIndex(f => f.id === folder.id || f.id === mappedFolder.id);
+    if (index >= 0) {
+      folders[index] = mappedFolder;
+    } else {
+      folders.push(mappedFolder);
+    }
+    localStorage.setItem(STORAGE_KEYS.EXAM_FOLDERS, JSON.stringify(folders));
+    
+    return mappedFolder;
+  } catch (error) {
+    console.error('Failed to save exam folder via API:', error);
+    // Fallback to localStorage
+    const folderToSave = { ...folder };
+    if (folderToSave.id.startsWith('temp-')) {
+      folderToSave.id = `folder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      folderToSave.createdAt = Date.now();
+      if (userId) {
+        folderToSave.userId = userId;
+      }
+    }
+    
+    const folders = getExamFoldersSync(undefined, true);
+    const index = folders.findIndex(f => f.id === folder.id || f.id === folderToSave.id);
+    if (index >= 0) {
+      folders[index] = folderToSave;
+    } else {
+      folders.push(folderToSave);
+    }
+    localStorage.setItem(STORAGE_KEYS.EXAM_FOLDERS, JSON.stringify(folders));
+    return folderToSave;
+  }
+};
+
+export const deleteExamFolder = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteExamFolder(id);
+    
+    // 更新本地缓存
+    const folders = getExamFoldersSync(undefined, true);
+    const folderIndex = folders.findIndex(f => f.id === id);
+    if (folderIndex >= 0) {
+      folders[folderIndex].isDeleted = true;
+      folders[folderIndex].deletedAt = Date.now();
+      folders[folderIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.EXAM_FOLDERS, JSON.stringify(folders));
+    }
+  } catch (error) {
+    console.error('Failed to delete exam folder via API:', error);
+    // Fallback to localStorage
+    const folders = getExamFoldersSync(undefined, true);
+    const folderIndex = folders.findIndex(f => f.id === id);
+    if (folderIndex >= 0) {
+      folders[folderIndex].isDeleted = true;
+      folders[folderIndex].deletedAt = Date.now();
+      folders[folderIndex].deletedBy = operatorId;
+      localStorage.setItem(STORAGE_KEYS.EXAM_FOLDERS, JSON.stringify(folders));
+      
+      // 记录操作日志
+      if (operatorId) {
+        logOperation({
+          operatorId,
+          operationType: 'delete_exam_folder',
+          targetId: id,
+          targetType: 'ExamFolder',
+          targetName: folders[folderIndex].name,
+          reason
+        });
+      }
     }
   }
 };
 
 export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
-  const allQuestions = getBankQuestions();
+  const allQuestions = getBankQuestionsSync(undefined, true);
   const allResources = await getResources();
   
   const results: Question[] = [];
@@ -1253,7 +2289,7 @@ export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
 
 // Get questions with their resource info
 export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array<{ question: Question; resourceId?: string; resourceTitle?: string }>> => {
-  const allQuestions = getBankQuestions();
+  const allQuestions = getBankQuestionsSync(undefined, true);
   const allResources = await getResources();
   
   const results: Array<{ question: Question; resourceId?: string; resourceTitle?: string }> = [];
@@ -1286,10 +2322,40 @@ export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array
 };
 
 // --- Exam Session Management ---
-export const getExamSessions = (studentId?: string, includeDeleted: boolean = false): ExamSession[] => {
+export const getExamSessions = async (studentId?: string, includeDeleted: boolean = false): Promise<ExamSession[]> => {
+  try {
+    const raw = await apiGetExamSessions(undefined, studentId);
+    const sessions = raw.map(mapApiToExamSession);
+    
+    // 更新本地缓存
+    localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+    
+    // 过滤已删除数据（如果后端未过滤）
+    if (!includeDeleted) {
+      return sessions.filter(s => !s.isDeleted);
+    }
+    
+    return sessions;
+  } catch (error) {
+    console.error('Failed to fetch exam sessions from API:', error);
+    // Fallback to localStorage
+    let allSessions: ExamSession[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXAM_SESSIONS) || '[]');
+    
+    if (!includeDeleted) {
+      allSessions = allSessions.filter(s => !s.isDeleted);
+    }
+    
+    if (studentId) {
+      return allSessions.filter(s => s.studentId === studentId);
+    }
+    return allSessions;
+  }
+};
+
+// 同步版本
+export const getExamSessionsSync = (studentId?: string, includeDeleted: boolean = false): ExamSession[] => {
   let allSessions: ExamSession[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXAM_SESSIONS) || '[]');
   
-  // 过滤已删除数据
   if (!includeDeleted) {
     allSessions = allSessions.filter(s => !s.isDeleted);
   }
@@ -1300,50 +2366,110 @@ export const getExamSessions = (studentId?: string, includeDeleted: boolean = fa
   return allSessions;
 };
 
-export const getExamSessionById = (id: string): ExamSession | undefined => {
-  const sessions = getExamSessions();
+export const getExamSessionById = async (id: string): Promise<ExamSession | undefined> => {
+  const sessions = await getExamSessions();
   return sessions.find(s => s.id === id);
 };
 
-export const saveExamSession = (session: ExamSession) => {
-  const sessions = getExamSessions();
-  const index = sessions.findIndex(s => s.id === session.id);
-  if (index !== -1) {
-    sessions[index] = session;
-  } else {
-    sessions.push(session);
-  }
-  localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+// 同步版本
+export const getExamSessionByIdSync = (id: string): ExamSession | undefined => {
+  const sessions = getExamSessionsSync();
+  return sessions.find(s => s.id === id);
 };
 
-export const deleteExamSession = (id: string, operatorId?: string, reason?: string) => {
-  const sessions = getExamSessions(undefined, true); // 包含已删除数据
-  const sessionIndex = sessions.findIndex(s => s.id === id);
-  if (sessionIndex >= 0) {
-    sessions[sessionIndex].isDeleted = true;
-    sessions[sessionIndex].deletedAt = Date.now();
-    sessions[sessionIndex].deletedBy = operatorId;
-    sessions[sessionIndex].deletedReason = reason;
-    localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+export const saveExamSession = async (session: ExamSession): Promise<void> => {
+  try {
+    const isNew = !session.id || session.id.startsWith('temp-');
     
-    // 记录操作日志
-    if (operatorId) {
-      logOperation({
-        operatorId,
-        operationType: 'return_to_redo',
-        targetId: id,
-        targetType: 'ExamSession',
-        targetName: `${sessions[sessionIndex].studentName} - ${sessions[sessionIndex].examTitle}`,
-        reason
+    if (isNew) {
+      const result = await apiCreateExamSession({
+        exam_paper_id: session.examPaperId,
+        exam_title: session.examTitle,
+        total_score: session.totalScore
       });
+      session.id = result.id;
+    } else {
+      await apiUpdateExamSession(session.id, {
+        answers: session.answers,
+        elapsed_time: session.elapsedTime,
+        is_submitted: session.isSubmitted,
+        submit_time: session.submitTime,
+        score: session.score,
+        teacher_feedback: session.teacherFeedback,
+        manual_score: session.manualScore,
+        item_scores: session.itemScores,
+        status: session.status
+      });
+    }
+    
+    // 更新本地缓存
+    const sessions = getExamSessionsSync();
+    const index = sessions.findIndex(s => s.id === session.id);
+    if (index !== -1) {
+      sessions[index] = session;
+    } else {
+      sessions.push(session);
+    }
+    localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+  } catch (error) {
+    console.error('Failed to save exam session via API:', error);
+    // Fallback to localStorage
+    const sessions = getExamSessionsSync();
+    const index = sessions.findIndex(s => s.id === session.id);
+    if (index !== -1) {
+      sessions[index] = session;
+    } else {
+      sessions.push(session);
+    }
+    localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+  }
+};
+
+export const deleteExamSession = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  try {
+    await apiDeleteExamSession(id);
+    
+    // 更新本地缓存
+    const sessions = getExamSessionsSync(undefined, true);
+    const sessionIndex = sessions.findIndex(s => s.id === id);
+    if (sessionIndex >= 0) {
+      sessions[sessionIndex].isDeleted = true;
+      sessions[sessionIndex].deletedAt = Date.now();
+      sessions[sessionIndex].deletedBy = operatorId;
+      sessions[sessionIndex].deletedReason = reason;
+      localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+    }
+  } catch (error) {
+    console.error('Failed to delete exam session via API:', error);
+    // Fallback to localStorage
+    const sessions = getExamSessionsSync(undefined, true);
+    const sessionIndex = sessions.findIndex(s => s.id === id);
+    if (sessionIndex >= 0) {
+      sessions[sessionIndex].isDeleted = true;
+      sessions[sessionIndex].deletedAt = Date.now();
+      sessions[sessionIndex].deletedBy = operatorId;
+      sessions[sessionIndex].deletedReason = reason;
+      localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+      
+      // 记录操作日志
+      if (operatorId) {
+        logOperation({
+          operatorId,
+          operationType: 'return_to_redo',
+          targetId: id,
+          targetType: 'ExamSession',
+          targetName: `${sessions[sessionIndex].studentName} - ${sessions[sessionIndex].examTitle}`,
+          reason
+        });
+      }
     }
   }
 };
 
 // Get exam sessions by exam paper and class
-export const getExamSessionsByExamAndClass = (examId: string, classId: string): ExamSession[] => {
-  const allSessions = getExamSessions();
-  const classroom = getClassroomById(classId);
+export const getExamSessionsByExamAndClass = async (examId: string, classId: string): Promise<ExamSession[]> => {
+  const allSessions = await getExamSessions();
+  const classroom = await getClassroomById(classId);
   if (!classroom) return [];
   
   const studentUserIds = new Set(classroom.students.map(s => s.userId).filter((id): id is string => !!id));
@@ -1351,49 +2477,62 @@ export const getExamSessionsByExamAndClass = (examId: string, classId: string): 
 };
 
 // Update exam session (alias for saveExamSession for clarity)
-export const updateExamSession = (session: ExamSession) => {
-  saveExamSession(session);
+export const updateExamSession = async (session: ExamSession): Promise<void> => {
+  await saveExamSession(session);
 };
 
 // Delete exam sessions by exam and student IDs (for "return to redo" feature)
-export const deleteExamSessionsByExam = (examId: string, studentIds: string[], operatorId?: string, reason?: string) => {
-  const sessions = getExamSessions(undefined, true); // 包含已删除数据
+export const deleteExamSessionsByExam = async (examId: string, studentIds: string[], operatorId?: string, reason?: string): Promise<void> => {
+  const sessions = getExamSessionsSync(undefined, true); // 包含已删除数据
   const studentIdSet = new Set(studentIds);
   
-  sessions.forEach(session => {
+  for (const session of sessions) {
     if (session.examPaperId === examId && studentIdSet.has(session.studentId)) {
-      session.isDeleted = true;
-      session.deletedAt = Date.now();
-      session.deletedBy = operatorId;
-      session.deletedReason = reason;
-      
-      // 记录操作日志
-      if (operatorId) {
-        logOperation({
-          operatorId,
-          operationType: 'return_to_redo',
-          targetId: session.id,
-          targetType: 'ExamSession',
-          targetName: `${session.studentName} - ${session.examTitle}`,
-          reason,
-          details: { examId, studentId: session.studentId }
-        });
-      }
+      await deleteExamSession(session.id, operatorId, reason);
     }
-  });
-  
-  localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+  }
 };
 
 // --- OPERATION LOGS (审计日志) ---
-export const getOperationLogs = (operatorId?: string): OperationLog[] => {
+// Sync version for internal use
+const getOperationLogsSync = (operatorId?: string): OperationLog[] => {
   const data = localStorage.getItem(STORAGE_KEYS.OPERATION_LOGS);
   if (!data) return [];
   const logs: OperationLog[] = JSON.parse(data);
   return operatorId ? logs.filter(log => log.operatorId === operatorId) : logs;
 };
 
-export const logOperation = (params: {
+// Async version with API
+export const getOperationLogs = async (operatorId?: string): Promise<OperationLog[]> => {
+  try {
+    const logs = await apiGetOperationLogs({ operatorId });
+    
+    // Convert from API format
+    const converted = logs.map((log: any) => ({
+      id: log.id,
+      operatorId: log.operator_id,
+      operatorName: log.operator_name,
+      operationType: log.operation_type,
+      targetId: log.target_id,
+      targetType: log.target_type,
+      targetName: log.target_name,
+      reason: log.reason,
+      details: log.details ? JSON.parse(log.details) : undefined,
+      timestamp: log.timestamp
+    }));
+    
+    // Update localStorage cache
+    localStorage.setItem(STORAGE_KEYS.OPERATION_LOGS, JSON.stringify(converted));
+    
+    return converted;
+  } catch (error) {
+    console.error('Failed to fetch operation logs from API:', error);
+    return getOperationLogsSync(operatorId);
+  }
+};
+
+// Sync version for internal use (non-blocking API call)
+function logOperationSync(params: {
   operatorId: string;
   operationType: OperationLog['operationType'];
   targetId: string;
@@ -1401,8 +2540,8 @@ export const logOperation = (params: {
   targetName?: string;
   reason?: string;
   details?: Record<string, any>;
-}) => {
-  const logs = getOperationLogs();
+}) {
+  const logs = getOperationLogsSync();
   const operator = getUserById(params.operatorId);
   
   const log: OperationLog = {
@@ -1420,7 +2559,37 @@ export const logOperation = (params: {
   
   logs.push(log);
   localStorage.setItem(STORAGE_KEYS.OPERATION_LOGS, JSON.stringify(logs));
-};
+  
+  return log;
+}
+
+// Export function - logs locally and sends to API in background
+export function logOperation(params: {
+  operatorId: string;
+  operationType: OperationLog['operationType'];
+  targetId: string;
+  targetType: string;
+  targetName?: string;
+  reason?: string;
+  details?: Record<string, any>;
+}) {
+  // Log locally first (sync)
+  const log = logOperationSync(params);
+  
+  // Then send to API in background (async, non-blocking)
+  apiCreateOperationLog({
+    operationType: params.operationType,
+    targetId: params.targetId,
+    targetType: params.targetType,
+    targetName: params.targetName,
+    reason: params.reason,
+    details: params.details
+  }).catch(error => {
+    console.error('Failed to log operation to API:', error);
+  });
+  
+  return log;
+}
 
 // 清理超过30天的已删除记录
 export const cleanupOldDeletedRecords = async () => {
@@ -1432,22 +2601,22 @@ export const cleanupOldDeletedRecords = async () => {
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(activeUsers));
   
   // 清理班级
-  const classrooms = getClassrooms(undefined, true);
+  const classrooms = getClassroomsSync(undefined, true);
   const activeClassrooms = classrooms.filter(c => !c.isDeleted || (c.deletedAt && c.deletedAt > thirtyDaysAgo));
   localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(activeClassrooms));
   
   // 清理试卷
-  const papers = getExamPapers(undefined, true);
+  const papers = getExamPapersSync(undefined, true);
   const activePapers = papers.filter(p => !p.isDeleted || (p.deletedAt && p.deletedAt > thirtyDaysAgo));
   localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(activePapers));
   
   // 清理考试会话
-  const sessions = getExamSessions(undefined, true);
+  const sessions = getExamSessionsSync(undefined, true);
   const activeSessions = sessions.filter(s => !s.isDeleted || (s.deletedAt && s.deletedAt > thirtyDaysAgo));
   localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(activeSessions));
   
   // 清理频道
-  const channels = getChannels(undefined, true);
+  const channels = getChannelsSync(undefined, true);
   const activeChannels = channels.filter(c => !c.isDeleted || (c.deletedAt && c.deletedAt > thirtyDaysAgo));
   localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(activeChannels));
   
@@ -1457,7 +2626,7 @@ export const cleanupOldDeletedRecords = async () => {
   localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(activeResources));
 
   // 清理提交记录
-  const submissions = getSubmissions(true);
+  const submissions = getSubmissionsSync(true);
   const activeSubmissions = submissions.filter(s => !s.isDeleted || (s.deletedAt && s.deletedAt > thirtyDaysAgo));
   localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(activeSubmissions));
 
@@ -1474,12 +2643,12 @@ export const cleanupOldDeletedRecords = async () => {
   if (practiceChanged) setStudentPracticeDataMap(practiceMap);
 
   // 清理题库题目
-  const questions = getBankQuestions(undefined, true);
+  const questions = getBankQuestionsSync(undefined, true);
   const activeQuestions = questions.filter(q => !q.isDeleted || (q.deletedAt && q.deletedAt > thirtyDaysAgo));
   localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(activeQuestions));
 
   // 清理课程大纲
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   courses.forEach(c => {
     // 清理课程内超过30天的已删除单元/知识点
     c.units = c.units.filter(u => !u.isDeleted || (u.deletedAt && u.deletedAt > thirtyDaysAgo));
@@ -1539,7 +2708,7 @@ export const initializeAutomaticCleanup = () => {
 
 
 const restoreExamSessionsByExamPaperId = (examPaperId: string) => {
-  const sessions = getExamSessions(undefined, true);
+  const sessions = getExamSessionsSync(undefined, true);
   let changed = false;
   sessions.forEach(s => {
     if (s.examPaperId !== examPaperId) return;
@@ -1556,7 +2725,7 @@ const restoreExamSessionsByExamPaperId = (examPaperId: string) => {
 const restoreExamSessionsByStudentIds = (studentIds: string[]) => {
   if (studentIds.length === 0) return;
   const set = new Set(studentIds);
-  const sessions = getExamSessions(undefined, true);
+  const sessions = getExamSessionsSync(undefined, true);
   let changed = false;
   sessions.forEach(s => {
     if (!set.has(s.studentId)) return;
@@ -1585,7 +2754,7 @@ const cascadeRestoreResourceInternal = async (resourceId: string) => {
 };
 
 const cascadeRestoreChannelInternal = async (channelId: string) => {
-  const channels = getChannels(undefined, true);
+  const channels = getChannelsSync(undefined, true);
   const channel = channels.find(c => c.id === channelId);
   if (channel && channel.isDeleted) {
     channel.isDeleted = false;
@@ -1602,7 +2771,7 @@ const cascadeRestoreChannelInternal = async (channelId: string) => {
 };
 
 const cascadeRestoreClassroomInternal = (classId: string) => {
-  const classrooms = getClassrooms(undefined, true);
+  const classrooms = getClassroomsSync(undefined, true);
   const classroom = classrooms.find(c => c.id === classId);
   if (classroom && classroom.isDeleted) {
     classroom.isDeleted = false;
@@ -1618,7 +2787,7 @@ const cascadeRestoreClassroomInternal = (classId: string) => {
 };
 
 const cascadeRestoreSyllabusCourseInternal = (courseId: string) => {
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (course && course.isDeleted) {
     course.isDeleted = false;
@@ -1653,10 +2822,10 @@ const cascadeRestoreUserInternal = (userId: string) => {
   }
 
   // teacher/admin
-  getChannels(userId, true).forEach(c => cascadeRestoreChannelInternal(c.id));
-  getClassrooms(userId, true).forEach(c => cascadeRestoreClassroomInternal(c.id));
-  getExamPapers(userId, true).forEach(p => {
-    const papers = getExamPapers(undefined, true);
+  getChannelsSync(userId, true).forEach(c => cascadeRestoreChannelInternal(c.id));
+  getClassroomsSync(userId, true).forEach(c => cascadeRestoreClassroomInternal(c.id));
+  getExamPapersSync(userId, true).forEach(p => {
+    const papers = getExamPapersSync(undefined, true);
     const paper = papers.find(x => x.id === p.id);
     if (paper && paper.isDeleted) {
       paper.isDeleted = false;
@@ -1669,7 +2838,7 @@ const cascadeRestoreUserInternal = (userId: string) => {
   });
 
   // 题库题目
-  const questions = getBankQuestions(undefined, true);
+  const questions = getBankQuestionsSync(undefined, true);
   let changed = false;
   questions.forEach(q => {
     if (q.teacherId !== userId) return;
@@ -1683,7 +2852,7 @@ const cascadeRestoreUserInternal = (userId: string) => {
   if (changed) localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
 
   // 课程
-  getSyllabusCourses(undefined, true)
+  getSyllabusCoursesSync(undefined, true)
     .filter(c => c.userId === userId)
     .forEach(c => cascadeRestoreSyllabusCourseInternal(c.id));
 };
@@ -1706,7 +2875,7 @@ const cascadePermanentlyDeleteChannelInternal = async (channelId: string) => {
     await cascadePermanentlyDeleteResourceInternal(r.id);
   }
 
-  const channels = getChannels(undefined, true);
+  const channels = getChannelsSync(undefined, true);
   const filtered = channels.filter(c => c.id !== channelId);
   if (filtered.length !== channels.length) {
     localStorage.setItem(STORAGE_KEYS.CHANNELS, JSON.stringify(filtered));
@@ -1714,7 +2883,7 @@ const cascadePermanentlyDeleteChannelInternal = async (channelId: string) => {
 };
 
 const cascadePermanentlyDeleteClassroomInternal = (classId: string) => {
-  const classrooms = getClassrooms(undefined, true);
+  const classrooms = getClassroomsSync(undefined, true);
   const classroom = classrooms.find(c => c.id === classId);
   const studentIds = (classroom?.students || []).map(s => s.userId).filter((x): x is string => !!x);
 
@@ -1726,7 +2895,7 @@ const cascadePermanentlyDeleteClassroomInternal = (classId: string) => {
     const studentIdSet = new Set(studentIds);
 
     // ExamSession：仅删除已软删且原因匹配的
-    const sessions = getExamSessions(undefined, true);
+    const sessions = getExamSessionsSync(undefined, true);
     const filteredSessions = sessions.filter(s => {
       if (!studentIdSet.has(s.studentId)) return true;
       if (!s.isDeleted) return true;
@@ -1739,7 +2908,7 @@ const cascadePermanentlyDeleteClassroomInternal = (classId: string) => {
     }
 
     // Submission：仅删除已软删且原因匹配的
-    const subs = getSubmissions(true);
+    const subs = getSubmissionsSync(true);
     const filteredSubs = subs.filter(s => {
       if (!studentIdSet.has(s.studentId)) return true;
       if (!s.isDeleted) return true;
@@ -1777,7 +2946,7 @@ const cascadePermanentlyDeleteClassroomInternal = (classId: string) => {
 const cascadePermanentlyDeleteExamPaperInternal = (examPaperId: string) => {
   permanentlyDeleteExamSessionsByExamPaperId(examPaperId);
 
-  const papers = getExamPapers(undefined, true);
+  const papers = getExamPapersSync(undefined, true);
   const filtered = papers.filter(p => p.id !== examPaperId);
   if (filtered.length !== papers.length) {
     localStorage.setItem(STORAGE_KEYS.EXAM_PAPERS, JSON.stringify(filtered));
@@ -1785,7 +2954,7 @@ const cascadePermanentlyDeleteExamPaperInternal = (examPaperId: string) => {
 };
 
 const cascadePermanentlyDeleteSyllabusCourseInternal = (courseId: string) => {
-  const courses = getSyllabusCourses(undefined, true);
+  const courses = getSyllabusCoursesSync(undefined, true);
   const course = courses.find(c => c.id === courseId);
   if (!course) return;
   const kpIds = course.units.flatMap(u => u.knowledgePoints.map(k => k.id));
@@ -1807,19 +2976,19 @@ const cascadePermanentlyDeleteUserInternal = (userId: string) => {
     permanentlyDeleteStudentPracticeDataByUserIds([userId]);
   } else {
     // teacher/admin
-    getChannels(userId, true).forEach(c => cascadePermanentlyDeleteChannelInternal(c.id));
-    getClassrooms(userId, true).forEach(c => cascadePermanentlyDeleteClassroomInternal(c.id));
-    getExamPapers(userId, true).forEach(p => cascadePermanentlyDeleteExamPaperInternal(p.id));
+    getChannelsSync(userId, true).forEach(c => cascadePermanentlyDeleteChannelInternal(c.id));
+    getClassroomsSync(userId, true).forEach(c => cascadePermanentlyDeleteClassroomInternal(c.id));
+    getExamPapersSync(userId, true).forEach(p => cascadePermanentlyDeleteExamPaperInternal(p.id));
 
     // 题库题目：按 teacherId 物理删除
-    const questions = getBankQuestions(undefined, true);
+    const questions = getBankQuestionsSync(undefined, true);
     const filteredQuestions = questions.filter(q => q.teacherId !== userId);
     if (filteredQuestions.length !== questions.length) {
       localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(filteredQuestions));
     }
 
     // 课程：物理删除课程 + 关联题目
-    getSyllabusCourses(undefined, true)
+    getSyllabusCoursesSync(undefined, true)
       .filter(c => c.userId === userId)
       .forEach(c => cascadePermanentlyDeleteSyllabusCourseInternal(c.id));
   }
@@ -1840,7 +3009,7 @@ export const restoreDeletedRecord = (type: 'User' | 'Classroom' | 'ExamPaper' | 
       break;
     }
     case 'ExamPaper': {
-      const papers = getExamPapers(undefined, true);
+      const papers = getExamPapersSync(undefined, true);
       const paper = papers.find(p => p.id === id);
       if (paper && paper.isDeleted) {
         paper.isDeleted = false;
@@ -1854,7 +3023,7 @@ export const restoreDeletedRecord = (type: 'User' | 'Classroom' | 'ExamPaper' | 
       break;
     }
     case 'ExamSession': {
-      const sessions = getExamSessions(undefined, true);
+      const sessions = getExamSessionsSync(undefined, true);
       const session = sessions.find(s => s.id === id);
       if (session && session.isDeleted) {
         session.isDeleted = false;
@@ -1874,7 +3043,7 @@ export const restoreDeletedRecord = (type: 'User' | 'Classroom' | 'ExamPaper' | 
       break;
     }
     case 'Question': {
-      const questions = getBankQuestions(undefined, true);
+      const questions = getBankQuestionsSync(undefined, true);
       const question = questions.find(q => q.id === id);
       if (question && question.isDeleted) {
         question.isDeleted = false;
@@ -1932,102 +3101,139 @@ export const getRecycleBinItems = async (): Promise<RecycleBinItem[]> => {
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
   const items: RecycleBinItem[] = [];
 
-  getUsers(true)
-    .filter(u => u.isDeleted && u.deletedAt && u.deletedAt > thirtyDaysAgo)
-    .forEach(u => items.push({
-      id: u.id,
-      type: 'User',
-      name: u.name || u.username,
-      deletedAt: u.deletedAt!,
-      deletedBy: u.deletedBy,
-      deletedReason: (u as any).deletedReason,
-      daysRemaining: calcDaysRemaining(u.deletedAt!),
-    }));
+  // 从 API 获取最新的被软删除数据，而不是依赖本地缓存
+  try {
+    const users = await getUsersAsync(true);
+    users
+      .filter(u => u.isDeleted && u.deletedAt && u.deletedAt > thirtyDaysAgo)
+      .forEach(u => items.push({
+        id: u.id,
+        type: 'User',
+        name: u.name || u.username,
+        deletedAt: u.deletedAt!,
+        deletedBy: u.deletedBy,
+        deletedReason: (u as any).deletedReason,
+        daysRemaining: calcDaysRemaining(u.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted users:', error);
+  }
 
-  getClassrooms(undefined, true)
-    .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
-    .forEach(c => items.push({
-      id: c.id,
-      type: 'Classroom',
-      name: c.name,
-      deletedAt: c.deletedAt!,
-      deletedBy: c.deletedBy,
-      daysRemaining: calcDaysRemaining(c.deletedAt!),
-    }));
+  try {
+    const classrooms = await getClassrooms(undefined, true);
+    classrooms
+      .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
+      .forEach(c => items.push({
+        id: c.id,
+        type: 'Classroom',
+        name: c.name,
+        deletedAt: c.deletedAt!,
+        deletedBy: c.deletedBy,
+        daysRemaining: calcDaysRemaining(c.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted classrooms:', error);
+  }
 
-  getChannels(undefined, true)
-    .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
-    .forEach(c => items.push({
-      id: c.id,
-      type: 'Channel',
-      name: c.name,
-      deletedAt: c.deletedAt!,
-      deletedBy: c.deletedBy,
-      daysRemaining: calcDaysRemaining(c.deletedAt!),
-    }));
+  try {
+    const channels = await getChannels(undefined, true);
+    channels
+      .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
+      .forEach(c => items.push({
+        id: c.id,
+        type: 'Channel',
+        name: c.name,
+        deletedAt: c.deletedAt!,
+        deletedBy: c.deletedBy,
+        daysRemaining: calcDaysRemaining(c.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted channels:', error);
+  }
 
-  (await getResources(undefined, true))
-    .filter(r => r.isDeleted && r.deletedAt && r.deletedAt > thirtyDaysAgo)
-    .forEach(r => items.push({
-      id: r.id,
-      type: 'Resource',
-      name: r.title,
-      deletedAt: r.deletedAt!,
-      deletedBy: r.deletedBy,
-      daysRemaining: calcDaysRemaining(r.deletedAt!),
-    }));
+  try {
+    const resources = await getResources(undefined, true);
+    resources
+      .filter(r => r.isDeleted && r.deletedAt && r.deletedAt > thirtyDaysAgo)
+      .forEach(r => items.push({
+        id: r.id,
+        type: 'Resource',
+        name: r.title,
+        deletedAt: r.deletedAt!,
+        deletedBy: r.deletedBy,
+        daysRemaining: calcDaysRemaining(r.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted resources:', error);
+  }
 
-  getExamPapers(undefined, true)
-    .filter(p => p.isDeleted && p.deletedAt && p.deletedAt > thirtyDaysAgo)
-    .forEach(p => items.push({
-      id: p.id,
-      type: 'ExamPaper',
-      name: p.title,
-      deletedAt: p.deletedAt!,
-      deletedBy: p.deletedBy,
-      deletedReason: (p as any).deletedReason,
-      daysRemaining: calcDaysRemaining(p.deletedAt!),
-    }));
+  try {
+    const examPapers = await getExamPapers(undefined, true);
+    examPapers
+      .filter(p => p.isDeleted && p.deletedAt && p.deletedAt > thirtyDaysAgo)
+      .forEach(p => items.push({
+        id: p.id,
+        type: 'ExamPaper',
+        name: p.title,
+        deletedAt: p.deletedAt!,
+        deletedBy: p.deletedBy,
+        deletedReason: (p as any).deletedReason,
+        daysRemaining: calcDaysRemaining(p.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted exam papers:', error);
+  }
 
-  getExamSessions(undefined, true)
-    .filter(s => s.isDeleted && s.deletedAt && s.deletedAt > thirtyDaysAgo)
-    .forEach(s => items.push({
-      id: s.id,
-      type: 'ExamSession',
-      name: `${s.studentName} - ${s.examTitle}`,
-      deletedAt: s.deletedAt!,
-      deletedBy: s.deletedBy,
-      deletedReason: s.deletedReason,
-      daysRemaining: calcDaysRemaining(s.deletedAt!),
-    }));
+  try {
+    const examSessions = await getExamSessions(undefined, true);
+    examSessions
+      .filter(s => s.isDeleted && s.deletedAt && s.deletedAt > thirtyDaysAgo)
+      .forEach(s => items.push({
+        id: s.id,
+        type: 'ExamSession',
+        name: `${s.studentName} - ${s.examTitle}`,
+        deletedAt: s.deletedAt!,
+        deletedBy: s.deletedBy,
+        deletedReason: s.deletedReason,
+        daysRemaining: calcDaysRemaining(s.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted exam sessions:', error);
+  }
 
-  getBankQuestions(undefined, true)
-    .filter(q => q.isDeleted && q.deletedAt && q.deletedAt > thirtyDaysAgo)
-    .forEach(q => items.push({
-      id: q.id,
-      type: 'Question',
-      name: q.text?.slice(0, 50) || '题目',
-      deletedAt: q.deletedAt!,
-      deletedBy: q.deletedBy,
-      deletedReason: (q as any).deletedReason,
-      daysRemaining: calcDaysRemaining(q.deletedAt!),
-    }));
+  try {
+    const questions = await getBankQuestions(undefined, true);
+    questions
+      .filter(q => q.isDeleted && q.deletedAt && q.deletedAt > thirtyDaysAgo)
+      .forEach(q => items.push({
+        id: q.id,
+        type: 'Question',
+        name: q.text?.slice(0, 50) || '题目',
+        deletedAt: q.deletedAt!,
+        deletedBy: q.deletedBy,
+        deletedReason: (q as any).deletedReason,
+        daysRemaining: calcDaysRemaining(q.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted questions:', error);
+  }
 
-  getSyllabusCourses(undefined, true)
-    .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
-    .forEach(c => items.push({
-      id: c.id,
-      type: 'SyllabusCourse',
-      name: c.name,
-      deletedAt: c.deletedAt!,
-      deletedBy: c.deletedBy,
-      deletedReason: (c as any).deletedReason,
-      daysRemaining: calcDaysRemaining(c.deletedAt!),
-    }));
+  try {
+    const syllabuses = await getSyllabusCourses(undefined, true);
+    syllabuses
+      .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
+      .forEach(c => items.push({
+        id: c.id,
+        type: 'SyllabusCourse',
+        name: c.name,
+        deletedAt: c.deletedAt!,
+        deletedBy: c.deletedBy,
+        deletedReason: (c as any).deletedReason,
+        daysRemaining: calcDaysRemaining(c.deletedAt!),
+      }));
 
-  // 单元 / 知识点：嵌套在课程内，以 compositeId 作为回收站 id
-  getSyllabusCourses(undefined, true)
-    .forEach(course => {
+    // 单元 / 知识点：嵌套在课程内，以 compositeId 作为回收站 id
+    syllabuses.forEach(course => {
       course.units
         .filter(u => u.isDeleted && u.deletedAt && u.deletedAt > thirtyDaysAgo)
         .forEach(u => items.push({
@@ -2052,57 +3258,96 @@ export const getRecycleBinItems = async (): Promise<RecycleBinItem[]> => {
           }));
       });
     });
+  } catch (error) {
+    console.error('Failed to fetch deleted syllabuses:', error);
+  }
 
   return items.sort((a, b) => b.deletedAt - a.deletedAt);
 };
 
-// 从回收站永久删除（立即从存储中移除）
-export const permanentlyDeleteRecord = (type: RecycleBinItemType, id: string) => {
-  switch (type) {
-    case 'User': {
-      cascadePermanentlyDeleteUserInternal(id);
-      break;
+// 从回收站永久删除（调用 API 删除 R2 文件，然后清空本地存储）
+export const permanentlyDeleteRecord = async (type: RecycleBinItemType, id: string): Promise<void> => {
+  try {
+    // 先调用 API 删除 R2 文件（需要服务器端删除）
+    let apiType: 'resource' | 'channel' | 'user' | 'question' | 'exam-paper' | undefined;
+    
+    switch (type) {
+      case 'Resource':
+        apiType = 'resource';
+        break;
+      case 'Channel':
+        apiType = 'channel';
+        break;
+      case 'User':
+        apiType = 'user';
+        break;
+      case 'Question':
+        apiType = 'question';
+        break;
+      case 'ExamPaper':
+        apiType = 'exam-paper';
+        break;
     }
-    case 'Classroom': {
-      cascadePermanentlyDeleteClassroomInternal(id);
-      break;
+    
+    if (apiType) {
+      try {
+        await permanentlyDeleteWithR2Cleanup(apiType, id);
+      } catch (error) {
+        console.error(`Failed to permanently delete ${apiType} from API:`, error);
+        // 如果 API 调用失败，继续清理本地存储
+      }
     }
-    case 'Channel': {
-      cascadePermanentlyDeleteChannelInternal(id);
-      break;
+    
+    // 然后清理本地存储
+    switch (type) {
+      case 'User': {
+        cascadePermanentlyDeleteUserInternal(id);
+        break;
+      }
+      case 'Classroom': {
+        cascadePermanentlyDeleteClassroomInternal(id);
+        break;
+      }
+      case 'Channel': {
+        await cascadePermanentlyDeleteChannelInternal(id);
+        break;
+      }
+      case 'Resource': {
+        await cascadePermanentlyDeleteResourceInternal(id);
+        break;
+      }
+      case 'ExamPaper': {
+        cascadePermanentlyDeleteExamPaperInternal(id);
+        break;
+      }
+      case 'ExamSession': {
+        const sessions = getExamSessionsSync(undefined, true);
+        const filtered = sessions.filter(s => s.id !== id);
+        localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(filtered));
+        break;
+      }
+      case 'Question': {
+        const questions = getBankQuestionsSync(undefined, true);
+        const filtered = questions.filter(q => q.id !== id);
+        localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(filtered));
+        break;
+      }
+      case 'SyllabusCourse': {
+        cascadePermanentlyDeleteSyllabusCourseInternal(id);
+        break;
+      }
+      case 'SyllabusUnit': {
+        permanentlyDeleteSyllabusUnitByCompositeId(id);
+        break;
+      }
+      case 'SyllabusKnowledgePoint': {
+        permanentlyDeleteKnowledgePointByCompositeId(id);
+        break;
+      }
     }
-    case 'Resource': {
-      cascadePermanentlyDeleteResourceInternal(id);
-      break;
-    }
-    case 'ExamPaper': {
-      cascadePermanentlyDeleteExamPaperInternal(id);
-      break;
-    }
-    case 'ExamSession': {
-      const sessions = getExamSessions(undefined, true);
-      const filtered = sessions.filter(s => s.id !== id);
-      localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(filtered));
-      break;
-    }
-    case 'Question': {
-      const questions = getBankQuestions(undefined, true);
-      const filtered = questions.filter(q => q.id !== id);
-      localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(filtered));
-      break;
-    }
-    case 'SyllabusCourse': {
-      cascadePermanentlyDeleteSyllabusCourseInternal(id);
-      break;
-    }
-    case 'SyllabusUnit': {
-      permanentlyDeleteSyllabusUnitByCompositeId(id);
-      break;
-    }
-    case 'SyllabusKnowledgePoint': {
-      permanentlyDeleteKnowledgePointByCompositeId(id);
-      break;
-    }
+  } catch (error) {
+    console.error(`Error permanently deleting ${type} ${id}:`, error);
+    throw error;
   }
 };
 
@@ -2111,78 +3356,106 @@ export const getRecycleBinItemsForTeacher = async (teacherId: string): Promise<R
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
   const items: RecycleBinItem[] = [];
 
-  getClassrooms(teacherId, true)
-    .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
-    .forEach(c => items.push({
-      id: c.id,
-      type: 'Classroom',
-      name: c.name,
-      deletedAt: c.deletedAt!,
-      deletedBy: c.deletedBy,
-      daysRemaining: calcDaysRemaining(c.deletedAt!),
-    }));
+  // 从 API 获取最新的被软删除数据，而不是依赖本地缓存
+  try {
+    const classrooms = await getClassrooms(teacherId, true);
+    classrooms
+      .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
+      .forEach(c => items.push({
+        id: c.id,
+        type: 'Classroom',
+        name: c.name,
+        deletedAt: c.deletedAt!,
+        deletedBy: c.deletedBy,
+        daysRemaining: calcDaysRemaining(c.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted classrooms for teacher:', error);
+  }
 
-  getChannels(teacherId, true)
-    .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
-    .forEach(c => items.push({
-      id: c.id,
-      type: 'Channel',
-      name: c.name,
-      deletedAt: c.deletedAt!,
-      deletedBy: c.deletedBy,
-      daysRemaining: calcDaysRemaining(c.deletedAt!),
-    }));
+  try {
+    const channels = await getChannels(teacherId, true);
+    channels
+      .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
+      .forEach(c => items.push({
+        id: c.id,
+        type: 'Channel',
+        name: c.name,
+        deletedAt: c.deletedAt!,
+        deletedBy: c.deletedBy,
+        daysRemaining: calcDaysRemaining(c.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted channels for teacher:', error);
+  }
 
-  (await getResources(teacherId, true))
-    .filter(r => r.isDeleted && r.deletedAt && r.deletedAt > thirtyDaysAgo)
-    .forEach(r => items.push({
-      id: r.id,
-      type: 'Resource',
-      name: r.title,
-      deletedAt: r.deletedAt!,
-      deletedBy: r.deletedBy,
-      daysRemaining: calcDaysRemaining(r.deletedAt!),
-    }));
+  try {
+    const resources = await getResources(teacherId, true);
+    resources
+      .filter(r => r.isDeleted && r.deletedAt && r.deletedAt > thirtyDaysAgo)
+      .forEach(r => items.push({
+        id: r.id,
+        type: 'Resource',
+        name: r.title,
+        deletedAt: r.deletedAt!,
+        deletedBy: r.deletedBy,
+        daysRemaining: calcDaysRemaining(r.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted resources for teacher:', error);
+  }
 
-  getExamPapers(teacherId, true)
-    .filter(p => p.isDeleted && p.deletedAt && p.deletedAt > thirtyDaysAgo)
-    .forEach(p => items.push({
-      id: p.id,
-      type: 'ExamPaper',
-      name: p.title,
-      deletedAt: p.deletedAt!,
-      deletedBy: p.deletedBy,
-      deletedReason: (p as any).deletedReason,
-      daysRemaining: calcDaysRemaining(p.deletedAt!),
-    }));
+  try {
+    const examPapers = await getExamPapers(teacherId, true);
+    examPapers
+      .filter(p => p.isDeleted && p.deletedAt && p.deletedAt > thirtyDaysAgo)
+      .forEach(p => items.push({
+        id: p.id,
+        type: 'ExamPaper',
+        name: p.title,
+        deletedAt: p.deletedAt!,
+        deletedBy: p.deletedBy,
+        deletedReason: (p as any).deletedReason,
+        daysRemaining: calcDaysRemaining(p.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted exam papers for teacher:', error);
+  }
 
-  // 题库题目：按 teacherId 过滤（兼容旧数据）
-  getBankQuestions(teacherId, true)
-    .filter(q => q.isDeleted && q.deletedAt && q.deletedAt > thirtyDaysAgo)
-    .forEach(q => items.push({
-      id: q.id,
-      type: 'Question',
-      name: q.text?.slice(0, 50) || '题目',
-      deletedAt: q.deletedAt!,
-      deletedBy: q.deletedBy,
-      deletedReason: (q as any).deletedReason,
-      daysRemaining: calcDaysRemaining(q.deletedAt!),
-    }));
+  // 题库题目：按 teacherId 过滤
+  try {
+    const questions = await getBankQuestions(teacherId, true);
+    questions
+      .filter(q => q.isDeleted && q.deletedAt && q.deletedAt > thirtyDaysAgo)
+      .forEach(q => items.push({
+        id: q.id,
+        type: 'Question',
+        name: q.text?.slice(0, 50) || '题目',
+        deletedAt: q.deletedAt!,
+        deletedBy: q.deletedBy,
+        deletedReason: (q as any).deletedReason,
+        daysRemaining: calcDaysRemaining(q.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted questions for teacher:', error);
+  }
 
-  getSyllabusCourses(teacherId, true)
-    .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
-    .forEach(c => items.push({
-      id: c.id,
-      type: 'SyllabusCourse',
-      name: c.name,
-      deletedAt: c.deletedAt!,
-      deletedBy: c.deletedBy,
-      deletedReason: (c as any).deletedReason,
-      daysRemaining: calcDaysRemaining(c.deletedAt!),
-    }));
+  try {
+    const syllabuses = await getSyllabusCourses(teacherId, true);
+    syllabuses
+      .filter(c => c.isDeleted && c.deletedAt && c.deletedAt > thirtyDaysAgo)
+      .forEach(c => items.push({
+        id: c.id,
+        type: 'SyllabusCourse',
+        name: c.name,
+        deletedAt: c.deletedAt!,
+        deletedBy: c.deletedBy,
+        deletedReason: (c as any).deletedReason,
+        daysRemaining: calcDaysRemaining(c.deletedAt!),
+      }));
 
-  getSyllabusCourses(teacherId, true)
-    .forEach(course => {
+    // 单元和知识点
+    syllabuses.forEach(course => {
       course.units
         .filter(u => u.isDeleted && u.deletedAt && u.deletedAt > thirtyDaysAgo)
         .forEach(u => items.push({
@@ -2207,19 +3480,27 @@ export const getRecycleBinItemsForTeacher = async (teacherId: string): Promise<R
           }));
       });
     });
+  } catch (error) {
+    console.error('Failed to fetch deleted syllabuses for teacher:', error);
+  }
 
   // ExamSession：不严格属于教师，但如果是教师执行了“打回重做/级联删除”导致删除，则展示出来便于恢复
-  getExamSessions(undefined, true)
-    .filter(s => s.isDeleted && s.deletedAt && s.deletedAt > thirtyDaysAgo && s.deletedBy === teacherId)
-    .forEach(s => items.push({
-      id: s.id,
-      type: 'ExamSession',
-      name: `${s.studentName} - ${s.examTitle}`,
-      deletedAt: s.deletedAt!,
-      deletedBy: s.deletedBy,
-      deletedReason: s.deletedReason,
-      daysRemaining: calcDaysRemaining(s.deletedAt!),
-    }));
+  try {
+    const examSessions = await getExamSessions(undefined, true);
+    examSessions
+      .filter(s => s.isDeleted && s.deletedAt && s.deletedAt > thirtyDaysAgo && s.deletedBy === teacherId)
+      .forEach(s => items.push({
+        id: s.id,
+        type: 'ExamSession',
+        name: `${s.studentName} - ${s.examTitle}`,
+        deletedAt: s.deletedAt!,
+        deletedBy: s.deletedBy,
+        deletedReason: s.deletedReason,
+        daysRemaining: calcDaysRemaining(s.deletedAt!),
+      }));
+  } catch (error) {
+    console.error('Failed to fetch deleted exam sessions for teacher:', error);
+  }
 
   return items.sort((a, b) => b.deletedAt - a.deletedAt);
 };
@@ -2248,7 +3529,7 @@ export const checkUserReferences = async (userId: string): Promise<DeleteCheckRe
   const references: ReferenceInfo[] = [];
   
   // 检查频道
-  const channels = getChannels(userId, false);
+  const channels = getChannelsSync(userId, false);
   if (channels.length > 0) {
     references.push({
       type: 'Channel',
@@ -2268,7 +3549,7 @@ export const checkUserReferences = async (userId: string): Promise<DeleteCheckRe
   }
   
   // 检查班级
-  const classrooms = getClassrooms(userId, false);
+  const classrooms = getClassroomsSync(userId, false);
   if (classrooms.length > 0) {
     references.push({
       type: 'Classroom',
@@ -2278,7 +3559,7 @@ export const checkUserReferences = async (userId: string): Promise<DeleteCheckRe
   }
   
   // 检查题目
-  const questions = getBankQuestions(userId);
+  const questions = getBankQuestionsSync(userId);
   if (questions.length > 0) {
     references.push({
       type: 'Question',
@@ -2288,7 +3569,7 @@ export const checkUserReferences = async (userId: string): Promise<DeleteCheckRe
   }
   
   // 检查试卷
-  const examPapers = getExamPapers(userId, false);
+  const examPapers = getExamPapersSync(userId, false);
   if (examPapers.length > 0) {
     references.push({
       type: 'ExamPaper',
@@ -2317,7 +3598,7 @@ export const checkClassroomReferences = (classId: string): DeleteCheckResult => 
   const practiceData = localStorage.getItem(STORAGE_KEYS.STUDENT_DATA);
   if (practiceData) {
     const dataObj = JSON.parse(practiceData);
-    const classroom = getClassroomById(classId);
+    const classroom = getClassroomByIdSync(classId);
     if (classroom) {
       const studentIds = new Set(classroom.students.map(s => s.userId).filter(Boolean));
       const matchingData = Object.keys(dataObj).filter(key => {
@@ -2335,8 +3616,8 @@ export const checkClassroomReferences = (classId: string): DeleteCheckResult => 
   }
   
   // 检查作业提交
-  const submissions = getSubmissions();
-  const classroom = getClassroomById(classId);
+  const submissions = getSubmissionsSync();
+  const classroom = getClassroomByIdSync(classId);
   if (classroom) {
     const studentIds = new Set(classroom.students.map(s => s.userId).filter(Boolean));
     const classSubmissions = submissions.filter(s => studentIds.has(s.studentId));
@@ -2350,7 +3631,7 @@ export const checkClassroomReferences = (classId: string): DeleteCheckResult => 
   }
   
   // 检查考试会话
-  const sessions = getExamSessions(undefined, false);
+  const sessions = getExamSessionsSync(undefined, false);
   const classSessions = sessions.filter(s => {
     const studentIds = classroom?.students.map(st => st.userId).filter(Boolean);
     return studentIds?.includes(s.studentId);
@@ -2380,7 +3661,7 @@ export const checkQuestionReferences = (questionId: string): DeleteCheckResult =
   const references: ReferenceInfo[] = [];
   
   // 检查试卷引用
-  const examPapers = getExamPapers(undefined, false);
+  const examPapers = getExamPapersSync(undefined, false);
   const referencingExams = examPapers.filter(exam => 
     exam.sections.some(section => 
       section.items.some(item => item.questionId === questionId)
@@ -2426,7 +3707,7 @@ export const checkResourceReferences = (resourceId: string): DeleteCheckResult =
   }
   
   // 检查提交记录
-  const submissions = getSubmissions();
+  const submissions = getSubmissionsSync();
   const resourceSubmissions = submissions.filter(s => s.resourceId === resourceId);
   if (resourceSubmissions.length > 0) {
     references.push({
@@ -2481,7 +3762,7 @@ export const checkExamPaperReferences = (examId: string): DeleteCheckResult => {
   const references: ReferenceInfo[] = [];
   
   // 检查考试会话
-  const sessions = getExamSessions(undefined, false);
+  const sessions = getExamSessionsSync(undefined, false);
   const examSessions = sessions.filter(s => s.examPaperId === examId);
   
   if (examSessions.length > 0) {
@@ -2505,7 +3786,7 @@ export const checkExamPaperReferences = (examId: string): DeleteCheckResult => {
 };
 
 export const cascadeDeleteClassroom = async (classId: string, operatorId?: string) => {
-  const classroom = getClassroomById(classId);
+  const classroom = getClassroomByIdSync(classId);
   if (!classroom) return;
   
   const studentIds = classroom.students.map(s => s.userId).filter((id): id is string => !!id);
@@ -2516,14 +3797,14 @@ export const cascadeDeleteClassroom = async (classId: string, operatorId?: strin
   const studentIdSet = new Set(studentIds);
 
   // 只删除分配给该班级的试卷产生的考试会话
-  const examPapers = getExamPapers(undefined, false);
+  const examPapers = getExamPapersSync(undefined, false);
   const classExamIds = new Set(
     examPapers
       .filter(p => p.assignedClassIds?.includes(classId))
       .map(p => p.id)
   );
   
-  const sessions = getExamSessions(undefined, false);
+  const sessions = getExamSessionsSync(undefined, false);
   sessions.forEach(session => {
     if (studentIdSet.has(session.studentId) && classExamIds.has(session.examPaperId)) {
       deleteExamSession(session.id, operatorId, '级联删除');
@@ -2539,7 +3820,7 @@ export const cascadeDeleteClassroom = async (classId: string, operatorId?: strin
   );
 
   // 删除作业提交（只删除该班级学生在该班级资源上的提交）
-  const submissions = getSubmissions(true);
+  const submissions = getSubmissionsSync(true);
   submissions.forEach(sub => {
     if (studentIdSet.has(sub.studentId) && classResourceIds.has(sub.resourceId)) {
       if (!sub.isDeleted) {
@@ -2603,7 +3884,7 @@ export const cascadeDeleteChannel = async (channelId: string, operatorId?: strin
 
 export const cascadeDeleteExamPaper = (examId: string, operatorId?: string) => {
   // 删除所有考试会话
-  const sessions = getExamSessions(undefined, false);
+  const sessions = getExamSessionsSync(undefined, false);
   const examSessions = sessions.filter(s => s.examPaperId === examId);
   
   examSessions.forEach(s => deleteExamSession(s.id, operatorId, '级联删除'));
@@ -2619,7 +3900,7 @@ export const cascadeDeleteUser = (userId: string, operatorId?: string) => {
   // 学生：删除其学习与提交数据
   if (user?.role === 'student') {
     // 考试会话
-    const sessions = getExamSessions(undefined, false);
+    const sessions = getExamSessionsSync(undefined, false);
     sessions.forEach(s => {
       if (s.studentId === userId) deleteExamSession(s.id, operatorId, '级联删除用户(学生)');
     });
@@ -2637,25 +3918,25 @@ export const cascadeDeleteUser = (userId: string, operatorId?: string) => {
 
   // 教师/管理员：删除其名下内容
   // 频道（会级联删除频道下资源及其学生数据）
-  const channels = getChannels(userId, false);
+  const channels = getChannelsSync(userId, false);
   channels.forEach(c => cascadeDeleteChannel(c.id, operatorId));
 
   // 班级（会级联删除学生数据）
-  const classrooms = getClassrooms(userId, false);
+  const classrooms = getClassroomsSync(userId, false);
   classrooms.forEach(c => cascadeDeleteClassroom(c.id, operatorId));
 
   // 试卷（建议级联删除考试会话，避免孤儿 ExamSession）
-  const examPapers = getExamPapers(userId, false);
+  const examPapers = getExamPapersSync(userId, false);
   examPapers.forEach(e => cascadeDeleteExamPaper(e.id, operatorId));
 
   // 题库中心题目：按 teacherId 软删除（包含不在课程知识点中的题目）
-  const questions = getBankQuestions(undefined, true);
+  const questions = getBankQuestionsSync(undefined, true);
   questions
     .filter(q => q.teacherId === userId && !q.isDeleted)
     .forEach(q => deleteBankQuestion(q.id, operatorId, '级联删除用户(教师)'));
 
   // 课程：级联删除课程 + 关联题库题目
-  const courses = getSyllabusCourses(undefined, true)
+  const courses = getSyllabusCoursesSync(undefined, true)
     .filter(c => c.userId === userId && !c.isDeleted);
   courses.forEach(c => cascadeDeleteSyllabusCourse(c.id, operatorId));
 
@@ -2694,3 +3975,16 @@ export const saveUserApiKeys = (userId: string, keys: {
     localStorage.setItem(`${userId}_azure_speech_region`, keys.azureRegion);
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+

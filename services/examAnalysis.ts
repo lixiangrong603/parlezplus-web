@@ -73,7 +73,7 @@ export async function calculateExamAnalysis(params: {
   const { exam, user, allQuestions } = params;
   
   // Load syllabus courses
-  const allCourses = getSyllabusCourses(user.id);
+  const allCourses = await getSyllabusCourses(user.id);
   
   // Load all resources
   const allResources = await getResources(user.id);

@@ -90,7 +90,7 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
   const handlePermanentDelete = async (item: RecycleBinItem) => {
     const ok = await modal.confirm({
       title: '永久删除',
-      message: `确定要永久删除该${typeLabel(item.type)}吗？\n\n「${item.name}」\n\n此操作不可撤销。`,
+      message: `确定要永久删除该${typeLabel(item.type)}吗？\n\n「${item.name}」\n\n此操作不可撤销。将删除数据库记录和相关的媒体文件。`,
       type: 'danger',
       confirmText: '永久删除',
       cancelText: '取消'
@@ -99,7 +99,7 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
 
     setDeletingId(item.id);
     try {
-      permanentlyDeleteRecord(item.type, item.id);
+      await permanentlyDeleteRecord(item.type, item.id);
       await load();
     } finally {
       setDeletingId(null);
@@ -144,14 +144,20 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
     if (selectedItems.length === 0) return;
     const ok = await modal.confirm({
       title: '批量永久删除',
-      message: `确定要永久删除选中的 ${selectedItems.length} 项吗？\n\n此操作不可撤销。`,
+      message: `确定要永久删除选中的 ${selectedItems.length} 项吗？\n\n此操作不可撤销。将删除数据库记录和相关的媒体文件。`,
       type: 'danger',
       confirmText: '永久删除',
       cancelText: '取消'
     });
     if (!ok) return;
 
-    selectedItems.forEach(it => permanentlyDeleteRecord(it.type, it.id));
+    for (const it of selectedItems) {
+      try {
+        await permanentlyDeleteRecord(it.type, it.id);
+      } catch (error) {
+        console.error(`Failed to delete ${it.type} ${it.id}:`, error);
+      }
+    }
     setSelectedKeys(new Set());
     await load();
   };

@@ -155,17 +155,21 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   // Determine initial phase based on content availability
   useEffect(() => {
     if (!currentUserId) return;
-    // 1. Check Submission Status First
-    const allSubs = getSubmissions();
-    const existingSub = allSubs.find(s => s.resourceId === initialResource.id && s.studentId === currentUserId);
-    setSubmission(existingSub);
+    
+    // 1. Check Submission Status First (async)
+    const checkSubmission = async () => {
+      const allSubs = await getSubmissions();
+      const existingSub = allSubs.find(s => s.resourceId === initialResource.id && s.studentId === currentUserId);
+      setSubmission(existingSub);
+    };
+    checkSubmission();
 
+    // 2. Initial State Logic
     const hasQuiz = initialResource.questions && initialResource.questions.length > 0;
     
     // Will check for cloze availability after loading transcript if needed, but initial check:
     const hasCloze = initialResource.transcript.some(seg => seg.words.some(w => w.isCloze));
 
-    // 2. Initial State Logic
     if (hasQuiz) {
         setPracticePhase('quiz');
     } else if (hasCloze) {
@@ -192,44 +196,54 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     }
 
     // 3. Load Persisted Progress (if not fully graded, load partial work)
-    const savedData = getStudentProgress(currentUserId, initialResource.id);
-    if (savedData) {
-        // Load single segment recordings
-        if (savedData.segmentRecordings) {
-            const loadedRecordings: Record<string, { blob: Blob, url: string }> = {};
-            for (const [segId, base64] of Object.entries(savedData.segmentRecordings)) {
-                const blob = dataURLtoBlob(base64);
-                loadedRecordings[segId] = { blob, url: URL.createObjectURL(blob) };
-            }
-            setSegmentRecordings(prev => ({ ...prev, ...loadedRecordings }));
-        }
-        // Load full recording
-        if (savedData.fullRecording) {
-            const blob = dataURLtoBlob(savedData.fullRecording);
-            setUserAudioBlob(blob);
-            setUserAudioUrl(URL.createObjectURL(blob));
-            // Estimate duration
-            setUserAudioDuration(blob.size / 32000); 
-            setRecorderState(RecorderState.REVIEWING_AUDIO);
-            setHasPerformedFullRecording(true); // A saved full recording means this step is done
-        }
-        
-        // Load Quiz Data
-        if (savedData.quizAnswers) {
-            setSavedQuizData({
-                answers: savedData.quizAnswers,
-                score: savedData.quizScore
-            });
-        }
+    const loadProgress = async () => {
+      const savedData = await getStudentProgress(currentUserId, initialResource.id);
+      if (savedData) {
+          // Load single segment recordings
+          if (savedData.segmentRecordings) {
+              const loadedRecordings: Record<string, { blob: Blob, url: string }> = {};
+              for (const [segId, value] of Object.entries(savedData.segmentRecordings)) {
+                  if (typeof value === 'string' && value.startsWith('data:')) {
+                      const blob = dataURLtoBlob(value);
+                      loadedRecordings[segId] = { blob, url: URL.createObjectURL(blob) };
+                  } else if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/api/'))) {
+                      // R2 CDN URL - use directly
+                      loadedRecordings[segId] = { blob: new Blob(), url: value };
+                  }
+              }
+              setSegmentRecordings(prev => ({ ...prev, ...loadedRecordings }));
+          }
+          // Load full recording
+          if (savedData.fullRecording) {
+              const isDataUrl = savedData.fullRecording.startsWith('data:');
+              const blob = isDataUrl ? dataURLtoBlob(savedData.fullRecording) : new Blob();
+              const url = isDataUrl ? URL.createObjectURL(blob) : savedData.fullRecording;
+              setUserAudioBlob(blob);
+              setUserAudioUrl(url);
+              // Estimate duration
+              setUserAudioDuration(blob.size / 32000); 
+              setRecorderState(RecorderState.REVIEWING_AUDIO);
+              setHasPerformedFullRecording(true); // A saved full recording means this step is done
+          }
+          
+          // Load Quiz Data
+          if (savedData.quizAnswers) {
+              setSavedQuizData({
+                  answers: savedData.quizAnswers,
+                  score: savedData.quizScore
+              });
+          }
 
-        // Load Cloze Data
-        if (savedData.clozeAnswers) {
-            setSavedClozeData({
-                answers: savedData.clozeAnswers,
-                score: savedData.clozeScore
-            });
-        }
-    }
+          // Load Cloze Data
+          if (savedData.clozeAnswers) {
+              setSavedClozeData({
+                  answers: savedData.clozeAnswers,
+                  score: savedData.clozeScore
+              });
+          }
+      }
+    };
+    loadProgress();
   }, [initialResource, currentUserId]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -337,10 +351,10 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   const canSubmit = isQuizCompleted && isSingleCompleted && isFullCompleted;
   const isReadOnly = !!submission;
 
-  const handleSubmitAssignment = () => {
+  const handleSubmitAssignment = async () => {
       if (!canSubmit) return;
 
-      const progress = getStudentProgress(currentUserId, resource.id);
+      const progress = await getStudentProgress(currentUserId, resource.id);
       const fullRecordingDataUrl = progress?.fullRecording;
       
       if (!fullRecordingDataUrl) return;
@@ -531,8 +545,8 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
           const currentSeg = resource.transcript.find(s => videoRef.current!.currentTime >= s.startTime && videoRef.current!.currentTime <= s.endTime);
           if (currentSeg) setLockedSegmentId(currentSeg.id);
         }
-        videoRef.current.play();
-        bgmRef.current?.play(); 
+        videoRef.current.play().catch(e => console.warn('Play interrupted', e));
+        bgmRef.current?.play().catch(e => console.warn('BGM play interrupted', e)); 
         if (isPreviewingMovie && userAudioRef.current) {
             const vTime = videoRef.current.currentTime;
             if (vTime >= recordingStartTime) {
@@ -911,8 +925,8 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
         if (videoRef.current) { 
           videoRef.current.currentTime = time; 
           if (bgmRef.current) bgmRef.current.currentTime = time; 
-          videoRef.current.play(); 
-          bgmRef.current?.play(); 
+          videoRef.current.play().catch(e => console.warn('Play interrupted', e)); 
+          bgmRef.current?.play().catch(e => console.warn('BGM play interrupted', e)); 
           setIsPlaying(true); 
         }
     }
@@ -927,11 +941,11 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     if (playMode === 'full') {
       if (videoRef.current) {
         videoRef.current.currentTime = 0;
-        videoRef.current.play();
+        videoRef.current.play().catch(e => console.warn('Play loop interrupted', e));
       }
       if (bgmRef.current) {
         bgmRef.current.currentTime = 0;
-        bgmRef.current.play();
+        bgmRef.current.play().catch(e => console.warn('BGM loop interrupted', e));
       }
     } else {
       setIsPlaying(false);

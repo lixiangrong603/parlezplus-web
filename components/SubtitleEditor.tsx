@@ -349,7 +349,7 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden transition-colors duration-300">
-      <header className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-6 flex items-center justify-between shrink-0">
+      <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="p-2 rounded-full transition hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600">
             <ChevronLeft size={20} />
@@ -397,7 +397,7 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
       
       {activeTab === 'subtitle' ? (
         <div className="flex-1 flex overflow-hidden bg-slate-50 dark:bg-slate-950">
-            <div className="w-1/3 border-r dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col p-6 space-y-6 shrink-0">
+            <div className="w-1/3 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col p-6 space-y-6 shrink-0">
             
             <div className="aspect-video bg-black rounded-2xl shadow-lg flex items-center justify-center relative overflow-hidden shrink-0 group">
                 {resource.videoUrl ? (
@@ -415,7 +415,7 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                                         <div className="absolute w-[65%] h-[65%] rounded-full overflow-hidden border-4 border-[#18181b] z-10 bg-slate-800 shadow-md">
                                             <img src={resource.coverImage || getFallbackCover(resource.id)} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.classList.add('bg-slate-700'); }} />
                                         </div>
-                                        <div className="absolute w-3.5 h-3.5 bg-slate-200 rounded-full z-20 shadow-inner border border-slate-400">
+                                        <div className="absolute w-3.5 h-3.5 bg-slate-200 rounded-full z-20 shadow-inner border border-slate-300 dark:border-slate-500">
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-black/50 rounded-full"></div>
                                         </div>
                                     </div>
@@ -456,7 +456,7 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                 <h4 className="text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-4 shrink-0">时间轴对齐</h4>
                 <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
                     {segments.map((seg, i) => (
-                    <div key={seg.id} onClick={() => { setActiveSegId(seg.id); playSegment(seg.startTime); }} className={`p-3 rounded-xl border transition-all cursor-pointer ${activeSegId === seg.id ? 'bg-indigo-600 border-indigo-400' : 'bg-slate-800 dark:bg-slate-900 border-slate-700 dark:border-slate-800 hover:border-slate-600'}`}>
+                    <div key={seg.id} onClick={() => { setActiveSegId(seg.id); playSegment(seg.startTime); }} className={`p-3 rounded-xl border transition-all cursor-pointer ${activeSegId === seg.id ? 'bg-indigo-600 border-indigo-400' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">第 {i+1} 句</span>
                             <span className="text-[10px] font-mono text-indigo-300">{seg.startTime}s - {seg.endTime}s</span>
