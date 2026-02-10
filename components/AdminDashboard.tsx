@@ -84,7 +84,7 @@ export const AdminDashboard: React.FC = () => {
     if (!ok) return;
 
     try {
-      await apiClient.post(`/api/users/${id}/change-password`, { newPassword: '123456' });
+      await apiClient.post(`/api/users/${id}/change-password`, { newPassword: '123456', needsPasswordChange: true });
       await modal.alert({ message: '密码已重置为 123456' });
     } catch (e: any) {
       await modal.alert({ message: e?.message || '重置密码失败' });

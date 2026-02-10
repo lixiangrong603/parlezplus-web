@@ -33,20 +33,33 @@ jobs:
       - name: Build
         run: npm run build
 
-      # 使用 wrangler 部署（会读取 wrangler.toml 中的 D1 绑定配置）
-      - name: Deploy to Cloudflare Pages with D1 binding
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=parlezplus --commit-dirty=true
+      # 使用 wrangler 部署（Cloudflare 偶发 internal error 时自动重试，并输出 debug 日志）
+      - name: Deploy to Cloudflare Pages (retry)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_LOG: debug
+        run: |
+          set -euo pipefail
+          for i in 1 2 3; do
+            echo "Deploy attempt $i/3"
+            npx --yes wrangler@4.63.0 pages deploy dist --project-name=parlezplus --commit-dirty=true && break
+            if [ "$i" -lt 3 ]; then
+              echo "Deploy failed; retrying in 20s..."
+              sleep 20
+            else
+              echo "Deploy failed after 3 attempts"
+              exit 1
+            fi
+          done
 
       # 首次部署或 schema 变更时运行数据库迁移
       - name: Run D1 migrations (if schema changed)
         if: github.ref == 'refs/heads/main'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 execute parlezplus_db --remote --file=database/schema.sql
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_LOG: debug
+        run: |
+          npx --yes wrangler@4.63.0 d1 execute parlezplus_db --remote --file=database/schema.sql
         continue-on-error: true # schema 已存在时不会失败
