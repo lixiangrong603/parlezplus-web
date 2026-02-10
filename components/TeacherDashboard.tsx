@@ -481,7 +481,7 @@ const ClassDetailView = ({
     return () => window.removeEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
   }, [classId, teacherId]);
 
-  const handleAddStudent = () => {
+  const handleAddStudent = async () => {
     if (!newStudentData.name.trim() || !newStudentData.username.trim()) return;
     
     const existingUsers = getUsers();
@@ -519,17 +519,145 @@ const ClassDetailView = ({
           type: "info"
         });
     } else {
-        const studentUserId = `u-${Date.now()}`;
-        const newUser: UserType = { id: studentUserId, username: newStudentData.username.trim().toLowerCase(), password: '123456', name: newStudentData.name.trim(), role: 'student', isBlocked: false, classId: classId, needsPasswordChange: true };
-        saveUser(newUser);
-        const newStudent: Student = { id: `s-${Date.now()}`, userId: studentUserId, name: newStudentData.name.trim(), overallProgress: 0 };
-        const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
-        saveClassroom(updatedClass);
+        const username = newStudentData.username.trim().toLowerCase();
+        const name = newStudentData.name.trim();
+
+        try {
+          const created = await apiClient.post<{ id: string; username: string; role: string; name: string }>(
+            '/api/users',
+            {
+              username,
+              password: '123456',
+              role: 'student',
+              name,
+              classId,
+              needsPasswordChange: true,
+            }
+          );
+
+          const newUser: UserType = {
+            id: created.id,
+            username: created.username,
+            password: '123456',
+            name: created.name,
+            role: 'student',
+            isBlocked: false,
+            classId: classId,
+            needsPasswordChange: true,
+          };
+          saveUser(newUser);
+
+          const newStudent: Student = { id: `s-${Date.now()}`, userId: created.id, name, overallProgress: 0 };
+          const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
+          saveClassroom(updatedClass);
+        } catch (e: any) {
+          setConfirmConfig({
+            isOpen: true,
+            title: '创建失败',
+            message: e?.message || '创建学生账号失败',
+            onConfirm: () => {},
+            type: 'danger'
+          });
+          return;
+        }
     }
     
     loadData();
     setNewStudentData({ name: '', username: '' });
     setShowAddStudent(false);
+  };
+
+  const handleBatchImportStudents = async (list: { name: string; username: string }[]) => {
+    const existingUsers = getUsers();
+    let addedCount = 0;
+    let createdCount = 0;
+    let skipCount = 0;
+    const resultsErrors: string[] = [];
+
+    if (!classroom) return;
+
+    const newStudents: Student[] = [...classroom.students];
+
+    for (const item of list) {
+      const username = item.username.trim().toLowerCase();
+      const name = item.name.trim();
+      if (!username || !name) continue;
+
+      // 检查是否已经在当前班级
+      if (newStudents.some(s => s.userId && getUserById(s.userId)?.username === username)) {
+        skipCount++;
+        continue;
+      }
+
+      const existingUser = existingUsers.find(u => u.username === username);
+      if (existingUser) {
+        // 账号存在，关联班级（本地）
+        existingUser.classId = classId;
+        saveUser(existingUser);
+        newStudents.push({
+          id: `s-${Date.now()}-${username}`,
+          userId: existingUser.id,
+          name: existingUser.name,
+          avatar: existingUser.avatar,
+          overallProgress: 0
+        });
+        addedCount++;
+        continue;
+      }
+
+      // 账号不存在，新建（写入后端，确保可登录）
+      try {
+        const created = await apiClient.post<{ id: string; username: string; role: string; name: string }>(
+          '/api/users',
+          {
+            username,
+            password: '123456',
+            role: 'student',
+            name,
+            classId,
+            needsPasswordChange: true,
+          }
+        );
+
+        const newUser: UserType = {
+          id: created.id,
+          username: created.username,
+          password: '123456',
+          name: created.name,
+          role: 'student',
+          isBlocked: false,
+          classId: classId,
+          needsPasswordChange: true,
+        };
+        saveUser(newUser);
+        newStudents.push({
+          id: `s-${Date.now()}-${username}`,
+          userId: created.id,
+          name: newUser.name,
+          overallProgress: 0
+        });
+        createdCount++;
+      } catch (e: any) {
+        resultsErrors.push(`@${username}: ${e?.message || '创建失败'}`);
+        skipCount++;
+      }
+    }
+
+    const updatedClass = { ...classroom, students: newStudents, studentCount: newStudents.length };
+    saveClassroom(updatedClass);
+    await loadData();
+
+    const errorText = resultsErrors.length > 0
+      ? `\n\n失败明细：\n${resultsErrors.slice(0, 10).join('\n')}${resultsErrors.length > 10 ? '\n...更多略' : ''}`
+      : '';
+    setConfirmConfig({
+      isOpen: true,
+      title: '导入完成',
+      message: `导入操作已结束。\n新增关联: ${addedCount} 人\n新开账号: ${createdCount} 人\n跳过/失败: ${skipCount} 人${errorText}`,
+      onConfirm: () => {},
+      type: 'info'
+    });
+    setShowBatchImport(false);
   };
 
   const handleResetPassword = (studentId: string) => {
@@ -904,69 +1032,7 @@ const ClassDetailView = ({
       {showBatchImport && (
           <BatchImportModal 
             onClose={() => setShowBatchImport(false)}
-            onImport={(list) => {
-                const existingUsers = getUsers();
-                let addedCount = 0;
-                let createdCount = 0;
-                let skipCount = 0;
-
-                const newStudents: Student[] = [...classroom.students];
-
-                list.forEach(item => {
-                    const username = item.username.trim().toLowerCase();
-                    const name = item.name.trim();
-                    if (!username || !name) return;
-
-                    // 检查是否已经在当前班级
-                    if (newStudents.some(s => s.userId && getUserById(s.userId)?.username === username)) {
-                        skipCount++;
-                        return;
-                    }
-
-                    const existingUser = existingUsers.find(u => u.username === username);
-                    if (existingUser) {
-                        // 账号存在，关联班级
-                        existingUser.classId = classId;
-                        saveUser(existingUser);
-                        newStudents.push({
-                            id: `s-${Date.now()}-${username}`,
-                            userId: existingUser.id,
-                            name: existingUser.name,
-                            avatar: existingUser.avatar,
-                            overallProgress: 0
-                        });
-                        addedCount++;
-                    } else {
-                        // 账号不存在，新建
-                        const studentUserId = `u-${Date.now()}-${username}`;
-                        const newUser: UserType = { 
-                            id: studentUserId, username, password: '123456', 
-                            name, role: 'student', isBlocked: false, classId: classId,
-                            needsPasswordChange: true
-                        };
-                        saveUser(newUser);
-                        newStudents.push({
-                            id: `s-${Date.now()}-${username}`,
-                            userId: studentUserId,
-                            name: newUser.name,
-                            overallProgress: 0
-                        });
-                        createdCount++;
-                    }
-                });
-
-                const updatedClass = { ...classroom, students: newStudents, studentCount: newStudents.length };
-                saveClassroom(updatedClass);
-                loadData();
-                setConfirmConfig({
-                  isOpen: true,
-                  title: "导入完成",
-                  message: `导入操作已结束。\n新增关联: ${addedCount} 人\n新开账号: ${createdCount} 人\n跳过(已在班级): ${skipCount} 人`,
-                  onConfirm: () => {},
-                  type: "info"
-                });
-                setShowBatchImport(false);
-            }}
+            onImport={handleBatchImportStudents}
           />
       )}
 
@@ -1039,7 +1105,7 @@ const ClassDetailView = ({
   );
 };
 
-const BatchImportModal = ({ onClose, onImport }: { onClose: () => void, onImport: (list: {name: string, username: string}[]) => void }) => {
+const BatchImportModal = ({ onClose, onImport }: { onClose: () => void, onImport: (list: {name: string, username: string}[]) => void | Promise<void> }) => {
     const [input, setInput] = useState('');
     
     const handleProcess = () => {
@@ -1055,7 +1121,7 @@ const BatchImportModal = ({ onClose, onImport }: { onClose: () => void, onImport
         if (list.length === 0) {
             return; // 这里应该用自定义弹窗通知，但最小化更新只处理 confirm
         }
-        onImport(list);
+        void onImport(list);
     };
 
     return (

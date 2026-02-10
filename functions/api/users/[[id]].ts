@@ -1,7 +1,7 @@
 // 用户管理 API (注册、密码修改)
 
 import type { Env, User } from '../../../types/worker';
-import { getUserFromRequest, jsonResponse, errorResponse, hashPassword, verifyPassword, generateJWT } from '../../utils';
+import { getUserFromRequest, jsonResponse, errorResponse, hashPassword, verifyPassword } from '../../utils';
 
 // ============================================
 // GET /api/users - 获取用户列表 (管理员查看全部，教师查看自己班级的学生)
@@ -58,8 +58,15 @@ export async function onRequestPost(context: any): Promise<Response> {
   const { request, env } = context as { request: Request; env: Env };
   
   try {
+    const url = new URL(request.url);
+
+    // /api/users/:id/change-password
+    if (/^\/api\/users\/[^/]+\/change-password\/?$/.test(url.pathname)) {
+      return onRequestPost_changePassword(context);
+    }
+
     const user = await getUserFromRequest(request, env);
-    
+
     // 只有管理员和教师可以创建用户
     if (!user || (user.role !== 'admin' && user.role !== 'teacher')) {
       return errorResponse('无权限', 403);
@@ -67,15 +74,20 @@ export async function onRequestPost(context: any): Promise<Response> {
     
     const body = await request.json() as {
       username: string;
-      password: string;
+      password: unknown;
       role: 'student' | 'teacher' | 'admin';
       name: string;
       classId?: string;
+      needsPasswordChange?: boolean;
     };
     
     // 验证必填字段
-    if (!body.username || !body.password || !body.role || !body.name) {
+    if (!body.username || body.password === undefined || body.password === null || !body.role || !body.name) {
       return errorResponse('缺少必填字段', 400);
+    }
+
+    if (typeof body.password !== 'string') {
+      return errorResponse('password 必须是字符串', 400);
     }
     
     // 教师只能创建学生账户
@@ -98,6 +110,7 @@ export async function onRequestPost(context: any): Promise<Response> {
     
     // 哈希密码
     const passwordHash = await hashPassword(body.password);
+    const needsPasswordChange = body.needsPasswordChange ?? true;
     
     // 插入用户
     await env.DB
@@ -112,7 +125,7 @@ export async function onRequestPost(context: any): Promise<Response> {
         body.role,
         body.name,
         body.classId || null,
-        0, // needs_password_change
+        needsPasswordChange ? 1 : 0,
         Date.now()
       )
       .run();
@@ -254,11 +267,14 @@ export async function onRequestPost_changePassword(context: any): Promise<Respon
     
     // 哈希新密码
     const newPasswordHash = await hashPassword(body.newPassword);
+
+    // 管理员重置他人密码：强制目标用户下次登录改密
+    const forceTargetChange = user.role === 'admin' && user.id !== targetUserId;
     
     // 更新密码，并清除需要修改密码标志
     await env.DB
-      .prepare('UPDATE users SET password_hash = ?, needs_password_change = 0 WHERE id = ?')
-      .bind(newPasswordHash, targetUserId)
+      .prepare('UPDATE users SET password_hash = ?, needs_password_change = ? WHERE id = ?')
+      .bind(newPasswordHash, forceTargetChange ? 1 : 0, targetUserId)
       .run();
     
     return jsonResponse({ success: true, message: '密码已修改' });

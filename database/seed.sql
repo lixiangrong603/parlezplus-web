@@ -12,7 +12,7 @@ INSERT OR IGNORE INTO users (
 ) VALUES (
     'admin-001',
     'admin',
-    '$sha256$ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f',
+    '$sha256$d3fc50c8f714cebd16d6c827826df01205bf519529f9d34775293cf9b70a420e',
     'admin',
     '系统管理员',
     (strftime('%s', 'now') * 1000)
@@ -29,7 +29,7 @@ INSERT OR IGNORE INTO users (
 ) VALUES (
     'teacher-001',
     'teacher',
-    '$sha256$ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f',
+    '$sha256$d3fc50c8f714cebd16d6c827826df01205bf519529f9d34775293cf9b70a420e',
     'teacher',
     '测试教师',
     (strftime('%s', 'now') * 1000)
@@ -46,7 +46,7 @@ INSERT OR IGNORE INTO users (
 ) VALUES (
     'student-001',
     'student',
-    '$sha256$ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f',
+    '$sha256$d3fc50c8f714cebd16d6c827826df01205bf519529f9d34775293cf9b70a420e',
     'student',
     '测试学生',
     (strftime('%s', 'now') * 1000)

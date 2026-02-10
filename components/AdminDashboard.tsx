@@ -2,13 +2,14 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Users, UserPlus, Trash2, ShieldAlert, ShieldCheck, 
-  Search, Filter, LogOut, Plus, X, Check, MoreVertical, Sun, Moon, AlertTriangle, FileText
+  Search, Filter, LogOut, Plus, X, Check, MoreVertical, Sun, Moon, AlertTriangle, FileText, KeyRound
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { 
   getUsers, saveUser, toggleBlockUser, 
   checkUserReferences, cascadeDeleteUser, ReferenceInfo 
 } from '../utils/storage';
+import { apiClient } from '../services/api/client';
 import { ThemeContext } from '../App';
 import { useModal } from '../contexts/ModalContext';
 import OperationLogViewer from './OperationLogViewer';
@@ -34,20 +35,60 @@ export const AdminDashboard: React.FC = () => {
     setUsers(getUsers());
   }, []);
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newUser.username || !newUser.name) return;
-    const user: User = {
-      id: `u-${Date.now()}`,
-      username: newUser.username.toLowerCase(),
-      name: newUser.name,
-      role: newUser.role,
-      isBlocked: false,
-      needsPasswordChange: true
-    };
-    saveUser(user);
-    setUsers(getUsers());
-    setShowAddModal(false);
-    setNewUser({ username: '', name: '', role: 'teacher' });
+
+    const username = newUser.username.trim().toLowerCase();
+    const name = newUser.name.trim();
+
+    try {
+      const created = await apiClient.post<{ id: string; username: string; role: string; name: string }>(
+        '/api/users',
+        {
+          username,
+          password: '123456',
+          role: newUser.role,
+          name,
+          needsPasswordChange: true,
+        }
+      );
+
+      // 兼容现有 UI：仍然写入本地缓存，以便列表立即可见
+      const user: User = {
+        id: created.id,
+        username: created.username,
+        name: created.name,
+        role: created.role as UserRole,
+        isBlocked: false,
+        needsPasswordChange: true
+      };
+      saveUser(user);
+      setUsers(getUsers());
+      setShowAddModal(false);
+      setNewUser({ username: '', name: '', role: 'teacher' });
+    } catch (e: any) {
+      await modal.alert({ message: e?.message || '创建用户失败' });
+    }
+  };
+
+  const handleResetPassword = async (id: string) => {
+    const userToReset = users.find(u => u.id === id);
+    if (!userToReset) return;
+
+    const ok = await modal.confirm({
+      title: '重置密码',
+      message: `确定要将用户“${userToReset.name} (@${userToReset.username})”的密码重置为默认值 (123456) 吗？\n\n重置后该用户下次登录将被要求修改密码。`,
+      type: 'danger',
+      confirmText: '重置'
+    });
+    if (!ok) return;
+
+    try {
+      await apiClient.post(`/api/users/${id}/change-password`, { newPassword: '123456' });
+      await modal.alert({ message: '密码已重置为 123456' });
+    } catch (e: any) {
+      await modal.alert({ message: e?.message || '重置密码失败' });
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -60,7 +101,7 @@ export const AdminDashboard: React.FC = () => {
     if (!userToDelete) return;
     
     // 检查引用
-    const checkResult = checkUserReferences(id);
+    const checkResult = await checkUserReferences(id);
     
     if (checkResult.hasReferences) {
       // 显示引用信息对话框
@@ -227,6 +268,13 @@ export const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="px-8 py-5 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        <button 
+                          onClick={() => handleResetPassword(u.id)}
+                          className="p-2 text-slate-300 dark:text-slate-600 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-all"
+                          title="重置密码为 123456"
+                        >
+                          <KeyRound size={18} />
+                        </button>
                         <button 
                           onClick={() => handleToggleBlock(u.id)}
                           className={`p-2 rounded-xl transition-all ${u.isBlocked ? 'text-emerald-500 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20' : 'text-orange-400 dark:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20'}`}
