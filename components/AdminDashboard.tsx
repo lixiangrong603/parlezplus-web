@@ -149,7 +149,7 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="h-screen w-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans overflow-hidden transition-colors duration-300">
-      <header className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-8 flex items-center justify-between shadow-sm shrink-0 transition-colors">
+      <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between shadow-sm shrink-0 transition-colors">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-black text-indigo-900 dark:text-indigo-400 tracking-tight">ParlezPlus</h1>
           <span className="bg-indigo-900 dark:bg-indigo-950 text-white dark:text-indigo-300 px-3 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border dark:border-indigo-900">Admin</span>
@@ -205,7 +205,7 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
-            <div className="p-6 border-b dark:border-slate-800 flex items-center gap-4 bg-slate-50/50 dark:bg-slate-950/50">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4 bg-slate-50/50 dark:bg-slate-950/50">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600" size={18} />
                 <input 

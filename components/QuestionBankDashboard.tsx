@@ -184,8 +184,8 @@ const QuestionBankDashboard: React.FC = () => {
     <div className="flex h-full w-full bg-white dark:bg-slate-900 transition-colors duration-300">
             {courseDeleteConfirmState && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800">
-                        <div className="p-6 border-b dark:border-slate-800">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+                        <div className="p-6 border-b border-slate-200 dark:border-slate-800">
                             <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">删除课程</h3>
                             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                                 课程「{courseDeleteConfirmState.courseName}」关联了题库题目（通过知识点）。
@@ -221,7 +221,7 @@ const QuestionBankDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3 justify-end">
+                        <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex gap-3 justify-end">
                             <button
                                 onClick={() => setCourseDeleteConfirmState(null)}
                                 className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition"
@@ -251,7 +251,7 @@ const QuestionBankDashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white dark:bg-slate-800 border-b dark:border-slate-700 px-8 flex items-center justify-between shrink-0">
+                <header className="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-8 flex items-center justify-between shrink-0">
           <h2 className="text-lg font-black text-slate-800 dark:text-white tracking-tight">题库中心</h2>
           <div className="flex gap-2">
             <button

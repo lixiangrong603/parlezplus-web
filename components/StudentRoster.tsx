@@ -27,7 +27,7 @@ export const StudentRoster: React.FC<StudentRosterProps> = ({
 }) => {
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-all">
-      <div className="p-5 flex justify-between items-center border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+      <div className="p-5 flex justify-between items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
         <button 
           onClick={() => onToggleExpanded(!isExpanded)} 
           className="flex items-center gap-3 group"
@@ -92,14 +92,14 @@ export const StudentRoster: React.FC<StudentRosterProps> = ({
                 <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
                     onClick={() => onResetPassword(student.id)}
-                    className="p-1.5 bg-white dark:bg-slate-700 rounded-lg text-slate-400 hover:text-amber-500 shadow-sm transition-colors border dark:border-slate-600"
+                    className="p-1.5 bg-white dark:bg-slate-700 rounded-lg text-slate-400 hover:text-amber-500 shadow-sm transition-colors border border-slate-200 dark:border-slate-600"
                     title="重置密码"
                   >
                     <RotateCcw size={12} />
                   </button>
                   <button 
                     onClick={() => onRemoveStudent(student.id)}
-                    className="p-1.5 bg-white dark:bg-slate-700 rounded-lg text-slate-400 hover:text-red-500 shadow-sm transition-colors border dark:border-slate-600"
+                    className="p-1.5 bg-white dark:bg-slate-700 rounded-lg text-slate-400 hover:text-red-500 shadow-sm transition-colors border border-slate-200 dark:border-slate-600"
                     title="移出班级"
                   >
                     <UserMinus size={12} />

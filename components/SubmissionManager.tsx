@@ -37,7 +37,7 @@ const CustomConfirmModal = ({
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border dark:border-slate-800">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
         <div className="p-8 flex flex-col items-center text-center">
           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${type === 'danger' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'}`}>
             {type === 'danger' ? <Trash2 size={32} /> : <Sparkles size={32} />}
@@ -45,7 +45,7 @@ const CustomConfirmModal = ({
           <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">{title}</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
         </div>
-        <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800">
+                <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all">{cancelText}</button>
           <button onClick={() => { onConfirm(); onClose(); }} className={`flex-[1.5] py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all active:scale-95`}>{confirmText}</button>
         </div>

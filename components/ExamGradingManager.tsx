@@ -109,7 +109,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
     });
     setQuestionResourceMap(resourceMap);
 
-    const allResources = getResources();
+    const allResources = await getResources();
     const resMap: Record<string, MediaResource> = {};
     uniqueResourceIds.forEach(rid => {
       const resource = allResources.find(r => r.id === rid);
@@ -1589,7 +1589,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
 }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
         <div className="p-8 flex flex-col items-center text-center">
           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${
             type === 'danger' 
@@ -1601,7 +1601,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">{title}</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
         </div>
-        <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800">
+        <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
           <button 
             onClick={onClose}
             className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all"

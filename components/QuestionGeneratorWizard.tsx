@@ -139,7 +139,7 @@ const QuestionGeneratorWizard: React.FC<QuestionGeneratorWizardProps> = ({
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-[95vw] xl:max-w-[90vw] h-[95vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 transition-colors">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-[95vw] xl:max-w-[90vw] h-[95vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
                 
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/50">

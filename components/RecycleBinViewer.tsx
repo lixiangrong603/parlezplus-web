@@ -47,12 +47,15 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
-  const load = () => {
-    setItems(teacherId ? getRecycleBinItemsForTeacher(teacherId) : getRecycleBinItems());
+  const load = async () => {
+    const nextItems = teacherId
+      ? await getRecycleBinItemsForTeacher(teacherId)
+      : await getRecycleBinItems();
+    setItems(nextItems);
   };
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   useEffect(() => {
@@ -78,7 +81,7 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
     setRestoringId(item.id);
     try {
       restoreDeletedRecord(item.type, item.id);
-      load();
+      await load();
     } finally {
       setRestoringId(null);
     }
@@ -97,7 +100,7 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
     setDeletingId(item.id);
     try {
       permanentlyDeleteRecord(item.type, item.id);
-      load();
+      await load();
     } finally {
       setDeletingId(null);
     }
@@ -134,7 +137,7 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
     if (selectedItems.length === 0) return;
     selectedItems.forEach(it => restoreDeletedRecord(it.type, it.id));
     setSelectedKeys(new Set());
-    load();
+    await load();
   };
 
   const deleteSelected = async () => {
@@ -150,7 +153,7 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
 
     selectedItems.forEach(it => permanentlyDeleteRecord(it.type, it.id));
     setSelectedKeys(new Set());
-    load();
+    await load();
   };
 
   return (

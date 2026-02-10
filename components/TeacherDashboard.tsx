@@ -53,7 +53,7 @@ const CustomConfirmModal = ({
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
         <div className="p-8 flex flex-col items-center text-center">
           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${type === 'danger' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'}`}>
             {type === 'danger' ? <Trash2 size={32} /> : <AlertCircle size={32} />}
@@ -61,7 +61,7 @@ const CustomConfirmModal = ({
           <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">{title}</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
         </div>
-        <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800">
+        <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all">{cancelText}</button>
           <button onClick={() => { onConfirm(); onClose(); }} className={`flex-[1.5] py-3 text-sm font-black text-white rounded-xl shadow-lg transition-all active:scale-95 ${type === 'danger' ? 'bg-red-500 hover:bg-red-600 shadow-red-100 dark:shadow-none' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none'}`}>{confirmText}</button>
         </div>
@@ -122,7 +122,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
 
   return (
     <div className="h-screen w-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans overflow-hidden transition-colors duration-300">
-      <header className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm shrink-0 transition-colors">
+      <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm shrink-0 transition-colors">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 cursor-pointer">
             <h1 className="text-xl font-black text-indigo-900 dark:text-indigo-400 tracking-tight">ParlezPlus</h1>
@@ -1005,12 +1005,12 @@ const ClassDetailView = ({
       {/* Deadlines Update Modal */}
       {(editingDeadlineResource || editingDeadlineExam) && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl w-80 animate-fade-in-up border dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl w-80 animate-fade-in-up border border-slate-200 dark:border-slate-800">
             <h3 className="text-lg font-bold mb-2 dark:text-slate-100">修改截止日期</h3>
             <p className="text-sm text-slate-500 mb-4 truncate font-medium">
               {(editingDeadlineResource?.title || editingDeadlineExam?.title)}
             </p>
-            <input type="datetime-local" className="w-full p-2.5 border rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 dark:text-white" value={newDeadline} onChange={e => setNewDeadline(e.target.value)} />
+            <input type="datetime-local" className="w-full p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:text-white" value={newDeadline} onChange={e => setNewDeadline(e.target.value)} />
             <div className="flex gap-2 justify-end">
               <button 
                 onClick={() => {
@@ -1088,11 +1088,11 @@ const ClassDetailView = ({
       
       {showAddStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl w-full max-w-sm border dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-800">
             <h3 className="text-xl font-black mb-6 dark:text-slate-100">添加学生</h3>
             <div className="space-y-4">
-              <input className="w-full bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-xl p-3 dark:text-white" placeholder="真实姓名" value={newStudentData.name} onChange={e => setNewStudentData({ ...newStudentData, name: e.target.value })} />
-              <input className="w-full bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-xl p-3 dark:text-white" placeholder="用户名" value={newStudentData.username} onChange={e => setNewStudentData({ ...newStudentData, username: e.target.value.replace(/\s+/g, '') })} />
+              <input className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 dark:text-white" placeholder="真实姓名" value={newStudentData.name} onChange={e => setNewStudentData({ ...newStudentData, name: e.target.value })} />
+              <input className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 dark:text-white" placeholder="用户名" value={newStudentData.username} onChange={e => setNewStudentData({ ...newStudentData, username: e.target.value.replace(/\s+/g, '') })} />
             </div>
             <div className="flex gap-2 justify-end mt-8">
               <button onClick={() => setShowAddStudent(false)} className="px-6 py-2.5 text-slate-500 text-sm font-bold">取消</button>
@@ -1126,8 +1126,8 @@ const BatchImportModal = ({ onClose, onImport }: { onClose: () => void, onImport
 
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-xl flex flex-col overflow-hidden animate-fade-in-up border dark:border-slate-800">
-                <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center">
+        <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-xl flex flex-col overflow-hidden animate-fade-in-up border border-slate-200 dark:border-slate-800">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                     <div>
                         <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">批量导入学生</h3>
                         <p className="text-xs text-slate-400 mt-1 uppercase font-bold">Paste from Excel or Table</p>
@@ -1151,7 +1151,7 @@ const BatchImportModal = ({ onClose, onImport }: { onClose: () => void, onImport
                         onChange={e => setInput(e.target.value)}
                     />
                 </div>
-                <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex justify-end gap-3">
+                <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
                     <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-500">取消</button>
                     <button onClick={handleProcess} className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-black shadow-lg hover:bg-indigo-700 transition">开始分析并导入</button>
                 </div>
@@ -1194,8 +1194,8 @@ const AddTaskModal = ({
   }, [teacherId, alreadyAssignedResourceIds, alreadyAssignedExamIds]);
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden animate-fade-in-up border dark:border-slate-800">
-                <div className="p-8 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden animate-fade-in-up border border-slate-200 dark:border-slate-800">
+                <div className="p-8 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
           <div>
             <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">分发新任务</h3>
             <div className="mt-3 inline-flex rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 gap-1">
@@ -1349,7 +1349,7 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
   return (
     <>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-fade-in">
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex h-[500px] border dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex h-[500px] border border-slate-200 dark:border-slate-800">
           <div className="w-48 bg-slate-50 dark:bg-slate-950/50 border-r border-slate-100 dark:border-slate-800 flex flex-col p-4 shrink-0">
             <nav className="space-y-1">
               <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${activeTab === 'profile' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}><Camera size={18} /> 个人资料</button>
@@ -1359,7 +1359,7 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
             <button onClick={onLogout} className="mt-auto w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50"><LogOut size={18} /> 退出登录</button>
           </div>
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="text-lg font-black text-slate-800 dark:text-slate-100">{activeTab === 'profile' ? '个人资料' : activeTab === 'api' ? 'API 与服务配置' : '安全与密码'}</h2><button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={20} /></button></div>
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center"><h2 className="text-lg font-black text-slate-800 dark:text-slate-100">{activeTab === 'profile' ? '个人资料' : activeTab === 'api' ? 'API 与服务配置' : '安全与密码'}</h2><button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={20} /></button></div>
             <div className="p-8 flex-1 overflow-y-auto no-scrollbar">
               {activeTab === 'profile' ? (
                 <div className="max-w-md mx-auto text-center">
@@ -1420,9 +1420,9 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
               ) : activeTab === 'api' ? (
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Key</label><input type="password" value={azureKey} onChange={e => setAzureKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
-                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Region</label><input type="text" value={azureRegion} onChange={e => setAzureRegion(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
-                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Gemini Key</label><input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Key</label><input type="password" value={azureKey} onChange={e => setAzureKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Region</label><input type="text" value={azureRegion} onChange={e => setAzureRegion(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Gemini Key</label><input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
                   </div>
                 </div>
               ) : (
@@ -1435,7 +1435,7 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
                 </div>
               )}
             </div>
-            <div className="p-6 border-t dark:border-slate-800 flex justify-end gap-3 shrink-0"><button onClick={onClose} className="px-6 py-2 text-sm font-bold text-slate-500">取消</button><button onClick={handleSave} disabled={isSaving} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={18} />} 保存配置</button></div>
+            <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 shrink-0"><button onClick={onClose} className="px-6 py-2 text-sm font-bold text-slate-500">取消</button><button onClick={handleSave} disabled={isSaving} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={18} />} 保存配置</button></div>
           </div>
         </div>
       </div>

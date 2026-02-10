@@ -53,7 +53,7 @@ const ClassroomAssignmentModal: React.FC<{
   if (classrooms.length === 0) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
           <div className="p-8 text-center">
             <div className="w-16 h-16 bg-amber-50 dark:bg-amber-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <FolderOpen size={32} className="text-amber-600" />
@@ -71,8 +71,8 @@ const ClassroomAssignmentModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border dark:border-slate-800">
-        <div className="p-6 border-b dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">分发试卷</h3>
             <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
@@ -112,7 +112,7 @@ const ClassroomAssignmentModal: React.FC<{
           </div>
         </div>
 
-        <div className="p-6 border-t dark:border-slate-800 flex gap-3">
+        <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex gap-3">
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
             取消
           </button>
@@ -198,8 +198,8 @@ const ExamPlagiarismModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-slate-50 dark:bg-slate-950 w-full max-w-6xl h-[90vh] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border dark:border-slate-800">
-        <header className="p-6 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex justify-between items-center shrink-0">
+      <div className="bg-slate-50 dark:bg-slate-950 w-full max-w-6xl h-[90vh] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800">
+        <header className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center">
               <ShieldAlert className="text-purple-600" size={24} />
@@ -250,19 +250,19 @@ const ExamPlagiarismModal: React.FC<{
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-[2rem] border dark:border-slate-800 overflow-hidden shadow-sm">
-            <div className="p-4 bg-slate-50 dark:bg-slate-800 border-b dark:border-slate-700 grid grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-4">
               <div className="font-bold text-sm text-slate-500 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
                 试卷 A: {exams[0]?.title}
               </div>
-              <div className="font-bold text-sm text-slate-500 flex items-center gap-2 border-l pl-4 dark:border-slate-700">
+              <div className="font-bold text-sm text-slate-500 flex items-center gap-2 border-l border-slate-200 pl-4 dark:border-slate-700">
                 <div className="w-2 h-2 rounded-full bg-purple-500"></div>
                 试卷 B: {exams[1]?.title}
               </div>
             </div>
 
-            <div className="divide-y dark:divide-slate-800">
+            <div className="divide-y divide-slate-200 dark:divide-slate-800">
               {results.duplicates.length === 0 && results.highlySimilar.length === 0 && (
                 <div className="p-20 text-center text-slate-400 flex flex-col items-center">
                   <div className="w-20 h-20 bg-slate-50 dark:bg-slate-950 rounded-3xl flex items-center justify-center mb-4">
@@ -288,7 +288,7 @@ const ExamPlagiarismModal: React.FC<{
                       <p className="text-[10px] text-slate-400 italic line-clamp-2">原文: {stripHtml(match.q1.readingPassage)}</p>
                     )}
                   </div>
-                  <div className="pl-4 border-l dark:border-slate-800 space-y-2 relative">
+                  <div className="pl-4 border-l border-slate-200 dark:border-slate-800 space-y-2 relative">
                     <div className="flex items-center justify-between">
                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${match.reason === 'ID一致' || match.reason === '内容一致' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
                          试题 B
@@ -589,8 +589,8 @@ const ExamCenterDashboard: React.FC = () => {
     <div className="flex h-full w-full bg-white dark:bg-slate-900 transition-colors duration-300">
       {examDeleteConfirmState && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800">
-            <div className="p-6 border-b dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800">
               <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">删除试卷</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                 试卷「{examDeleteConfirmState.examTitle}」可能存在考试记录。
@@ -627,7 +627,7 @@ const ExamCenterDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3 justify-end">
+            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex gap-3 justify-end">
               <button
                 onClick={() => setExamDeleteConfirmState(null)}
                 className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition"
@@ -797,7 +797,7 @@ const ExamCenterDashboard: React.FC = () => {
 
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-16 bg-white dark:bg-slate-800 border-b dark:border-slate-700 px-6 flex items-center justify-between shrink-0">
+          <header className="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               {sidebarView === 'library' && !folderSidebarOpen && (
                 <button

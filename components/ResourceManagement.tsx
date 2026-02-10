@@ -43,7 +43,7 @@ const CustomConfirmModal = ({
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
         <div className="p-8 flex flex-col items-center text-center">
           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${type === 'danger' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'}`}>
             {type === 'danger' ? <Trash2 size={32} /> : <AlertTriangle size={32} />}
@@ -51,7 +51,7 @@ const CustomConfirmModal = ({
           <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">{title}</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
         </div>
-        <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800">
+        <div className="flex p-4 gap-3 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all">{cancelText}</button>
           <button onClick={() => { onConfirm(); onClose(); }} className={`flex-[1.5] py-3 text-sm font-black text-white rounded-xl shadow-lg transition-all active:scale-95 ${type === 'danger' ? 'bg-red-500 hover:bg-red-600 shadow-red-100 dark:shadow-none' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none'}`}>{confirmText}</button>
         </div>
@@ -247,8 +247,8 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
     <div className="flex h-full overflow-hidden bg-white dark:bg-slate-900">
       {channelDeleteConfirmState && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border dark:border-slate-800">
-            <div className="p-6 border-b dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800">
               <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">删除频道</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                 频道「{channelDeleteConfirmState.channelName}」可能包含资源。
@@ -285,7 +285,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
               </div>
             </div>
 
-            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3 justify-end">
+            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex gap-3 justify-end">
               <button
                 onClick={() => setChannelDeleteConfirmState(null)}
                 className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition"
@@ -375,7 +375,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b dark:border-slate-800 px-8 flex justify-between items-center shrink-0">
+        <header className="h-16 border-b border-slate-200 dark:border-slate-800 px-8 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-4">
              <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
                <ChevronLeft size={20} />
@@ -513,7 +513,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl w-80 animate-fade-in-up border border-transparent dark:border-slate-800 transition-colors">
             <h3 className="text-lg font-bold mb-4 dark:text-slate-100">新建频道</h3>
-            <input autoFocus className="w-full bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-lg p-2.5 mb-4 focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white" placeholder="例如：商务法语" value={newChannelName} onChange={e => setNewChannelName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddChannel()} />
+            <input autoFocus className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 mb-4 focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white" placeholder="例如：商务法语" value={newChannelName} onChange={e => setNewChannelName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddChannel()} />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowAddChannel(false)} className="px-4 py-2 text-slate-500 dark:text-slate-400 text-sm font-bold">取消</button>
               <button onClick={handleAddChannel} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold">创建</button>
@@ -594,7 +594,7 @@ const PublishToClassModal = ({ resource, onClose, onSuccess, userId }: { resourc
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up border border-transparent dark:border-slate-800 transition-colors">
-        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
           <div>
             <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">发布到班级</h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 italic">“{resource.title}”</p>
@@ -629,7 +629,7 @@ const PublishToClassModal = ({ resource, onClose, onSuccess, userId }: { resourc
            ))}
         </div>
 
-        <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3">
+        <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex gap-3">
            <button onClick={onClose} className="flex-1 py-3 text-slate-500 dark:text-slate-400 text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">取消</button>
            <button 
              onClick={handlePublish}
@@ -780,7 +780,7 @@ const UploadModal = ({ channelId, onClose, onConfirm, userId }: { channelId: str
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden animate-fade-in-up flex flex-col max-h-[90vh] border border-transparent dark:border-slate-800 transition-colors">
-        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
           <div>
             <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">上传新资源</h3>
             <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">智能分析：自动生成黑胶封面</p>
@@ -850,7 +850,7 @@ const UploadModal = ({ channelId, onClose, onConfirm, userId }: { channelId: str
         </div>
         
         {!isProcessing && (
-            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t dark:border-slate-800 flex gap-3 shrink-0">
+            <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex gap-3 shrink-0">
                 <button onClick={onClose} className="flex-1 py-3 text-slate-500 dark:text-slate-400 text-sm font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700 transition">取消</button>
                 <button disabled={files.length === 0} onClick={processUpload} className={`flex-[2] py-3 text-sm font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 ${files.length > 0 ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'}`}>
                     开始处理并上传

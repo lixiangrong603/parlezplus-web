@@ -819,7 +819,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
 
       {showSettings && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex h-[500px] border dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex h-[500px] border border-slate-200 dark:border-slate-800">
             <div className="w-48 bg-slate-50 dark:bg-slate-950/50 border-r border-slate-100 dark:border-slate-800 flex flex-col p-4 shrink-0">
               <nav className="space-y-1">
                 <button onClick={() => setSettingsTab('profile')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold ${settingsTab === 'profile' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200/50'}`}>
@@ -834,7 +834,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
               </button>
             </div>
             <div className="flex-1 flex flex-col min-w-0">
-              <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center">
+              <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                 <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">{settingsTab === 'profile' ? '个人资料' : '安全与密码'}</h2>
                 <button onClick={() => setShowSettings(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400">
                   <XIcon />

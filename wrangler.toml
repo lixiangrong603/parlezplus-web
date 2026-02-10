@@ -17,11 +17,11 @@ database_id = "c7b9d675-cfb5-4d16-b836-d0dc5c7ba24b"
 # ============================================
 # R2 存储桶绑定
 # 需要在 Dashboard 启用 R2: https://dash.cloudflare.com/?to=/:account/r2
-# 创建命令: npx wrangler d1 execute parlezplus_db --command "SELECT username, password_hash, is_deleted, is_blocked FROM users WHERE username='admin';"
+# 创建命令: npx wrangler r2 bucket create parlezplus-media
 # ============================================
-# [[r2_buckets]]
-# binding = "R2_BUCKET"
-# bucket_name = "parlezplus-media"
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "parlezplus-media"
 
 # ============================================
 # KV 命名空间 (可选，用于缓存)
@@ -34,7 +34,7 @@ database_id = "c7b9d675-cfb5-4d16-b836-d0dc5c7ba24b"
 # 环境变量 (非敏感)
 # ============================================
 [vars]
-ENVIRONMENT = "production"
+ENVIRONMENT = "development"
 
 # ============================================
 # 生产环境配置
