@@ -1,11 +1,12 @@
 
-import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession, OperationLog, ExamFolder } from '../types';
+import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession, OperationLog, ExamFolder, ExamSection } from '../types';
 import { 
   getResources as apiGetResources, 
   createResource as apiCreateResource, 
   updateResource as apiUpdateResource, 
   deleteResource as apiDeleteResource,
   permanentlyDeleteWithR2Cleanup,
+  restoreFromRecycleBin,
   // 班级 API
   getClassrooms as apiGetClassrooms,
   createClassroom as apiCreateClassroom,
@@ -220,7 +221,7 @@ const mapApiToExamSession = (raw: any): ExamSession => ({
 
 export const getSyllabusCourses = async (teacherId?: string, includeDeleted: boolean = false): Promise<SyllabusCourse[]> => {
   try {
-    const raw = await apiGetSyllabusCourses(teacherId);
+    const raw = await apiGetSyllabusCourses(teacherId, includeDeleted);
     const courses = raw.map(mapApiToSyllabusCourse);
     
     // 更新本地缓存
@@ -576,13 +577,8 @@ const getAllBankQuestionsRaw = (): Question[] => {
 
 export const getBankQuestions = async (teacherId?: string, includeDeleted: boolean = false): Promise<Question[]> => {
   try {
-    const raw = await apiGetQuestions(teacherId);
+    const raw = await apiGetQuestions(teacherId, undefined, undefined, includeDeleted);
     const questions = raw.map(mapApiToQuestion);
-    
-    // 过滤已删除数据（如果后端未过滤）
-    if (!includeDeleted) {
-      return questions.filter(q => !q.isDeleted);
-    }
     
     return questions;
   } catch (error) {
@@ -621,7 +617,7 @@ export const getBankQuestionsSync = (teacherId?: string, includeDeleted: boolean
 
 export const saveBankQuestion = async (question: Question, teacherId?: string): Promise<void> => {
   try {
-    const isNew = !question.id || question.id.startsWith('temp-');
+    const isNew = !question.id || question.id.startsWith('temp-') || question.id.startsWith('gen-');
     
     if (isNew) {
       const result = await apiCreateQuestion({
@@ -686,6 +682,52 @@ export const saveBankQuestion = async (question: Question, teacherId?: string): 
   }
 };
 
+// 辅助函数：计算试卷总分
+const calculateExamTotalScore = (sections: ExamSection[]): number => {
+  return sections.reduce((total, section) => {
+    return total + section.items.reduce((sectionTotal, item) => {
+      if (item.type === 'consigne') return sectionTotal;
+      return sectionTotal + item.points;
+    }, 0);
+  }, 0);
+};
+
+// 辅助函数：从试卷中移除指定的题目ID，并重新计算总分
+const removeQuestionsFromExamPapers = async (questionIds: string[]): Promise<void> => {
+  const questionIdSet = new Set(questionIds);
+  const papers = getExamPapersSync(undefined, false); // 只处理未删除的试卷
+  let hasChanges = false;
+
+  for (const paper of papers) {
+    let paperModified = false;
+    
+    // 遍历每个section，移除引用的题目
+    for (const section of paper.sections) {
+      const originalLength = section.items.length;
+      section.items = section.items.filter(item => {
+        if (item.type === 'consigne') return true; // 保留consigne
+        return !questionIdSet.has(item.questionId || '');
+      });
+      
+      if (section.items.length !== originalLength) {
+        paperModified = true;
+      }
+    }
+    
+    // 如果试卷有变化，重新计算总分并保存
+    if (paperModified) {
+      paper.totalScore = calculateExamTotalScore(paper.sections);
+      await saveExamPaper(paper);
+      hasChanges = true;
+      console.log(`试卷 "${paper.title}" 已更新：移除了 ${questionIds.length} 道题目，新总分: ${paper.totalScore}`);
+    }
+  }
+  
+  if (hasChanges) {
+    console.log(`已更新 ${papers.length} 份试卷，移除了被删除的题目`);
+  }
+};
+
 export const deleteBankQuestion = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
   try {
     await apiDeleteQuestion(id);
@@ -699,6 +741,9 @@ export const deleteBankQuestion = async (id: string, operatorId?: string, reason
       questions[questionIndex].deletedBy = operatorId;
       localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
     }
+    
+    // 从引用该题目的试卷中移除该题目并重新计算总分
+    await removeQuestionsFromExamPapers([id]);
   } catch (error) {
     console.error('Failed to delete question via API:', error);
     // Fallback to localStorage
@@ -722,6 +767,9 @@ export const deleteBankQuestion = async (id: string, operatorId?: string, reason
         });
       }
     }
+    
+    // 从引用该题目的试卷中移除该题目并重新计算总分
+    await removeQuestionsFromExamPapers([id]);
   }
 };
 
@@ -939,7 +987,7 @@ export interface StudentPracticeData {
   quizAnswers?: Record<string, string>; // questionId -> optionId
   quizScore?: { score: number; total: number };
   clozeAnswers?: Record<string, string>; // segmentIndex-wordIndex -> input string
-  clozeScore?: { correct: number; total: number };
+  clozeScore?: { correct: number; total: number; attempts?: number }; // ADDED: attempts
   segmentRecordings?: Record<string, string>; // segmentId -> Base64 Audio String
   segmentScores?: Record<string, AIResponse>; // segmentId -> AI Score
   fullRecording?: string; // Base64 Audio String
@@ -1258,7 +1306,7 @@ export const getUsers = (includeDeleted: boolean = false): User[] => {
 // Async version with API
 export const getUsersAsync = async (includeDeleted: boolean = false): Promise<User[]> => {
   try {
-    const users = await apiGetUsers();
+    const users = await apiGetUsers(undefined, undefined, includeDeleted);
     
     // Convert from API format to local format
     const converted = users.map((u: any) => ({
@@ -1456,7 +1504,7 @@ const getChannelsSync = (userId?: string, includeDeleted: boolean = false): Chan
 // Async version with API
 export const getChannels = async (userId?: string, includeDeleted: boolean = false): Promise<Channel[]> => {
   try {
-    const raw = await apiGetChannels(userId);
+    const raw = await apiGetChannels(userId, includeDeleted);
     const channels = raw.map(mapApiToChannel);
     
     // Update localStorage cache
@@ -1558,7 +1606,7 @@ export const deleteChannel = async (id: string, operatorId?: string, reason?: st
 // 重构：使用 Cloudflare D1 数据库 + R2 存储
 export const getResources = async (teacherId?: string, includeDeleted: boolean = false): Promise<MediaResource[]> => {
   try {
-    const raw = await apiGetResources(teacherId);
+    const raw = await apiGetResources(teacherId, includeDeleted);
     const resources = raw.map(mapApiToMediaResource);
     
     // 更新本地缓存
@@ -1601,6 +1649,11 @@ export const getResources = async (teacherId?: string, includeDeleted: boolean =
     
     return resources;
   }
+};
+
+export const getResourceById = async (id: string, teacherId?: string, includeDeleted: boolean = false): Promise<MediaResource | undefined> => {
+  const resources = await getResources(teacherId, includeDeleted);
+  return resources.find(r => r.id === id);
 };
 
 export const saveResource = async (resource: MediaResource, teacherId?: string): Promise<MediaResource> => {
@@ -1729,6 +1782,21 @@ export const saveResource = async (resource: MediaResource, teacherId?: string):
 };
 
 export const deleteResource = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+  // 先获取资源信息，以便获取其quiz题目ID
+  let resourceQuestionIds: string[] = [];
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.RESOURCES);
+    if (data) {
+      const allResources: MediaResource[] = JSON.parse(data);
+      const resource = allResources.find(r => r.id === id);
+      if (resource && resource.questions) {
+        resourceQuestionIds = resource.questions.map(q => q.id).filter(Boolean);
+      }
+    }
+  } catch (err) {
+    console.error('Error extracting resource question IDs:', err);
+  }
+  
   try {
     await apiDeleteResource(id);
     console.log('Resource deleted via API:', id);
@@ -1770,6 +1838,11 @@ export const deleteResource = async (id: string, operatorId?: string, reason?: s
       }
     }
   }
+  
+  // 从引用该资源quiz题目的试卷中移除这些题目并重新计算总分
+  if (resourceQuestionIds.length > 0) {
+    await removeQuestionsFromExamPapers(resourceQuestionIds);
+  }
 };
 
 // --- MOCK CDN ---
@@ -1810,7 +1883,7 @@ export const fetchResourceFromCDN = async (url: string): Promise<Partial<MediaRe
 
 export const getClassrooms = async (teacherId?: string, includeDeleted: boolean = false): Promise<Classroom[]> => {
   try {
-    const raw = await apiGetClassrooms(teacherId);
+    const raw = await apiGetClassrooms(teacherId, includeDeleted);
     const classrooms = raw.map(mapApiToClassroom);
     
     // 更新本地缓存
@@ -1961,7 +2034,7 @@ export const deleteClassroom = async (id: string, operatorId?: string, reason?: 
 // --- EXAM PAPERS ---
 export const getExamPapers = async (teacherId?: string, includeDeleted: boolean = false): Promise<ExamPaper[]> => {
   try {
-    const raw = await apiGetExamPapers(teacherId);
+    const raw = await apiGetExamPapers(teacherId, includeDeleted);
     const papers = raw.map(mapApiToExamPaper);
     
     // 更新本地缓存
@@ -2324,7 +2397,7 @@ export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array
 // --- Exam Session Management ---
 export const getExamSessions = async (studentId?: string, includeDeleted: boolean = false): Promise<ExamSession[]> => {
   try {
-    const raw = await apiGetExamSessions(undefined, studentId);
+    const raw = await apiGetExamSessions(undefined, studentId, includeDeleted);
     const sessions = raw.map(mapApiToExamSession);
     
     // 更新本地缓存
@@ -2998,7 +3071,43 @@ const cascadePermanentlyDeleteUserInternal = (userId: string) => {
 };
 
 // 恢复已删除的记录（包含自动级联恢复）
-export const restoreDeletedRecord = (type: 'User' | 'Classroom' | 'ExamPaper' | 'ExamSession' | 'Channel' | 'Resource' | 'Question' | 'SyllabusCourse' | 'SyllabusUnit' | 'SyllabusKnowledgePoint', id: string) => {
+export const restoreDeletedRecord = async (type: 'User' | 'Classroom' | 'ExamPaper' | 'ExamSession' | 'Channel' | 'Resource' | 'Question' | 'SyllabusCourse' | 'SyllabusUnit' | 'SyllabusKnowledgePoint', id: string): Promise<void> => {
+  // 先调用 API 恢复服务器端数据（如果适用）
+  let apiType: 'resource' | 'channel' | 'user' | 'question' | 'exam-paper' | 'classroom' | 'exam-session' | 'syllabus-course' | undefined;
+  
+  switch (type) {
+    case 'Resource':
+      apiType = 'resource';
+      break;
+    case 'Channel':
+      apiType = 'channel';
+      break;
+    case 'User':
+      apiType = 'user';
+      break;
+    case 'Question':
+      apiType = 'question';
+      break;
+    case 'ExamPaper':
+      apiType = 'exam-paper';
+      break;
+    case 'Classroom':
+      apiType = 'classroom';
+      break;
+    case 'ExamSession':
+      apiType = 'exam-session';
+      break;
+    case 'SyllabusCourse':
+      apiType = 'syllabus-course';
+      break;
+  }
+  
+  // 先调用 API 恢复服务器端的数据
+  if (apiType) {
+    await restoreFromRecycleBin(apiType, id);
+  }
+  
+  // API 调用成功后，再清理本地存储中的软删除标记
   switch (type) {
     case 'User': {
       cascadeRestoreUserInternal(id);
@@ -3269,7 +3378,7 @@ export const getRecycleBinItems = async (): Promise<RecycleBinItem[]> => {
 export const permanentlyDeleteRecord = async (type: RecycleBinItemType, id: string): Promise<void> => {
   try {
     // 先调用 API 删除 R2 文件（需要服务器端删除）
-    let apiType: 'resource' | 'channel' | 'user' | 'question' | 'exam-paper' | undefined;
+    let apiType: 'resource' | 'channel' | 'user' | 'question' | 'exam-paper' | 'classroom' | 'exam-session' | 'syllabus-course' | undefined;
     
     switch (type) {
       case 'Resource':
@@ -3287,18 +3396,24 @@ export const permanentlyDeleteRecord = async (type: RecycleBinItemType, id: stri
       case 'ExamPaper':
         apiType = 'exam-paper';
         break;
+      case 'Classroom':
+        apiType = 'classroom';
+        break;
+      case 'ExamSession':
+        apiType = 'exam-session';
+        break;
+      case 'SyllabusCourse':
+        apiType = 'syllabus-course';
+        break;
     }
     
+    // 先调用 API 删除服务器端数据和 R2 文件
+    // 如果API调用失败，会抛出错误，阻止后续的本地存储清理
     if (apiType) {
-      try {
-        await permanentlyDeleteWithR2Cleanup(apiType, id);
-      } catch (error) {
-        console.error(`Failed to permanently delete ${apiType} from API:`, error);
-        // 如果 API 调用失败，继续清理本地存储
-      }
+      await permanentlyDeleteWithR2Cleanup(apiType, id);
     }
     
-    // 然后清理本地存储
+    // API 调用成功后，再清理本地存储
     switch (type) {
       case 'User': {
         cascadePermanentlyDeleteUserInternal(id);

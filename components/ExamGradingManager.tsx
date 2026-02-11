@@ -36,9 +36,9 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   
   // Load syllabuses for knowledge points
-  const syllabuses = useMemo(() => getSyllabusCourses(), []);
+  const [syllabuses, setSyllabuses] = useState<SyllabusCourse[]>([]);
 
-  const [allQuestions, setAllQuestions] = useState<Question[]>([]);
+  const [allQuestions, setAllQuestions] = useState<Question[]>();
   const [questionResourceMap, setQuestionResourceMap] = useState<Record<string, string>>({});
   const [resourcesMap, setResourcesMap] = useState<Record<string, MediaResource>>({});
   
@@ -57,27 +57,34 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   
   // Load initial data
   useEffect(() => {
-    const examData = getExamPaperById(examId);
-    if (examData) setExam(examData);
-    
-    const classData = getClassroomById(classId);
-    if (classData) setClassroom(classData);
-    
-    loadSessions();
+    const loadInitialData = async () => {
+      const examData = await getExamPaperById(examId);
+      if (examData) setExam(examData);
+      
+      const classData = await getClassroomById(classId);
+      if (classData) setClassroom(classData);
+      
+      const sessionData = await getExamSessionsByExamAndClass(examId, classId);
+      setSessions(sessionData);
+      
+      const syllabusData = await getSyllabusCourses();
+      setSyllabuses(syllabusData);
+    };
+    loadInitialData();
   }, [examId, classId]);
 
   // Refresh classroom data when storage is updated (e.g., student avatar changed)
   useEffect(() => {
-    const handleDataChanged = () => {
-      const classData = getClassroomById(classId);
+    const handleDataChanged = async () => {
+      const classData = await getClassroomById(classId);
       if (classData) setClassroom(classData);
     };
     window.addEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
     return () => window.removeEventListener('parlezplus:data-changed', handleDataChanged as EventListener);
   }, [classId]);
 
-  const loadSessions = () => {
-    const sessionData = getExamSessionsByExamAndClass(examId, classId);
+  const loadSessions = async () => {
+    const sessionData = await getExamSessionsByExamAndClass(examId, classId);
     setSessions(sessionData);
   };
 
@@ -153,7 +160,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
 
   // Get student list with submission status
   const studentList = useMemo(() => {
-    if (!classroom) return [];
+    if (!classroom || !classroom.students) return [];
     
     return classroom.students.map(student => {
       const session = sessions.find(s => s.studentId === student.userId);

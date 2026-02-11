@@ -91,7 +91,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
           if (!active) return;
           // 学生只能看到包含他们的班级
           const myClassrooms = allClasses.filter(classroom => 
-            classroom.students.some(student => student.userId === user.id)
+            (classroom.students || []).some(student => student.userId === user.id)
           );
           setAllClassrooms(myClassrooms);
           const [subs, sessions] = await Promise.all([
@@ -255,7 +255,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
             
             <div className="flex flex-col">
               <div className="flex items-center gap-2 md:gap-3">
-                <h1 className="text-lg md:text-xl font-black text-indigo-900 dark:text-indigo-400 leading-none tracking-tight">ParlezPlus</h1>
+                <h1 className="text-lg md:text-xl font-black text-indigo-900 dark:text-indigo-400 leading-none tracking-tight">Fluide</h1>
                 
                 <div className="relative" ref={classSwitcherRef}>
                   <button 

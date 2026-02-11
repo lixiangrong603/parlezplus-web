@@ -5,7 +5,7 @@ import { createAiWorker } from './aiWorkerFactory';
 /**
  * Batch translation for the Teacher Editor - Web Worker Version (Non-blocking)
  */
-export const translateSegmentsWithWorker = (segments: TranscriptSegment[], apiKey: string): Promise<TranscriptSegment[]> => {
+export const translateSegmentsWithWorker = (segments: TranscriptSegment[], authToken: string): Promise<TranscriptSegment[]> => {
   return new Promise((resolve, reject) => {
     if (segments.length === 0) {
       resolve([]);
@@ -53,7 +53,7 @@ export const translateSegmentsWithWorker = (segments: TranscriptSegment[], apiKe
       id,
       payload: {
         segments,
-        apiKey: apiKey
+        apiKey: authToken
       }
     });
   });

@@ -114,17 +114,9 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
             {/* Header */}
             <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    {isSubmitted && (
-                        <button 
-                            onClick={onComplete}
-                            className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400 transition"
-                        >
-                            <ArrowLeft size={20} />
-                        </button>
-                    )}
                     <h1 className="font-bold text-slate-800 dark:text-slate-100 text-lg">练习测验</h1>
                     {isSubmitted && (
-                        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-900 rounded-full">
+                        <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-900 rounded-full">
                             <span className="text-sm font-medium text-slate-600 dark:text-slate-400">得分:</span>
                             <span className={`text-sm font-bold ${percentage >= 60 ? 'text-emerald-600' : 'text-red-500'}`}>
                                 {score}/{total} ({percentage}%)
@@ -133,13 +125,26 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                     )}
                 </div>
                 
-                <button 
-                    onClick={toggleTextSize}
-                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400"
-                    title="Change Text Size"
-                >
-                    <Type size={20} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={isSubmitted ? onComplete : handleSubmit}
+                        disabled={!isSubmitted && Object.keys(answers).length === 0}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 font-serif"
+                    >
+                        {isSubmitted ? (
+                            <><CheckCircle size={16} /> 完成</>
+                        ) : (
+                            <><CheckCircle size={16} /> 提交</>
+                        )}
+                    </button>
+                    <button 
+                        onClick={toggleTextSize}
+                        className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400"
+                        title="Change Text Size"
+                    >
+                        <Type size={20} />
+                    </button>
+                </div>
             </div>
 
             {/* Questions List */}
@@ -262,38 +267,6 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                 {/* Footer Padding */}
                 <div className="h-32"></div>
             </div>
-
-            {/* Bottom Bar */}
-            {!isSubmitted && (
-                <div className="sticky bottom-0 p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex justify-center shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-                    <button
-                        onClick={handleSubmit}
-                        disabled={Object.keys(answers).length === 0}
-                        className="w-full max-w-md bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-95"
-                    >
-                        提交答案
-                    </button>
-                </div>
-            )}
-            
-            {isSubmitted && (
-                 <div className="sticky bottom-0 p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-                    <div className="max-w-4xl mx-auto flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">最终得分</p>
-                            <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
-                                {score} <span className="text-sm text-slate-400 font-normal">/ {total}</span>
-                            </p>
-                        </div>
-                        <button
-                            onClick={onComplete}
-                            className="bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-                        >
-                            完成
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

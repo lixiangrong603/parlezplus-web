@@ -5,6 +5,7 @@ import { getUserFromRequest, jsonResponse, errorResponse, hashPassword, verifyPa
 
 // ============================================
 // GET /api/users - 获取用户列表 (管理员查看全部，教师查看自己班级的学生)
+// GET /api/users/:id - 获取单个用户信息
 // ============================================
 export async function onRequestGet(context: any): Promise<Response> {
   const { request, env } = context as { request: Request; env: Env };
@@ -16,20 +17,69 @@ export async function onRequestGet(context: any): Promise<Response> {
     }
     
     const url = new URL(request.url);
+    
+    // 检查是否是获取单个用户 /api/users/:id
+    const pathParts = url.pathname.split('/api/users/');
+    const userId = pathParts[1]?.split('?')[0];
+    
+    if (userId && userId !== '') {
+      // GET /api/users/:id - 获取单个用户
+      // 权限检查：用户可以查看自己，管理员可以查看任何人，教师可以查看学生
+      if (user.role !== 'admin' && user.id !== userId) {
+        // 教师查看学生需要验证
+        if (user.role === 'teacher') {
+          const targetUser = await env.DB
+            .prepare('SELECT role FROM users WHERE id = ? AND is_deleted = 0')
+            .bind(userId)
+            .first<{ role: string }>();
+          
+          if (!targetUser || targetUser.role !== 'student') {
+            return errorResponse('无权限', 403);
+          }
+        } else {
+          return errorResponse('无权限', 403);
+        }
+      }
+      
+      const targetUser = await env.DB
+        .prepare('SELECT id, username, role, name, avatar_r2_key, class_id, needs_password_change, is_blocked, created_at FROM users WHERE id = ? AND is_deleted = 0')
+        .bind(userId)
+        .first();
+      
+      if (!targetUser) {
+        return errorResponse('用户不存在', 404);
+      }
+      
+      return jsonResponse(targetUser);
+    }
+    
+    // GET /api/users - 获取用户列表
     const role = url.searchParams.get('role');
     const classId = url.searchParams.get('classId');
+    const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
     
     let query: D1PreparedStatement;
     
     if (user.role === 'admin') {
       // 管理员查看所有用户
       if (role) {
-        query = env.DB
-          .prepare('SELECT id, username, role, name, avatar_r2_key, class_id, needs_password_change, is_blocked, created_at FROM users WHERE role = ? AND is_deleted = 0 ORDER BY created_at DESC')
-          .bind(role);
+        if (includeDeleted) {
+          query = env.DB
+            .prepare('SELECT id, username, role, name, avatar_r2_key, class_id, needs_password_change, is_blocked, is_deleted, deleted_at, deleted_by, created_at FROM users WHERE role = ? ORDER BY created_at DESC')
+            .bind(role);
+        } else {
+          query = env.DB
+            .prepare('SELECT id, username, role, name, avatar_r2_key, class_id, needs_password_change, is_blocked, created_at FROM users WHERE role = ? AND is_deleted = 0 ORDER BY created_at DESC')
+            .bind(role);
+        }
       } else {
-        query = env.DB
-          .prepare('SELECT id, username, role, name, avatar_r2_key, class_id, needs_password_change, is_blocked, created_at FROM users WHERE is_deleted = 0 ORDER BY created_at DESC');
+        if (includeDeleted) {
+          query = env.DB
+            .prepare('SELECT id, username, role, name, avatar_r2_key, class_id, needs_password_change, is_blocked, is_deleted, deleted_at, deleted_by, created_at FROM users ORDER BY created_at DESC');
+        } else {
+          query = env.DB
+            .prepare('SELECT id, username, role, name, avatar_r2_key, class_id, needs_password_change, is_blocked, created_at FROM users WHERE is_deleted = 0 ORDER BY created_at DESC');
+        }
       }
     } else if (user.role === 'teacher') {
       // 教师查看自己班级的学生
@@ -97,11 +147,58 @@ export async function onRequestPost(context: any): Promise<Response> {
     
     // 检查用户名是否已存在
     const existing = await env.DB
-      .prepare('SELECT id FROM users WHERE username = ?')
+      .prepare('SELECT id, username, role, name, class_id, is_deleted FROM users WHERE username = ?')
       .bind(body.username)
-      .first();
+      .first<{ id: string; username: string; role: string; name: string; class_id: string | null; is_deleted: number }>();
     
     if (existing) {
+      // 如果用户已被软删除，恢复该用户
+      if (existing.is_deleted === 1) {
+        await env.DB
+          .prepare('UPDATE users SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL, class_id = ? WHERE id = ?')
+          .bind(body.classId || null, existing.id)
+          .run();
+        return jsonResponse({ 
+          id: existing.id, 
+          username: existing.username, 
+          role: existing.role, 
+          name: existing.name,
+          existed: true,
+          restored: true 
+        }, 200);
+      }
+      
+      // 如果是教师创建学生，且该用户已存在且是学生角色，允许将其加入班级
+      if (user.role === 'teacher' && body.role === 'student' && existing.role === 'student') {
+        // 如果学生已经在目标班级中
+        if (existing.class_id === body.classId) {
+          return jsonResponse({ 
+            id: existing.id, 
+            username: existing.username, 
+            role: existing.role, 
+            name: existing.name,
+            existed: true,
+            alreadyInClass: true 
+          }, 200);
+        }
+        
+        // 将学生添加到新班级（更新 class_id）
+        if (body.classId) {
+          await env.DB
+            .prepare('UPDATE users SET class_id = ? WHERE id = ?')
+            .bind(body.classId, existing.id)
+            .run();
+        }
+        
+        return jsonResponse({ 
+          id: existing.id, 
+          username: existing.username, 
+          role: existing.role, 
+          name: existing.name,
+          existed: true 
+        }, 200);
+      }
+      
       return errorResponse('用户名已存在', 400);
     }
     

@@ -97,7 +97,48 @@ npm run dev
 http://localhost:3000
 ```
 
-### 使用 Cloudflare Pages 本地环境
+### 使用 Cloudflare Pages 本地环境（推荐）
+
+**连接真实 D1 + R2 环境，与线上保持一致：**
+
+```bash
+# 1. 安装依赖
+npm install
+
+# 2. 登录 Cloudflare（首次）
+npm run login
+
+# 3. 初始化数据库（首次）
+npm run db:migrate
+
+# 4. 启动 Wrangler 开发服务器
+npm run dev:wrangler
+
+# 5. 浏览器访问
+http://localhost:8788
+```
+
+> 📘 **详细开发指南**: 查看 [LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md)
+
+### 方式对比
+
+| 特性 | `npm run dev` | `npm run dev:wrangler` |
+|------|---------------|------------------------|
+| **HMR 速度** | ⚡ 极快 (~100ms) | 🐢 较慢（需重新构建） |
+| **D1 数据库** | ❌ 不可用 | ✅ 本地/远程 D1 |
+| **R2 存储** | ❌ 不可用 | ✅ 本地/远程 R2 |
+| **API 路由** | ❌ 回退到 localStorage | ✅ 完整 Workers 环境 |
+| **适用场景** | UI 快速开发 | API 开发/完整测试 |
+
+### 环境变量
+
+创建 `.dev.vars` 文件（已在 .gitignore 中）：
+
+```bash
+JWT_SECRET=your_jwt_secret_here
+GEMINI_MASTER_KEY=your_gemini_key  # 可选
+AZURE_MASTER_KEY=your_azure_key     # 可选
+```
 
 ```bash
 # 1. 构建前端

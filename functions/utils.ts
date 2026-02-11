@@ -233,17 +233,29 @@ export function errorResponse(error: string, status = 400): Response {
  */
 export async function getUserFromRequest(request: Request, env: Env): Promise<User | null> {
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('getUserFromRequest: 缺少或格式错误的 Authorization header');
+    return null;
+  }
   
   const token = authHeader.substring(7);
   const payload = await verifyJWT(token, env.JWT_SECRET);
-  if (!payload) return null;
+  if (!payload) {
+    console.log('getUserFromRequest: JWT 验证失败');
+    return null;
+  }
+  
+  console.log('getUserFromRequest: JWT 验证成功 - userId:', payload.userId);
   
   // 从数据库查询用户
   const result = await env.DB
     .prepare('SELECT * FROM users WHERE id = ? AND is_deleted = 0 AND is_blocked = 0')
     .bind(payload.userId)
     .first<User>();
+  
+  if (!result) {
+    console.log('getUserFromRequest: 数据库中未找到用户 -', payload.userId);
+  }
   
   return result || null;
 }

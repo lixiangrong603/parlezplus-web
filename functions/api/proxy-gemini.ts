@@ -13,8 +13,11 @@ export async function onRequestPost(context: any): Promise<Response> {
     // 验证用户身份
     const user = await getUserFromRequest(request, env);
     if (!user) {
-      return errorResponse('未授权', 401);
+      console.error('Proxy-Gemini: 用户验证失败 - Authorization header:', request.headers.get('Authorization')?.substring(0, 20) + '...');
+      return errorResponse('未授权 - 请检查登录状态', 401);
     }
+    
+    console.log('Proxy-Gemini: 用户验证成功 -', user.username, user.id);
     
     // 从数据库获取用户的加密 Gemini Key
     const keyRecord = await env.DB
@@ -23,14 +26,26 @@ export async function onRequestPost(context: any): Promise<Response> {
       .first<{ gemini_key_encrypted: string | null }>();
     
     if (!keyRecord?.gemini_key_encrypted) {
+      console.error('Proxy-Gemini: 用户未配置 Gemini Key -', user.id);
       return errorResponse('未配置 Gemini API Key，请在设置中添加', 400);
     }
+    
+    console.log('Proxy-Gemini: 找到加密的 Gemini Key');
     
     // 解密 API Key
     const apiKey = await decryptApiKey(keyRecord.gemini_key_encrypted, env.GEMINI_MASTER_KEY || '');
     
-    // 获取请求体
-    const body = await request.json();
+    // 获取请求体并容错转换
+    const body = await request.json() as any;
+    
+    // 容错：转换 config → generationConfig，移除 model（已在 URL 中）
+    if (body.config && !body.generationConfig) {
+      body.generationConfig = body.config;
+      delete body.config;
+    }
+    if (body.model) {
+      delete body.model;
+    }
     
     // TODO: 未来扩展 - 根据用户地理位置路由到不同 AI 服务
     // const country = request.cf?.country;

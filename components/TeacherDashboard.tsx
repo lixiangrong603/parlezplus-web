@@ -12,7 +12,7 @@ import AvatarEditor from './AvatarEditor';
 import { Classroom, Student, Submission, MediaResource, User as UserType, ExamPaper, ExamSession } from '../types';
 import { 
   getClassrooms, saveClassroom, saveUser, getUsers, getUserById, 
-  getResources, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass,
+  getResources, getResourceById, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass,
   checkClassroomReferences, cascadeDeleteClassroom, ReferenceInfo
 } from '../utils/storage';
 import { apiClient } from '../services/api/client';
@@ -125,7 +125,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
       <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm shrink-0 transition-colors">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 cursor-pointer">
-            <h1 className="text-xl font-black text-indigo-900 dark:text-indigo-400 tracking-tight">ParlezPlus</h1>
+            <h1 className="text-xl font-black text-indigo-900 dark:text-indigo-400 tracking-tight">Fluide</h1>
             <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border border-indigo-200 dark:border-indigo-800">Teacher</span>
           </div>
           
@@ -474,9 +474,11 @@ const ClassDetailView = ({
     const classes = await getClassrooms(teacherId);
     const cls = classes.find(c => c.id === classId);
     if (cls) setClassroom(cls);
-    const allResources = await getResources(teacherId);
+    const [allResources, allExams] = await Promise.all([
+      getResources(teacherId, false),
+      getExamPapers(teacherId)
+    ]);
     setAssignedResources(allResources.filter(r => r.assignedClassIds?.includes(classId)).sort((a, b) => b.createdAt - a.createdAt));
-    const allExams = await getExamPapers(teacherId);
     const assigned = allExams.filter(e => e.assignedClassIds?.includes(classId));
     setAssignedExams(assigned);
 
@@ -539,7 +541,7 @@ const ClassDetailView = ({
         const name = newStudentData.name.trim();
 
         try {
-          const created = await apiClient.post<{ id: string; username: string; role: string; name: string }>(
+          const created = await apiClient.post<{ id: string; username: string; role: string; name: string; existed?: boolean; alreadyInClass?: boolean; restored?: boolean }>(
             '/api/users',
             {
               username,
@@ -551,21 +553,50 @@ const ClassDetailView = ({
             }
           );
 
-          const newUser: UserType = {
-            id: created.id,
-            username: created.username,
-            password: '123456',
-            name: created.name,
-            role: 'student',
-            isBlocked: false,
-            classId: classId,
-            needsPasswordChange: true,
-          };
-          await saveUser(newUser);
+          // 处理后端返回的"用户已存在"情况
+          if (created.existed) {
+            if (created.alreadyInClass) {
+              setConfirmConfig({
+                isOpen: true,
+                title: "提示",
+                message: `学生 @${created.username} 已在班级中。`,
+                onConfirm: () => {},
+                type: "info"
+              });
+            } else {
+              // 用户已存在并已被加入班级（或被恢复）
+              const newStudent: Student = { id: `s-${Date.now()}`, userId: created.id, name: created.name, overallProgress: 0 };
+              const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
+              await saveClassroom(updatedClass);
+              
+              setConfirmConfig({
+                isOpen: true,
+                title: created.restored ? "恢复成功" : "添加成功",
+                message: created.restored 
+                  ? `已恢复并添加学生 @${created.username} 到班级。`
+                  : `已找到现有账号 @${created.username}，已将其加入班级。`,
+                onConfirm: () => {},
+                type: "info"
+              });
+            }
+          } else {
+            // 全新创建的用户
+            const newUser: UserType = {
+              id: created.id,
+              username: created.username,
+              password: '123456',
+              name: created.name,
+              role: 'student',
+              isBlocked: false,
+              classId: classId,
+              needsPasswordChange: true,
+            };
+            await saveUser(newUser);
 
-          const newStudent: Student = { id: `s-${Date.now()}`, userId: created.id, name, overallProgress: 0 };
-          const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
-          await saveClassroom(updatedClass);
+            const newStudent: Student = { id: `s-${Date.now()}`, userId: created.id, name, overallProgress: 0 };
+            const updatedClass = { ...classroom!, students: [...classroom!.students, newStudent], studentCount: classroom!.students.length + 1 };
+            await saveClassroom(updatedClass);
+          }
         } catch (e: any) {
           setConfirmConfig({
             isOpen: true,
@@ -592,7 +623,7 @@ const ClassDetailView = ({
 
     if (!classroom) return;
 
-    const newStudents: Student[] = [...classroom.students];
+    const newStudents: Student[] = [...(classroom.students || [])];
 
     for (const item of list) {
       const username = item.username.trim().toLowerCase();
@@ -623,7 +654,7 @@ const ClassDetailView = ({
 
       // 账号不存在，新建（写入后端，确保可登录）
       try {
-        const created = await apiClient.post<{ id: string; username: string; role: string; name: string }>(
+        const created = await apiClient.post<{ id: string; username: string; role: string; name: string; existed?: boolean; alreadyInClass?: boolean; restored?: boolean }>(
           '/api/users',
           {
             username,
@@ -635,24 +666,41 @@ const ClassDetailView = ({
           }
         );
 
-        const newUser: UserType = {
-          id: created.id,
-          username: created.username,
-          password: '123456',
-          name: created.name,
-          role: 'student',
-          isBlocked: false,
-          classId: classId,
-          needsPasswordChange: true,
-        };
-        await saveUser(newUser);
-        newStudents.push({
-          id: `s-${Date.now()}-${username}`,
-          userId: created.id,
-          name: newUser.name,
-          overallProgress: 0
-        });
-        createdCount++;
+        // 处理后端返回的"用户已存在"情况
+        if (created.existed) {
+          if (created.alreadyInClass) {
+            skipCount++;
+          } else {
+            // 用户已存在并已被加入班级（或被恢复）
+            newStudents.push({
+              id: `s-${Date.now()}-${username}`,
+              userId: created.id,
+              name: created.name,
+              overallProgress: 0
+            });
+            addedCount++;
+          }
+        } else {
+          // 全新创建的用户
+          const newUser: UserType = {
+            id: created.id,
+            username: created.username,
+            password: '123456',
+            name: created.name,
+            role: 'student',
+            isBlocked: false,
+            classId: classId,
+            needsPasswordChange: true,
+          };
+          await saveUser(newUser);
+          newStudents.push({
+            id: `s-${Date.now()}-${username}`,
+            userId: created.id,
+            name: newUser.name,
+            overallProgress: 0
+          });
+          createdCount++;
+        }
       } catch (e: any) {
         resultsErrors.push(`@${username}: ${e?.message || '创建失败'}`);
         skipCount++;
@@ -722,8 +770,7 @@ const ClassDetailView = ({
       title: "撤回任务",
       message: "确定要从该班级撤回此任务吗？学生将无法再看到该任务。",
       onConfirm: async () => {
-        const resources = await getResources(teacherId);
-        const resource = resources.find(r => r.id === resourceId);
+        const resource = await getResourceById(resourceId);
         if (resource) {
           const updated = { ...resource, assignedClassIds: (resource.assignedClassIds || []).filter(id => id !== classId) };
           await saveResource(updated);
@@ -848,7 +895,7 @@ const ClassDetailView = ({
           {activeTab === 'roster' ? (
              <StudentRoster
                 classId={classId}
-                students={classroom.students}
+                students={classroom.students || []}
                 onAddStudent={() => setShowAddStudent(true)}
                 onBatchImport={() => setShowBatchImport(true)}
                 onResetPassword={handleResetPassword}
@@ -877,7 +924,7 @@ const ClassDetailView = ({
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {assignedResources.map(res => {
                         const submitted = MOCK_SUBMISSIONS.filter(s => s.resourceId === res.id).length;
-                        const total = classroom.students.length;
+                        const total = (classroom.students || []).length;
                         return (
                           <tr key={res.id} className="group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors">
                             <td className="px-6 py-4 align-middle">
@@ -953,7 +1000,7 @@ const ClassDetailView = ({
                       {assignedExams.map(exam => {
                         const sessions = examSessionsByExamId[exam.id] || [];
                         const submitted = sessions.filter(s => s.isSubmitted).length;
-                        const total = classroom.students.length;
+                        const total = (classroom.students || []).length;
                         const deadline = exam.assignedClassDeadlines?.[classId];
                         return (
                           <tr key={exam.id} className="group hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors">
@@ -1070,8 +1117,7 @@ const ClassDetailView = ({
           classId={classId}
           onClose={() => setShowAddTask(false)}
           onAssignResource={async (rid, d) => {
-            const resources = await getResources(teacherId);
-            const resource = resources.find(r => r.id === rid);
+            const resource = await getResourceById(rid);
             if (resource) {
               const nextClassIds = Array.from(new Set([...(resource.assignedClassIds || []), classId]));
               await saveResource({ ...resource, status: 'ready', deadline: d, assignedClassIds: nextClassIds });
@@ -1203,7 +1249,7 @@ const AddTaskModal = ({
 
   useEffect(() => {
     const loadData = async () => {
-      const allResources = await getResources(teacherId);
+      const allResources = await getResources(teacherId, false);
       setResources(allResources.filter(r => !alreadyAssignedResourceIds.includes(r.id)));
       const allExams = await getExamPapers(teacherId);
       setExams(allExams.filter(e => !alreadyAssignedExamIds.includes(e.id)));
@@ -1294,12 +1340,29 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
   const [azureKey, setAzureKey] = useState(user?.id ? localStorage.getItem(`${user.id}_azure_speech_key`) || '' : '');
   const [azureRegion, setAzureRegion] = useState(user?.id ? localStorage.getItem(`${user.id}_azure_speech_region`) || 'westeurope' : 'westeurope');
   const [geminiKey, setGeminiKey] = useState(user?.id ? localStorage.getItem(`${user.id}_gemini_api_key`) || '' : '');
+  const [hasD1GeminiKey, setHasD1GeminiKey] = useState(false);
+  const [hasD1AzureKey, setHasD1AzureKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
   const [candidateImage, setCandidateImage] = useState<string | null>(null);
   const [showAvatarEditor, setShowAvatarEditor] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // 从 D1 加载 key 状态（跨浏览器同步）
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    apiClient.get<{ hasGeminiKey: boolean; hasAzureKey: boolean; azureRegion: string }>(`/api/users/${user.id}/api-keys`).then(data => {
+      if (!active) return;
+      setHasD1GeminiKey(data.hasGeminiKey);
+      setHasD1AzureKey(data.hasAzureKey);
+      if (data.azureRegion && !localStorage.getItem(`${user.id}_azure_speech_region`)) {
+        setAzureRegion(data.azureRegion);
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [user?.id]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1336,17 +1399,18 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
     
     setIsSaving(true);
     try {
-      // 保存 API Keys 到数据库（加密存储）
-      await apiClient.put(`/api/users/${user.id}/api-keys`, {
-        geminiKey: geminiKey || undefined,
-        azureKey: azureKey || undefined,
+      // 保存 API Keys 到数据库（加密存储）—— 只传有值的字段
+      const apiKeysPayload: Record<string, string | undefined> = {
         azureRegion: azureRegion || 'westeurope',
-      });
+      };
+      if (geminiKey) apiKeysPayload.geminiKey = geminiKey;
+      if (azureKey) apiKeysPayload.azureKey = azureKey;
+      await apiClient.put(`/api/users/${user.id}/api-keys`, apiKeysPayload);
       
       // 同时保存到 localStorage 作为缓存（用于前端快速读取）
-      localStorage.setItem(`${user.id}_azure_speech_key`, azureKey);
+      if (azureKey) localStorage.setItem(`${user.id}_azure_speech_key`, azureKey);
       localStorage.setItem(`${user.id}_azure_speech_region`, azureRegion);
-      localStorage.setItem(`${user.id}_gemini_api_key`, geminiKey);
+      if (geminiKey) localStorage.setItem(`${user.id}_gemini_api_key`, geminiKey);
       
       // 保存头像
       if (avatarPreview !== user.avatar) {
@@ -1438,9 +1502,9 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
               ) : activeTab === 'api' ? (
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Key</label><input type="password" value={azureKey} onChange={e => setAzureKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Key {hasD1AzureKey && !azureKey && <span className="text-emerald-500 ml-1">✓ 已配置(服务端)</span>}</label><input type="password" value={azureKey} onChange={e => setAzureKey(e.target.value)} placeholder={hasD1AzureKey ? '已配置，留空则保持不变' : ''} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
                     <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Azure Region</label><input type="text" value={azureRegion} onChange={e => setAzureRegion(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
-                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Gemini Key</label><input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Gemini Key {hasD1GeminiKey && !geminiKey && <span className="text-emerald-500 ml-1">✓ 已配置(服务端)</span>}</label><input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder={hasD1GeminiKey ? '已配置，留空则保持不变' : ''} className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" /></div>
                   </div>
                 </div>
               ) : (

@@ -49,21 +49,21 @@ function AppContent() {
     }
   }, [isDarkMode]);
 
-  // Reload resources whenever user role is resolved or we return to dashboard
+  // Load resources for student view only (teachers load inside ResourceManagement)
   useEffect(() => {
-    const loadResources = async () => {
-      if (!isLoading && user) {
-        // 教师只加载自己的资源，学生加载全部（以便在子组件中根据班级过滤）
-        const fetchId = user.role === 'teacher' ? user.id : undefined;
-        const loadedResources = await getResources(fetchId);
-        setResources(loadedResources);
-      }
-    };
-    loadResources();
-  }, [isLoading, user, selectedResource]);
+    if (!isLoading && user && user.role !== 'teacher') {
+      getResources(undefined, false).then(setResources);
+    }
+  }, [isLoading, user]);
 
-  // [DEBUG] 输出状态
-  console.log('AppContent state:', { isLoading, user: user?.username || 'null' });
+  // Reload resources when student returns to dashboard from PracticeStudio
+  const prevSelectedRef = React.useRef(selectedResource);
+  useEffect(() => {
+    if (prevSelectedRef.current !== null && selectedResource === null && user && user.role !== 'teacher') {
+      getResources(undefined, false).then(setResources);
+    }
+    prevSelectedRef.current = selectedResource;
+  }, [selectedResource, user]);
 
   if (isLoading) {
     return (

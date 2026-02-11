@@ -51,13 +51,13 @@ interface QuizEditorProps {
     questions: Question[];
     onChange: (questions: Question[]) => void;
     fullText: string; // Resource's full text for AI generation
-    geminiKey: string;
+    authToken: string;
     onOpenSettings: () => void;
     resourceId?: string; // Needed for starting background task
 }
 
 const QuizEditor: React.FC<QuizEditorProps> = ({ 
-    questions, onChange, fullText, geminiKey, onOpenSettings, resourceId
+    questions, onChange, fullText, authToken, onOpenSettings, resourceId
 }) => {
     // Context - using useJobs to access startQuizGeneration
     const { startQuizGeneration } = useJobs();
@@ -75,7 +75,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     // --- Actions ---
 
     const handleGenerate = async () => {
-        if (!geminiKey) {
+        if (!authToken) {
             onOpenSettings();
             return;
         }
@@ -89,7 +89,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         }
 
         setError(null);
-        startQuizGeneration(resourceId, fullText, genCount, genLevel, geminiKey);
+        startQuizGeneration(resourceId, fullText, genCount, genLevel, authToken);
     };
 
     const addQuestion = () => {

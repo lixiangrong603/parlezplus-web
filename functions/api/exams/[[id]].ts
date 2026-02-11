@@ -18,19 +18,29 @@ export async function onRequestGet(context: any): Promise<Response> {
     const url = new URL(request.url);
     const teacherId = url.searchParams.get('teacherId');
     const classId = url.searchParams.get('classId');
+    const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
     
     let query: D1PreparedStatement;
     
     if (user.role === 'admin' && !teacherId) {
       // 管理员查看所有试卷
-      query = env.DB
-        .prepare('SELECT * FROM exam_papers WHERE is_deleted = 0 ORDER BY created_at DESC');
+      if (includeDeleted) {
+        query = env.DB.prepare('SELECT * FROM exam_papers ORDER BY created_at DESC');
+      } else {
+        query = env.DB.prepare('SELECT * FROM exam_papers WHERE is_deleted = 0 ORDER BY created_at DESC');
+      }
     } else if (user.role === 'teacher' || teacherId) {
       // 教师查看自己的试卷
       const targetTeacherId = teacherId || user.id;
-      query = env.DB
-        .prepare('SELECT * FROM exam_papers WHERE teacher_id = ? AND is_deleted = 0 ORDER BY created_at DESC')
-        .bind(targetTeacherId);
+      if (includeDeleted) {
+        query = env.DB
+          .prepare('SELECT * FROM exam_papers WHERE teacher_id = ? ORDER BY created_at DESC')
+          .bind(targetTeacherId);
+      } else {
+        query = env.DB
+          .prepare('SELECT * FROM exam_papers WHERE teacher_id = ? AND is_deleted = 0 ORDER BY created_at DESC')
+          .bind(targetTeacherId);
+      }
     } else if (user.role === 'student' && classId) {
       // 学生查看分配给自己班级的试卷
       query = env.DB
@@ -276,27 +286,51 @@ export async function onRequestGet_sessions(context: any): Promise<Response> {
     const url = new URL(request.url);
     const examId = url.searchParams.get('examId');
     const studentId = url.searchParams.get('studentId');
+    const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
     
     let query: D1PreparedStatement;
     
     if (user.role === 'student') {
       // 学生查看自己的考试会话
-      query = env.DB
-        .prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
-        .bind(user.id);
+      if (includeDeleted) {
+        query = env.DB
+          .prepare('SELECT * FROM exam_sessions WHERE student_id = ? ORDER BY start_time DESC')
+          .bind(user.id);
+      } else {
+        query = env.DB
+          .prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
+          .bind(user.id);
+      }
     } else if (user.role === 'teacher' || user.role === 'admin') {
       // 教师/管理员查看考试会话
       if (examId) {
-        query = env.DB
-          .prepare('SELECT * FROM exam_sessions WHERE exam_paper_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
-          .bind(examId);
+        if (includeDeleted) {
+          query = env.DB
+            .prepare('SELECT * FROM exam_sessions WHERE exam_paper_id = ? ORDER BY start_time DESC')
+            .bind(examId);
+        } else {
+          query = env.DB
+            .prepare('SELECT * FROM exam_sessions WHERE exam_paper_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
+            .bind(examId);
+        }
       } else if (studentId) {
-        query = env.DB
-          .prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
-          .bind(studentId);
+        if (includeDeleted) {
+          query = env.DB
+            .prepare('SELECT * FROM exam_sessions WHERE student_id = ? ORDER BY start_time DESC')
+            .bind(studentId);
+        } else {
+          query = env.DB
+            .prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
+            .bind(studentId);
+        }
       } else {
-        query = env.DB
-          .prepare('SELECT * FROM exam_sessions WHERE is_deleted = 0 ORDER BY start_time DESC LIMIT 100');
+        if (includeDeleted) {
+          query = env.DB
+            .prepare('SELECT * FROM exam_sessions ORDER BY start_time DESC LIMIT 100');
+        } else {
+          query = env.DB
+            .prepare('SELECT * FROM exam_sessions WHERE is_deleted = 0 ORDER BY start_time DESC LIMIT 100');
+        }
       }
     } else {
       return errorResponse('无权限', 403);

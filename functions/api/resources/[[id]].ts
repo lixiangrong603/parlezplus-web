@@ -3,6 +3,53 @@
 import type { Env, Resource } from '../../../types/worker';
 import { getUserFromRequest, jsonResponse, errorResponse } from '../../utils';
 
+// 辅助函数：从试卷中移除指定的题目ID并重新计算总分
+async function removeQuestionsFromExamPapers(env: Env, questionIds: string[]): Promise<void> {
+  const questionIdSet = new Set(questionIds);
+  
+  // 获取所有未删除的试卷
+  const { results: papers } = await env.DB
+    .prepare('SELECT id, sections, total_score FROM exam_papers WHERE is_deleted = 0')
+    .all<{ id: string; sections: string; total_score: number }>();
+  
+  for (const paper of papers) {
+    let paperModified = false;
+    const sections = JSON.parse(paper.sections || '[]');
+    
+    // 遍历每个section，移除引用的题目
+    for (const section of sections) {
+      const originalLength = section.items?.length || 0;
+      if (section.items) {
+        section.items = section.items.filter((item: any) => {
+          if (item.type === 'consigne') return true; // 保留consigne
+          return !questionIdSet.has(item.questionId || '');
+        });
+      }
+      
+      if ((section.items?.length || 0) !== originalLength) {
+        paperModified = true;
+      }
+    }
+    
+    // 如果试卷有变化，重新计算总分并保存
+    if (paperModified) {
+      const newTotalScore = sections.reduce((total: number, section: any) => {
+        return total + (section.items || []).reduce((sectionTotal: number, item: any) => {
+          if (item.type === 'consigne') return sectionTotal;
+          return sectionTotal + (item.points || 0);
+        }, 0);
+      }, 0);
+      
+      await env.DB
+        .prepare('UPDATE exam_papers SET sections = ?, total_score = ? WHERE id = ?')
+        .bind(JSON.stringify(sections), newTotalScore, paper.id)
+        .run();
+      
+      console.log(`试卷 ${paper.id} 已更新：移除了 ${questionIds.length} 道题目，新总分: ${newTotalScore}`);
+    }
+  }
+}
+
 // ============================================
 // GET /api/resources - 获取资源列表
 // 查询参数: teacherId (可选，教师查看自己的资源)
@@ -18,6 +65,7 @@ export async function onRequestGet(context: any): Promise<Response> {
     
     const url = new URL(request.url);
     const teacherId = url.searchParams.get('teacherId');
+    const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
     
     let query: D1PreparedStatement;
     
@@ -26,9 +74,15 @@ export async function onRequestGet(context: any): Promise<Response> {
       if (user.role !== 'teacher' && user.role !== 'admin') {
         return errorResponse('无权限', 403);
       }
-      query = env.DB
-        .prepare('SELECT * FROM resources WHERE teacher_id = ? AND is_deleted = 0 ORDER BY created_at DESC')
-        .bind(teacherId);
+      if (includeDeleted) {
+        query = env.DB
+          .prepare('SELECT * FROM resources WHERE teacher_id = ? ORDER BY created_at DESC')
+          .bind(teacherId);
+      } else {
+        query = env.DB
+          .prepare('SELECT * FROM resources WHERE teacher_id = ? AND is_deleted = 0 ORDER BY created_at DESC')
+          .bind(teacherId);
+      }
     } else {
       // 学生查看所有已发布的资源
       query = env.DB
@@ -248,10 +302,32 @@ export async function onRequestDelete(context: any): Promise<Response> {
     // [[id]] catch-all returns an array
     const resourceId = Array.isArray(params.id) ? params.id.join('/') : params.id;
     
+    // 先获取资源的quiz题目ID
+    const resource = await env.DB
+      .prepare('SELECT questions FROM resources WHERE id = ?')
+      .bind(resourceId)
+      .first<{ questions: string }>();
+    
+    let resourceQuestionIds: string[] = [];
+    if (resource?.questions) {
+      try {
+        const questions = JSON.parse(resource.questions);
+        resourceQuestionIds = questions.map((q: any) => q.id).filter(Boolean);
+      } catch (err) {
+        console.error('Error parsing resource questions:', err);
+      }
+    }
+    
+    // 软删除资源
     await env.DB
       .prepare('UPDATE resources SET is_deleted = 1, deleted_at = ?, deleted_by = ? WHERE id = ?')
       .bind(Date.now(), user.id, resourceId)
       .run();
+    
+    // 从引用该资源quiz题目的试卷中移除这些题目并重新计算总分
+    if (resourceQuestionIds.length > 0) {
+      await removeQuestionsFromExamPapers(env, resourceQuestionIds);
+    }
     
     return jsonResponse({ success: true });
   } catch (error) {

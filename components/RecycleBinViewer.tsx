@@ -80,8 +80,15 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
   const handleRestore = async (item: RecycleBinItem) => {
     setRestoringId(item.id);
     try {
-      restoreDeletedRecord(item.type, item.id);
+      await restoreDeletedRecord(item.type, item.id);
       await load();
+      modal.alert({ title: '恢复成功', message: `已恢复${typeLabel(item.type)}「${item.name}」` });
+    } catch (error: any) {
+      console.error('恢复失败:', error);
+      modal.alert({ 
+        title: '恢复失败', 
+        message: error?.message || '恢复失败，请查看控制台了解详情'
+      });
     } finally {
       setRestoringId(null);
     }
@@ -101,6 +108,13 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
     try {
       await permanentlyDeleteRecord(item.type, item.id);
       await load();
+      modal.alert({ title: '删除成功', message: `已永久删除${typeLabel(item.type)}「${item.name}」` });
+    } catch (error: any) {
+      console.error('永久删除失败:', error);
+      modal.alert({ 
+        title: '删除失败', 
+        message: error?.message || '永久删除失败，请查看控制台了解详情'
+      });
     } finally {
       setDeletingId(null);
     }
@@ -135,9 +149,33 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
 
   const restoreSelected = async () => {
     if (selectedItems.length === 0) return;
-    selectedItems.forEach(it => restoreDeletedRecord(it.type, it.id));
+    
+    let successCount = 0;
+    let failCount = 0;
+    const errors: string[] = [];
+    
+    for (const item of selectedItems) {
+      try {
+        await restoreDeletedRecord(item.type, item.id);
+        successCount++;
+      } catch (error: any) {
+        failCount++;
+        errors.push(`${typeLabel(item.type)}「${item.name}」: ${error?.message || '未知错误'}`);
+        console.error(`恢复 ${typeLabel(item.type)} ${item.name} 失败:`, error);
+      }
+    }
+    
     setSelectedKeys(new Set());
     await load();
+    
+    if (failCount === 0) {
+      modal.alert({ title: '恢复成功', message: `已成功恢复 ${successCount} 项` });
+    } else {
+      modal.alert({ 
+        title: '部分恢复失败', 
+        message: `成功: ${successCount} 项\n失败: ${failCount} 项\n\n失败详情:\n${errors.join('\n')}`
+      });
+    }
   };
 
   const deleteSelected = async () => {
@@ -151,15 +189,31 @@ const RecycleBinViewer: React.FC<RecycleBinViewerProps> = ({ onClose, teacherId 
     });
     if (!ok) return;
 
+    let successCount = 0;
+    let failCount = 0;
+    const errors: string[] = [];
+    
     for (const it of selectedItems) {
       try {
         await permanentlyDeleteRecord(it.type, it.id);
-      } catch (error) {
-        console.error(`Failed to delete ${it.type} ${it.id}:`, error);
+        successCount++;
+      } catch (error: any) {
+        failCount++;
+        errors.push(`${typeLabel(it.type)}「${it.name}」: ${error?.message || '未知错误'}`);
+        console.error(`删除 ${typeLabel(it.type)} ${it.name} 失败:`, error);
       }
     }
     setSelectedKeys(new Set());
     await load();
+    
+    if (failCount === 0) {
+      modal.alert({ title: '删除成功', message: `已成功删除 ${successCount} 项` });
+    } else {
+      modal.alert({ 
+        title: '部分删除失败', 
+        message: `成功: ${successCount} 项\n失败: ${failCount} 项\n\n失败详情:\n${errors.join('\n')}`
+      });
+    }
   };
 
   return (

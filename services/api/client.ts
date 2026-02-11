@@ -113,18 +113,36 @@ export const apiClient = new ApiClient();
 // 认证 API
 // ============================================
 
+// 将后端返回的蛇形命名用户对象转换为前端驼峰命名
+function transformUserFromApi(apiUser: any): any {
+  return {
+    ...apiUser,
+    // 关键字段映射：蛇形 → 驼峰
+    classId: apiUser.class_id ?? apiUser.classId,
+    needsPasswordChange: apiUser.needs_password_change === 1 || apiUser.needs_password_change === true || apiUser.needsPasswordChange,
+    isBlocked: apiUser.is_blocked === 1 || apiUser.is_blocked === true || apiUser.isBlocked,
+    isDeleted: apiUser.is_deleted === 1 || apiUser.is_deleted === true || apiUser.isDeleted,
+    deletedAt: apiUser.deleted_at ?? apiUser.deletedAt,
+    deletedBy: apiUser.deleted_by ?? apiUser.deletedBy,
+  };
+}
+
 export async function login(username: string, password: string): Promise<{ token: string; user: User }> {
-  const result = await apiClient.post<{ token: string; user: User }>('/api/auth', {
+  const result = await apiClient.post<{ token: string; user: any }>('/api/auth', {
     username,
     password,
   });
   
   apiClient.setToken(result.token);
-  return result;
+  return {
+    token: result.token,
+    user: transformUserFromApi(result.user),
+  };
 }
 
 export async function getCurrentUser(): Promise<User> {
-  return apiClient.get<User>('/api/auth');
+  const apiUser = await apiClient.get<any>('/api/auth');
+  return transformUserFromApi(apiUser);
 }
 
 export function logout() {
@@ -135,9 +153,12 @@ export function logout() {
 // 资源 API
 // ============================================
 
-export async function getResources(teacherId?: string): Promise<any[]> {
-  const queryParam = teacherId ? `?teacherId=${teacherId}` : '';
-  return apiClient.get<any[]>(`/api/resources${queryParam}`);
+export async function getResources(teacherId?: string, includeDeleted?: boolean): Promise<any[]> {
+  const params = new URLSearchParams();
+  if (teacherId) params.append('teacherId', teacherId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
+  const queryString = params.toString();
+  return apiClient.get<any[]>(`/api/resources${queryString ? `?${queryString}` : ''}`);
 }
 
 export async function createResource(resource: any): Promise<{ id: string; created_at: number }> {
@@ -214,9 +235,12 @@ export function getMediaUrl(r2Key: string | null | undefined): string {
 // 班级 API
 // ============================================
 
-export async function getClassrooms(teacherId?: string): Promise<any[]> {
-  const queryParam = teacherId ? `?teacherId=${teacherId}` : '';
-  return apiClient.get<any[]>(`/api/classrooms${queryParam}`);
+export async function getClassrooms(teacherId?: string, includeDeleted?: boolean): Promise<any[]> {
+  const params = new URLSearchParams();
+  if (teacherId) params.append('teacherId', teacherId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
+  const queryString = params.toString();
+  return apiClient.get<any[]>(`/api/classrooms${queryString ? `?${queryString}` : ''}`);
 }
 
 export async function createClassroom(data: { name: string; teacherId?: string }): Promise<any> {
@@ -235,9 +259,12 @@ export async function deleteClassroom(id: string): Promise<{ success: boolean }>
 // 频道 API
 // ============================================
 
-export async function getChannels(teacherId?: string): Promise<any[]> {
-  const queryParam = teacherId ? `?teacherId=${teacherId}` : '';
-  return apiClient.get<any[]>(`/api/channels${queryParam}`);
+export async function getChannels(teacherId?: string, includeDeleted?: boolean): Promise<any[]> {
+  const params = new URLSearchParams();
+  if (teacherId) params.append('teacherId', teacherId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
+  const queryString = params.toString();
+  return apiClient.get<any[]>(`/api/channels${queryString ? `?${queryString}` : ''}`);
 }
 
 export async function createChannel(data: { name: string }): Promise<any> {
@@ -257,9 +284,12 @@ export async function deleteChannel(id: string, operatorId?: string, reason?: st
 // 课程大纲 API
 // ============================================
 
-export async function getSyllabusCourses(teacherId?: string): Promise<any[]> {
-  const queryParam = teacherId ? `?teacherId=${teacherId}` : '';
-  return apiClient.get<any[]>(`/api/syllabus${queryParam}`);
+export async function getSyllabusCourses(teacherId?: string, includeDeleted?: boolean): Promise<any[]> {
+  const params = new URLSearchParams();
+  if (teacherId) params.append('teacherId', teacherId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
+  const queryString = params.toString();
+  return apiClient.get<any[]>(`/api/syllabus${queryString ? `?${queryString}` : ''}`);
 }
 
 export async function createSyllabusCourse(data: { name: string; units?: any[] }): Promise<any> {
@@ -278,11 +308,12 @@ export async function deleteSyllabusCourse(id: string): Promise<{ success: boole
 // 题库 API
 // ============================================
 
-export async function getQuestions(teacherId?: string, type?: string, level?: string): Promise<any[]> {
+export async function getQuestions(teacherId?: string, type?: string, level?: string, includeDeleted?: boolean): Promise<any[]> {
   const params = new URLSearchParams();
   if (teacherId) params.append('teacherId', teacherId);
   if (type) params.append('type', type);
   if (level) params.append('level', level);
+  if (includeDeleted) params.append('includeDeleted', 'true');
   const queryString = params.toString();
   return apiClient.get<any[]>(`/api/questions${queryString ? `?${queryString}` : ''}`);
 }
@@ -303,9 +334,12 @@ export async function deleteQuestion(id: string): Promise<{ success: boolean }> 
 // 试卷 API
 // ============================================
 
-export async function getExamPapers(teacherId?: string): Promise<any[]> {
-  const queryParam = teacherId ? `?teacherId=${teacherId}` : '';
-  return apiClient.get<any[]>(`/api/exams${queryParam}`);
+export async function getExamPapers(teacherId?: string, includeDeleted?: boolean): Promise<any[]> {
+  const params = new URLSearchParams();
+  if (teacherId) params.append('teacherId', teacherId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
+  const queryString = params.toString();
+  return apiClient.get<any[]>(`/api/exams${queryString ? `?${queryString}` : ''}`);
 }
 
 export async function createExamPaper(data: any): Promise<any> {
@@ -345,10 +379,11 @@ export async function deleteExamFolder(id: string): Promise<{ success: boolean }
 // 考试会话 API
 // ============================================
 
-export async function getExamSessions(examId?: string, studentId?: string): Promise<any[]> {
+export async function getExamSessions(examId?: string, studentId?: string, includeDeleted?: boolean): Promise<any[]> {
   const params = new URLSearchParams();
   if (examId) params.append('examId', examId);
   if (studentId) params.append('studentId', studentId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
   const queryString = params.toString();
   return apiClient.get<any[]>(`/api/exams/sessions${queryString ? `?${queryString}` : ''}`);
 }
@@ -411,10 +446,11 @@ export async function deleteSubmission(id: string, operatorId?: string, reason?:
 // 用户管理 API
 // ============================================
 
-export async function getUsers(role?: string, classId?: string): Promise<any[]> {
+export async function getUsers(role?: string, classId?: string, includeDeleted?: boolean): Promise<any[]> {
   const params = new URLSearchParams();
   if (role) params.append('role', role);
   if (classId) params.append('classId', classId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
   const queryString = params.toString();
   return apiClient.get<any[]>(`/api/users${queryString ? `?${queryString}` : ''}`);
 }
@@ -456,6 +492,14 @@ export async function createOperationLog(data: any): Promise<any> {
 // 数据清理 API (永久删除 R2 文件)
 // ============================================
 
-export async function permanentlyDeleteWithR2Cleanup(type: 'resource' | 'channel' | 'user' | 'question' | 'exam-paper', id: string): Promise<{ success: boolean; message: string }> {
+export async function permanentlyDeleteWithR2Cleanup(type: 'resource' | 'channel' | 'user' | 'question' | 'exam-paper' | 'classroom' | 'exam-session' | 'syllabus-course', id: string): Promise<{ success: boolean; message: string }> {
   return apiClient.post<{ success: boolean; message: string }>('/api/cleanup', { type, id });
+}
+
+// ============================================
+// 恢复回收站记录 API
+// ============================================
+
+export async function restoreFromRecycleBin(type: 'resource' | 'channel' | 'user' | 'question' | 'exam-paper' | 'classroom' | 'exam-session' | 'syllabus-course', id: string): Promise<{ success: boolean; message: string }> {
+  return apiClient.post<{ success: boolean; message: string }>('/api/restore', { type, id });
 }

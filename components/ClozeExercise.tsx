@@ -9,8 +9,10 @@ interface ClozeExerciseProps {
     currentTime: number;
     onSegmentClick: (startTime: number) => void;
     initialAnswers?: Record<string, string>;
+    initialAttempts?: number; // ADDED
     isReadOnly?: boolean;
-    onSaveProgress?: (answers: Record<string, string>, score: { correct: number, total: number }) => void;
+    onSaveProgress?: (answers: Record<string, string>, score: { correct: number, total: number, attempts?: number }) => void;
+    showTranslation: boolean;
 }
 
 const normalize = (str: string) => str.toLowerCase().replace(/[.,!?;:"«»()]/g, '').trim();
@@ -57,11 +59,13 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
     onSegmentClick,
     initialAnswers,
     isReadOnly = false,
-    onSaveProgress
+    onSaveProgress,
+    showTranslation,
+    initialAttempts = 0
 }) => {
     const [inputs, setInputs] = useState<Record<string, string>>(initialAnswers || {});
-    const [isSubmitted, setIsSubmitted] = useState(isReadOnly || !!initialAnswers);
-    const [attempts, setAttempts] = useState(initialAnswers ? 2 : 0); // 0: initial, 1: first check, 2: final
+    const [attempts, setAttempts] = useState(initialAttempts); 
+    const [isSubmitted, setIsSubmitted] = useState(isReadOnly || attempts > 0);
     const [score, setScore] = useState({ correct: 0, total: 0 });
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -132,9 +136,9 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
 
-        // Save progress immediately on every check to ensure data persistence
+        // Save attempts along with score
         if (onSaveProgress) {
-            onSaveProgress(inputs, currentScore);
+            onSaveProgress(inputs, { ...currentScore, attempts: newAttempts });
         }
     };
 
@@ -157,34 +161,69 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
     const isFinalState = isReadOnly || attempts >= 2 || (isSubmitted && score.correct === score.total);
 
     return (
-        <div 
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto no-scrollbar py-2"
-        >
-            {/* Embedded Header for Context */}
-            <div className="px-6 mb-4 animate-fade-in">
-                <div className={`rounded-xl p-3 border flex items-center justify-between transition-colors ${isSubmitted ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30' : 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30'}`}>
-                    <div>
-                        <h2 className={`text-sm font-black flex items-center gap-2 ${isSubmitted ? 'text-indigo-800 dark:text-indigo-200' : 'text-amber-800 dark:text-amber-200'}`}>
-                            {isFinalState ? <Lock size={16} /> : (isSubmitted ? <Edit3 size={16} /> : <HelpCircle size={16} />)} 
-                            {isFinalState ? "填空练习已完成" : (isSubmitted ? "发现错误，请订正" : "听写填空")}
-                        </h2>
-                        <p className={`text-[10px] mt-0.5 font-bold ${isSubmitted ? 'text-indigo-600 dark:text-indigo-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                            {isFinalState ? "查看您的作答详情" : (isSubmitted ? "您还有一次修改机会" : "请补全高亮缺失的单词")}
-                        </p>
-                    </div>
+        <div className="flex flex-col h-full bg-white dark:bg-slate-950">
+           {/* Header - Unified with QuizTaker */}
+           <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <h1 className={`font-bold text-lg font-serif ${isSubmitted ? 'text-indigo-800 dark:text-indigo-200' : 'text-slate-800 dark:text-slate-100'}`}>
+                        {isFinalState ? <span className="flex items-center gap-2"><Lock size={18} /> 完形填空</span> : (isSubmitted ? <span className="flex items-center gap-2"><Edit3 size={18} /> 发现错误</span> : "听写填空")}
+                    </h1>
+                </div>
+
+                <div className="flex items-center gap-2">
                     {isSubmitted ? (
-                        <div className={`text-sm font-black px-3 py-1 rounded-lg ${score.correct === score.total ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400' : 'bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400'}`}>
-                            {score.correct} / {score.total}
+                        <div className="flex items-center gap-2">
+                            <div className={`text-sm font-black px-3 py-1 rounded-lg ${score.correct === score.total ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400' : 'bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400'}`}>
+                                {score.correct} / {score.total}
+                            </div>
+                            
+                            {!isFinalState && (
+                                <button
+                                    onClick={handleRetry}
+                                    className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg font-bold text-sm hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all font-serif flex items-center gap-1"
+                                >
+                                    <RefreshCcw size={14} /> 修改
+                                </button>
+                            )}
+
+                            <button
+                                onClick={onComplete}
+                                className={`px-3 py-1.5 rounded-lg font-bold text-sm transition-all font-serif flex items-center gap-1 ${
+                                    !isFinalState 
+                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' 
+                                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
+                                }`}
+                            >
+                                {isFinalState ? "完成" : "跳过"} <ArrowRight size={14} />
+                            </button>
                         </div>
                     ) : (
-                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-800 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-900/50">
-                            进度 {filledCount}/{clozeItems.length}
+                        <div className="flex items-center gap-2">
+                            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                                {filledCount}/{clozeItems.length}
+                            </div>
+                            <button
+                                onClick={handleCheck}
+                                disabled={!isAllFilled}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 font-serif ${
+                                    isAllFilled 
+                                    ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-80'
+                                }`}
+                            >
+                                <CheckCircle2 size={16} /> {attempts === 1 ? '再查' : '提交'}
+                            </button>
                         </div>
                     )}
                 </div>
             </div>
 
+            <div 
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto no-scrollbar py-2"
+            >
+            {/* Embedded Header for Context - REMOVED */}
+            
             {/* Transcript-style List */}
             {segments.map((seg, sIdx) => {
                 const isActive = sIdx === activeIndex;
@@ -199,7 +238,7 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
                                 : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-900/30'
                         }`}
                     >
-                        <div className={`text-lg leading-snug ${isActive ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
+                        <div className={`text-lg leading-snug font-serif ${isActive ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
                             {seg.words.map((word, wIdx) => {
                                 const key = `${sIdx}-${wIdx}`;
                                 const isWordActive = currentTime >= word.startTime && currentTime <= word.endTime;
@@ -216,7 +255,7 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
                                                 value={val}
                                                 onChange={(e) => handleInputChange(key, e.target.value)}
                                                 disabled={isSubmitted}
-                                                className={`border-b-2 outline-none text-center font-bold px-1 min-w-[3em] transition-colors h-[1.4em] align-middle ${
+                                                className={`border-b-2 outline-none text-center font-bold px-1 min-w-[3em] transition-colors h-[1.4em] align-middle font-serif ${
                                                     isSubmitted 
                                                     ? (isCorrect 
                                                         ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-t' 
@@ -228,9 +267,9 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
                                                 autoCorrect="off"
                                             />
                                             {isSubmitted && !isCorrect && isFinalState && (
-                                                <div className="absolute top-full left-1/2 -translate-x-1/2 text-center text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 animate-fade-in bg-white dark:bg-slate-950 px-1 rounded shadow-sm z-20 border border-emerald-100 dark:border-emerald-900">
+                                                <span className="ml-1 text-sm font-bold text-emerald-600 dark:text-emerald-400 animate-fade-in inline-block align-middle font-serif">
                                                     {word.word}
-                                                </div>
+                                                </span>
                                             )}
                                             {word.needsLiaison && wIdx < seg.words.length - 1 && <LiaisonCurve />}
                                         </div>
@@ -257,49 +296,20 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
                             })}
                         </div>
                         
-                        <div className={`mt-0.5 text-sm tracking-wide leading-tight transition-all duration-300 ${isActive ? 'text-indigo-600/80 dark:text-indigo-400/80 font-medium' : 'text-slate-400 dark:text-slate-600'}`}>
-                            <span className="blur-[6px] hover:blur-0 transition-all cursor-help select-none">{seg.translation}</span>
+                        <div className={`mt-0.5 text-sm tracking-wide leading-tight transition-all duration-300 font-serif ${isActive ? 'text-indigo-600/80 dark:text-indigo-400/80 font-medium' : 'text-slate-400 dark:text-slate-600'}`}>
+                            <span className={`transition-all cursor-help select-none ${showTranslation ? '' : 'blur-[6px] hover:blur-0'}`}>{seg.translation}</span>
                         </div>
                     </div>
                 );
             })}
 
-            {/* Bottom Actions Area */}
-            <div className="mt-8 mb-12 px-6 animate-fade-in-up">
-                {!isSubmitted ? (
-                    <button
-                        onClick={handleCheck}
-                        disabled={!isAllFilled}
-                        className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-black shadow-xl transition-all active:scale-95 ${
-                            isAllFilled 
-                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200 dark:shadow-none' 
-                            : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-80'
-                        }`}
-                    >
-                        <CheckCircle2 size={20} /> {attempts === 1 ? '再次提交检查' : '提交检查'}
-                    </button>
-                ) : (
-                    <div className="flex gap-4">
-                        {!isFinalState && (
-                            <button
-                                onClick={handleRetry}
-                                className="flex-1 py-4 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-2xl font-bold text-base hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all flex items-center justify-center gap-2"
-                            >
-                                <RefreshCcw size={20} /> 修改错误
-                            </button>
-                        )}
-                        <button
-                            onClick={onComplete}
-                            className={`py-4 rounded-2xl font-black text-base shadow-xl transition-all flex items-center justify-center gap-2 ${!isFinalState ? 'flex-[1] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' : 'w-full bg-emerald-600 text-white shadow-emerald-200'}`}
-                        >
-                            {score.correct === score.total ? "完美通过！" : (isFinalState ? "练习已存档，进入跟读" : "跳过修改")} <ArrowRight size={20} />
-                        </button>
-                    </div>
-                )}
-            </div>
+            {/* Submit Button - REMOVED (Moved to Header) */}
+
+            {/* After Submission Actions - REMOVED (Move to Header) */}
             
             <div className="h-24" />
         </div>
+      </div>
     );
 };
 

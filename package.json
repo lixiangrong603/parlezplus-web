@@ -5,13 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:wrangler": "npm run build && npx wrangler pages dev dist --live-reload",
+    "dev:quick": "powershell -ExecutionPolicy Bypass -File ./dev-start.ps1",
     "build": "vite build",
+    "build:watch": "vite build --watch",
     "preview": "vite preview",
+    "lint": "echo 'Linting skipped' && exit 0",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name=parlezplus",
     "db:create": "npx wrangler d1 create parlezplus_db",
     "db:migrate": "npx wrangler d1 execute parlezplus_db --file=database/schema.sql",
+    "db:seed": "npx wrangler d1 execute parlezplus_db --file=database/seed.sql",
     "db:query": "npx wrangler d1 execute parlezplus_db --command",
-    "pages:dev": "npx wrangler pages dev dist --d1 DB --r2 R2_BUCKET",
+    "db:local": "npx wrangler d1 execute parlezplus_db --local --file",
+    "db:reset": "npx wrangler d1 execute parlezplus_db --local --file=database/schema.sql",
+    "pages:dev": "npx wrangler pages dev dist --live-reload",
     "login": "npx wrangler login"
   },
   "dependencies": {

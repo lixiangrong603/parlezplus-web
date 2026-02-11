@@ -17,19 +17,29 @@ export async function onRequestGet(context: any): Promise<Response> {
     
     const url = new URL(request.url);
     const teacherId = url.searchParams.get('teacherId');
+    const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
     
     let query: D1PreparedStatement;
     
     if (user.role === 'admin' && !teacherId) {
       // 管理员查看所有班级
-      query = env.DB
-        .prepare('SELECT * FROM classrooms WHERE is_deleted = 0 ORDER BY created_at DESC');
+      if (includeDeleted) {
+        query = env.DB.prepare('SELECT * FROM classrooms ORDER BY created_at DESC');
+      } else {
+        query = env.DB.prepare('SELECT * FROM classrooms WHERE is_deleted = 0 ORDER BY created_at DESC');
+      }
     } else if (user.role === 'teacher' || teacherId) {
       // 教师查看自己的班级
       const targetTeacherId = teacherId || user.id;
-      query = env.DB
-        .prepare('SELECT * FROM classrooms WHERE user_id = ? AND is_deleted = 0 ORDER BY created_at DESC')
-        .bind(targetTeacherId);
+      if (includeDeleted) {
+        query = env.DB
+          .prepare('SELECT * FROM classrooms WHERE user_id = ? ORDER BY created_at DESC')
+          .bind(targetTeacherId);
+      } else {
+        query = env.DB
+          .prepare('SELECT * FROM classrooms WHERE user_id = ? AND is_deleted = 0 ORDER BY created_at DESC')
+          .bind(targetTeacherId);
+      }
     } else if (user.role === 'student') {
       // 学生查看自己所在的班级
       if (!user.class_id) {

@@ -3,6 +3,53 @@
 import type { Env, Question } from '../../../types/worker';
 import { getUserFromRequest, jsonResponse, errorResponse } from '../../utils';
 
+// 辅助函数：从试卷中移除指定的题目ID并重新计算总分
+async function removeQuestionsFromExamPapers(env: Env, questionIds: string[]): Promise<void> {
+  const questionIdSet = new Set(questionIds);
+  
+  // 获取所有未删除的试卷
+  const { results: papers } = await env.DB
+    .prepare('SELECT id, sections, total_score FROM exam_papers WHERE is_deleted = 0')
+    .all<{ id: string; sections: string; total_score: number }>();
+  
+  for (const paper of papers) {
+    let paperModified = false;
+    const sections = JSON.parse(paper.sections || '[]');
+    
+    // 遍历每个section，移除引用的题目
+    for (const section of sections) {
+      const originalLength = section.items?.length || 0;
+      if (section.items) {
+        section.items = section.items.filter((item: any) => {
+          if (item.type === 'consigne') return true; // 保留consigne
+          return !questionIdSet.has(item.questionId || '');
+        });
+      }
+      
+      if ((section.items?.length || 0) !== originalLength) {
+        paperModified = true;
+      }
+    }
+    
+    // 如果试卷有变化，重新计算总分并保存
+    if (paperModified) {
+      const newTotalScore = sections.reduce((total: number, section: any) => {
+        return total + (section.items || []).reduce((sectionTotal: number, item: any) => {
+          if (item.type === 'consigne') return sectionTotal;
+          return sectionTotal + (item.points || 0);
+        }, 0);
+      }, 0);
+      
+      await env.DB
+        .prepare('UPDATE exam_papers SET sections = ?, total_score = ? WHERE id = ?')
+        .bind(JSON.stringify(sections), newTotalScore, paper.id)
+        .run();
+      
+      console.log(`试卷 ${paper.id} 已更新：移除了 ${questionIds.length} 道题目，新总分: ${newTotalScore}`);
+    }
+  }
+}
+
 // ============================================
 // GET /api/questions - 获取题目列表
 // ============================================
@@ -365,6 +412,9 @@ export async function onRequestDelete(context: any): Promise<Response> {
       .prepare('UPDATE question_bank SET is_deleted = 1, deleted_at = ?, deleted_by = ? WHERE id = ?')
       .bind(Date.now(), user.id, questionId)
       .run();
+    
+    // 从引用该题目的试卷中移除该题目并重新计算总分
+    await removeQuestionsFromExamPapers(env, [questionId]);
     
     return jsonResponse({ success: true, message: '题目已删除' });
   } catch (error: any) {

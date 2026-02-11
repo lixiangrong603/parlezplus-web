@@ -33,11 +33,11 @@ interface Job {
 interface JobContextType {
   jobs: Record<string, Job>; // Keyed by Job ID
   startAzureJob: (resource: MediaResource, apiKey: string, region: string) => Promise<void>;
-  startGeminiJob: (resourceId: string, segments: TranscriptSegment[], apiKey: string) => Promise<void>;
+  startGeminiJob: (resourceId: string, segments: TranscriptSegment[], authToken: string) => Promise<void>;
   startAudioShakeJob: (resourceId: string) => Promise<void>;
-  startQuizGeneration: (resourceId: string, fullText: string, count: number, difficulty: string, apiKey: string) => Promise<void>;
-  startSyllabusQuizGeneration: (jobId: string, knowledgePoints: KnowledgePoint[], count: number, difficulty: string, type: string, subQuestionCount: number, apiKey: string, customPrompt?: string) => Promise<void>;
-  startBatchEvaluationJob: (submissionId: string, segments: { id: string, text: string }[], audioBlob: Blob, azureKey: string, azureRegion: string, geminiKey: string) => Promise<void>;
+  startQuizGeneration: (resourceId: string, fullText: string, count: number, difficulty: string, authToken: string) => Promise<void>;
+  startSyllabusQuizGeneration: (jobId: string, knowledgePoints: KnowledgePoint[], count: number, difficulty: string, type: string, subQuestionCount: number, authToken: string, customPrompt?: string) => Promise<void>;
+  startBatchEvaluationJob: (submissionId: string, segments: { id: string, text: string }[], audioBlob: Blob, azureKey: string, azureRegion: string, authToken: string) => Promise<void>;
   clearJob: (jobId: string) => void;
 }
 
@@ -101,7 +101,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, []);
 
-  const startGeminiJob = useCallback(async (resourceId: string, segments: TranscriptSegment[], apiKey: string) => {
+  const startGeminiJob = useCallback(async (resourceId: string, segments: TranscriptSegment[], authToken: string) => {
     const jobId = resourceId;
     setJobs(prev => ({
       ...prev,
@@ -111,7 +111,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       if (segments.length === 0) throw new Error("No segments to translate");
 
-      const translatedSegments = await translateSegmentsWithWorker(segments, apiKey);
+      const translatedSegments = await translateSegmentsWithWorker(segments, authToken);
 
       updateJob(jobId, {
         status: 'completed',
@@ -143,7 +143,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 3000);
   }, []);
 
-  const startQuizGeneration = useCallback(async (resourceId: string, fullText: string, count: number, difficulty: string, apiKey: string) => {
+  const startQuizGeneration = useCallback(async (resourceId: string, fullText: string, count: number, difficulty: string, authToken: string) => {
     const jobId = resourceId;
     setJobs(prev => ({
       ...prev,
@@ -175,12 +175,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     worker.postMessage({
       type: 'GEMINI_GENERATE_QUIZ',
       id: wId,
-      payload: { fullText, count, difficulty, apiKey }
+      payload: { fullText, count, difficulty, apiKey: authToken }
     });
 
   }, []);
 
-  const startSyllabusQuizGeneration = useCallback(async (jobId: string, knowledgePoints: KnowledgePoint[], count: number, difficulty: string, type: string, subQuestionCount: number, apiKey: string, customPrompt?: string) => {
+  const startSyllabusQuizGeneration = useCallback(async (jobId: string, knowledgePoints: KnowledgePoint[], count: number, difficulty: string, type: string, subQuestionCount: number, authToken: string, customPrompt?: string) => {
     setJobs(prev => ({
       ...prev,
       [jobId]: { resourceId: jobId, type: 'quiz', status: 'processing', message: `Gemini: 正在针对知识点生成 ${count} 道题目...` }
@@ -234,11 +234,11 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     worker.postMessage({
       type: 'GEMINI_GENERATE_SYLLABUS_QUIZ',
       id: wId,
-      payload: { knowledgePoints, count, difficulty, type, subQuestionCount, apiKey, customPrompt }
+      payload: { knowledgePoints, count, difficulty, type, subQuestionCount, apiKey: authToken, customPrompt }
     });
   }, []);
 
-  const startBatchEvaluationJob = useCallback(async (submissionId: string, segments: { id: string, text: string }[], audioBlob: Blob, azureKey: string, azureRegion: string, geminiKey: string) => {
+  const startBatchEvaluationJob = useCallback(async (submissionId: string, segments: { id: string, text: string }[], audioBlob: Blob, azureKey: string, azureRegion: string, authToken: string) => {
     const jobId = `eval-${submissionId}`;
     setJobs(prev => ({
       ...prev,
@@ -278,7 +278,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           referenceText: fullReferenceText,
           key: azureKey,
           region: azureRegion,
-          geminiKey: geminiKey
+          geminiKey: authToken
       }
     });
   }, []);

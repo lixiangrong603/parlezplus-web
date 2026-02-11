@@ -218,11 +218,10 @@ const Transcript: React.FC<TranscriptProps> = ({
                     >
                       <span className={`transition-all duration-500 block ${isBlindMode ? 'blur-[6px] select-none opacity-80' : 'blur-0'}`}>
                         <FrenchTextRenderer text={word.word} />
+                        {/* Liaison Visualization - Now inside blur layer */}
+                        {word.needsLiaison && wIdx < seg.words.length - 1 && <LiaisonCurve />}
                       </span>
                     </span>
-
-                    {/* Liaison Visualization */}
-                    {word.needsLiaison && wIdx < seg.words.length - 1 && <LiaisonCurve />}
 
                     {/* Word-specific Score Tooltip (Only when Graded) */}
                     {isGraded && hoveredWord?.segId === seg.id && hoveredWord?.wordIdx === wIdx && scoreInfo && (
@@ -365,20 +364,14 @@ const Transcript: React.FC<TranscriptProps> = ({
         </div>
       )}
 
-      {/* --- Final Submission Action --- */}
-      {onSubmit && !isGraded && (
-        <div className="mt-8 mb-12 px-6 animate-fade-in-up">
+      {/* --- Final Submission Action (Below Review Box) --- */}
+      {onSubmit && !isGraded && canSubmit && !isSubmitted && (
+        <div className="px-6 mt-4 mb-6 flex justify-center animate-fade-in-up">
           <button 
-            onClick={isSubmitted ? undefined : onSubmit}
-            disabled={!canSubmit || isSubmitted}
-            className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-black shadow-xl transition-all active:scale-95 font-serif ${
-              canSubmit && !isSubmitted
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200 dark:shadow-none' 
-                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-80'
-            }`}
+            onClick={onSubmit}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl shadow-emerald-200 dark:shadow-none transition-all active:scale-95 font-serif"
           >
-            {isSubmitted ? <CheckCircle2 size={20} /> : (canSubmit ? <Send size={20} /> : <AlertTriangle size={20} />)}
-            {isSubmitted ? "作业已提交" : (canSubmit ? "提交作业" : "完成所有练习后提交")}
+            <Send size={16} /> 提交作业
           </button>
         </div>
       )}

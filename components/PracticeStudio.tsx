@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { RecorderState, MediaResource, Submission, TranscriptSegment } from '../types';
-import { fetchResourceFromCDN, saveStudentProgress, getStudentProgress, submitAssignment, getSubmissions } from '../utils/storage';
+import { fetchResourceFromCDN, saveStudentProgress, getStudentProgress, submitAssignment, getSubmissions, getResourceById } from '../utils/storage';
 import { encodeWAV, resampleAudio, stitchAudioSegments, mixAudio, dataURLtoBlob } from '../utils/audioUtils';
 import { uploadRecording } from '../services/api/client';
 import Transcript from './Transcript';
@@ -141,7 +141,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   // Persistent Data State for Quiz Restoration
   const [savedQuizData, setSavedQuizData] = useState<{answers?: Record<string, string>, score?: {score: number, total: number}}>({});
   // Persistent Data State for Cloze Restoration
-  const [savedClozeData, setSavedClozeData] = useState<{answers?: Record<string, string>, score?: {correct: number, total: number}}>({});
+  const [savedClozeData, setSavedClozeData] = useState<{answers?: Record<string, string>, score?: {correct: number, total: number, attempts?: number}}>({});
   
   // Submission Data (Graded Result)
   const [submission, setSubmission] = useState<Submission | undefined>(undefined);
@@ -152,52 +152,81 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   // Hint State
   const [hintMessage, setHintMessage] = useState<string | null>(null);
 
-  // Determine initial phase based on content availability
+  // Load submission state (async)
   useEffect(() => {
     if (!currentUserId) return;
-    
-    // 1. Check Submission Status First (async)
     const checkSubmission = async () => {
-      const allSubs = await getSubmissions();
-      const existingSub = allSubs.find(s => s.resourceId === initialResource.id && s.studentId === currentUserId);
+      const subs = await getSubmissions();
+      const existingSub = subs.find(s => s.studentId === currentUserId && s.resourceId === initialResource.id);
       setSubmission(existingSub);
     };
     checkSubmission();
+  }, [currentUserId, initialResource.id]);
 
-    // 2. Initial State Logic
-    const hasQuiz = initialResource.questions && initialResource.questions.length > 0;
-    
-    // Will check for cloze availability after loading transcript if needed, but initial check:
-    const hasCloze = initialResource.transcript.some(seg => seg.words.some(w => w.isCloze));
+  // Ensure transcript/questions are loaded (lightweight list may omit them)
+  useEffect(() => {
+    let active = true;
+
+    const ensureResourceLoaded = async () => {
+      try {
+        // Prefer CDN transcript if provided
+        if (initialResource.transcriptUrl) {
+          setIsLoadingCDN(true);
+          const cdnData = await fetchResourceFromCDN(initialResource.transcriptUrl);
+          if (!active) return;
+          if (cdnData && cdnData.transcript && cdnData.transcript.length > 0) {
+            setResource(prev => ({ ...prev, ...cdnData }));
+            return; // CDN success, no need for API fallback
+          }
+          // CDN failed or had no transcript, fall through to API
+        }
+
+        // If transcript is missing/empty, fetch full resource from API
+        if (!initialResource.transcript || initialResource.transcript.length === 0) {
+          setIsLoadingCDN(true);
+          const full = await getResourceById(initialResource.id);
+          if (!active) return;
+          setResource(prev => ({ ...prev, ...full }));
+        }
+      } catch (error) {
+        console.error('Failed to load full resource:', error);
+      } finally {
+        if (active) setIsLoadingCDN(false);
+      }
+    };
+
+    ensureResourceLoaded();
+    return () => {
+      active = false;
+    };
+  }, [initialResource.id, initialResource.transcriptUrl]);
+
+  // Determine initial phase based on loaded content
+  useEffect(() => {
+    if (!currentUserId) return;
+    if (practicePhase !== 'initializing') return;
+
+    const hasQuiz = !!resource.questions && resource.questions.length > 0;
+    const hasCloze = !!resource.transcript && resource.transcript.some(seg => seg.words?.some(w => w.isCloze));
 
     if (hasQuiz) {
-        setPracticePhase('quiz');
+      setPracticePhase('quiz');
     } else if (hasCloze) {
-        setPracticePhase('cloze');
-        setPlayMode('single'); // Set default to single for cloze
+      setPracticePhase('cloze');
+      setPlayMode('full');
     } else {
-        setPracticePhase('shadowing');
+      setPracticePhase('shadowing');
     }
+  }, [currentUserId, practicePhase, resource.questions, resource.transcript]);
 
-    if (initialResource.transcriptUrl) {
-      setIsLoadingCDN(true);
-      fetchResourceFromCDN(initialResource.transcriptUrl).then((cdnData) => {
-        if (cdnData && cdnData.transcript) {
-          setResource(prev => ({ ...prev, ...cdnData }));
-          // Re-evaluate phases if CDN data loads cloze words
-          const loadedHasCloze = cdnData.transcript.some((seg: TranscriptSegment) => seg.words.some(w => w.isCloze));
-          if (!hasQuiz && loadedHasCloze) {
-              setPracticePhase('cloze');
-              setPlayMode('single'); // Set default to single for cloze
-          }
-        }
-        setIsLoadingCDN(false);
-      });
-    }
+  // Load persisted progress (if not fully graded, load partial work)
+  useEffect(() => {
+    if (!currentUserId) return;
+    let active = true;
 
-    // 3. Load Persisted Progress (if not fully graded, load partial work)
     const loadProgress = async () => {
       const savedData = await getStudentProgress(currentUserId, initialResource.id);
+      if (!active) return;
       if (savedData) {
           // Load single segment recordings
           if (savedData.segmentRecordings) {
@@ -243,9 +272,12 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
           }
       }
     };
-    loadProgress();
-  }, [initialResource, currentUserId]);
 
+    loadProgress();
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, initialResource.id]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgmRef = useRef<HTMLAudioElement>(null); 
   const userAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -264,6 +296,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   
   // 锁定当前正在练习的单句 ID，防止连读
   const [lockedSegmentId, setLockedSegmentId] = useState<string | null>(null);
+  const lockedSegmentIdRef = useRef<string | null>(null);
 
   // Full mode recording state
   const [userAudioBlob, setUserAudioBlob] = useState<Blob | null>(null);
@@ -309,7 +342,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
       setPracticePhase('shadowing');
   };
 
-  const handleSaveClozeProgress = (answers: Record<string, string>, score: { correct: number, total: number }) => {
+  const handleSaveClozeProgress = (answers: Record<string, string>, score: { correct: number, total: number, attempts?: number }) => {
       saveStudentProgress({
           userId: currentUserId,
           resourceId: resource.id,
@@ -494,16 +527,20 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
           setIsPlaying(false);
       }
 
-      if (playMode === 'single' && isPlaying && !isPreviewingMovie && (practicePhase === 'shadowing' || practicePhase === 'cloze')) {
-        const targetSeg = lockedSegmentId ? resource.transcript.find(s => s.id === lockedSegmentId) : null;
+      if (playMode === 'single' && isPlaying && !isPreviewingMovie && practicePhase === 'shadowing') {
+        const targetSeg = lockedSegmentIdRef.current ? resource.transcript.find(s => s.id === lockedSegmentIdRef.current) : null;
         if (targetSeg && time >= targetSeg.endTime - 0.05) { 
              videoRef.current.pause();
              if (bgmRef.current) bgmRef.current.pause();
              setIsPlaying(false);
              setLockedSegmentId(null); 
+             lockedSegmentIdRef.current = null;
         } else if (!targetSeg) {
           const currentSeg = resource.transcript.find(s => time >= s.startTime && time <= s.endTime);
-          if (currentSeg) setLockedSegmentId(currentSeg.id);
+          if (currentSeg) {
+            setLockedSegmentId(currentSeg.id);
+            lockedSegmentIdRef.current = currentSeg.id;
+          }
         }
       }
     }
@@ -513,6 +550,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
     setLockedSegmentId(null); 
+    lockedSegmentIdRef.current = null;
     if (videoRef.current) {
       videoRef.current.currentTime = time;
       if (bgmRef.current) bgmRef.current.currentTime = time;
@@ -543,7 +581,10 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
       } else {
         if (playMode === 'single' && !isPreviewingMovie) {
           const currentSeg = resource.transcript.find(s => videoRef.current!.currentTime >= s.startTime && videoRef.current!.currentTime <= s.endTime);
-          if (currentSeg) setLockedSegmentId(currentSeg.id);
+          if (currentSeg) {
+            setLockedSegmentId(currentSeg.id);
+            lockedSegmentIdRef.current = currentSeg.id;
+          }
         }
         videoRef.current.play().catch(e => console.warn('Play interrupted', e));
         bgmRef.current?.play().catch(e => console.warn('BGM play interrupted', e)); 
@@ -638,6 +679,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
       
       if (!segmentToRecord) return;
 
+      lockedSegmentIdRef.current = segmentToRecord.id;
       startTime = segmentToRecord.startTime;
       setCurrentTime(startTime);
       setLockedSegmentId(segmentToRecord.id); 
@@ -737,6 +779,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
       } else {
         setRecorderState(RecorderState.IDLE);
       }
+      lockedSegmentIdRef.current = null;
       setLockedSegmentId(null);
     }
   };
@@ -831,6 +874,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
         if (bgmRef.current) bgmRef.current.currentTime = 0; 
         setCurrentTime(0);
         lastRecordedSegmentId.current = null;
+        lockedSegmentIdRef.current = null;
         setLockedSegmentId(null);
         setHasPerformedFullRecording(false);
       }
@@ -889,6 +933,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
               setIsUserAudioPlaying(false);
           }
           
+          lockedSegmentIdRef.current = null;
           lastRecordedSegmentId.current = null;
           setLockedSegmentId(null);
 
@@ -920,6 +965,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
         setIsPlaying(true);
         hasPreviewAudioTriggeredRef.current = true;
     } else {
+        lockedSegmentIdRef.current = null;
         setIsPreviewingMovie(false); 
         setLockedSegmentId(null); 
         if (videoRef.current) { 
@@ -951,6 +997,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
       setIsPlaying(false);
       if (bgmRef.current) {
         bgmRef.current.pause();
+      lockedSegmentIdRef.current = null;
       }
       setLockedSegmentId(null);
     }
@@ -974,7 +1021,6 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
             </button>
             <div className="ml-4 flex flex-col">
                 <span className="font-bold text-shadow md:text-shadow-none text-base leading-tight font-serif">{resource.title}</span>
-                <span className="text-[10px] opacity-70 font-bold uppercase tracking-widest hidden md:block font-serif">Shadowing Studio</span>
             </div>
           </div>
         </div>
@@ -1023,8 +1069,10 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
                     currentTime={currentTime}
                     onSegmentClick={handleSegmentClick}
                     initialAnswers={savedClozeData.answers}
-                    isReadOnly={!!savedClozeData.answers || isReadOnly}
+                    initialAttempts={savedClozeData?.score?.attempts || 0}
+                    isReadOnly={isReadOnly}
                     onSaveProgress={handleSaveClozeProgress}
+                    showTranslation={showTranslation}
                 />
             )}
 
@@ -1063,7 +1111,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
 
         {/* Universal Tools Footer */}
         {(practicePhase === 'shadowing' || practicePhase === 'cloze') && (
-            <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] z-40 pb-6 md:pb-8 pt-4 relative shrink-0 transition-colors">
+            <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] z-40 pb-4 md:pb-6 pt-3 relative shrink-0 transition-colors">
             <div className="max-w-4xl mx-auto flex items-center justify-between px-6 md:px-12 gap-2">
                 <div className="flex items-center gap-2 md:gap-4 flex-1">
                     <button onClick={() => setPlayMode(playMode === 'full' ? 'single' : 'full')} className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all ${playMode === 'single' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-100 dark:border-slate-700'}`} title={playMode === 'full' ? "整篇循环" : "单句循环"}>{playMode === 'full' ? <RepeatIcon /> : <RepeatOneIcon />}</button>
@@ -1080,7 +1128,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
 
                     <button 
                         onClick={recorderState === RecorderState.RECORDING ? stopRecording : () => startRecording()} 
-                        className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-95 mx-6 ${
+                        className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-95 mx-6 ${
                             recorderState === RecorderState.RECORDING 
                             ? 'bg-red-500 text-white shadow-xl shadow-red-200 dark:shadow-none ring-8 ring-red-100 dark:ring-red-900/30 animate-pulse' 
                             : (recorderState === RecorderState.REVIEWING_AUDIO || isReadOnly || (practicePhase === 'cloze' && !savedClozeData.answers))

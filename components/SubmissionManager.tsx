@@ -245,11 +245,11 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
       
       const azureKey = localStorage.getItem(`${user.id}_azure_speech_key`);
       const azureRegion = localStorage.getItem(`${user.id}_azure_speech_region`);
-      const geminiKey = localStorage.getItem(`${user.id}_gemini_api_key`) || "";
+      const authToken = localStorage.getItem('auth_token');
       
-      if (!azureKey || !azureRegion || !geminiKey) {
+      if (!azureKey || !azureRegion || !authToken) {
           if(!azureKey) void modal.alert({ message: '未配置 Azure Speech Key' });
-          else if(!geminiKey) void modal.alert({ message: '未配置 Gemini API Key' });
+          else if(!authToken) void modal.alert({ message: '请先登录' });
           setIsBatching(false);
           return;
       }
@@ -257,7 +257,7 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
       try {
           const audioBlob = dataURLtoBlob(currentSubmission.audioUrl);
           const segmentsForEval = resource.transcript.map(s => ({ id: s.id, text: s.text }));
-          startBatchEvaluationJob(currentSubmission.id, segmentsForEval, audioBlob, azureKey, azureRegion, geminiKey);
+          startBatchEvaluationJob(currentSubmission.id, segmentsForEval, audioBlob, azureKey, azureRegion, authToken);
       } catch (e) {
           console.error("Evaluation start failed", e);
           if (isBatching) moveToNextInQueue();

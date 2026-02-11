@@ -79,9 +79,9 @@ const QuestionGeneratorWizard: React.FC<QuestionGeneratorWizardProps> = ({
             return;
         }
 
-        const apiKey = localStorage.getItem(`${user.id}_gemini_api_key`);
-        if (!apiKey) {
-            void modal.alert({ message: '请先在教师设置中配置 Gemini API Key' });
+        const authToken = localStorage.getItem('auth_token');
+        if (!authToken) {
+            void modal.alert({ message: '请先登录' });
             return;
         }
 
@@ -110,7 +110,7 @@ const QuestionGeneratorWizard: React.FC<QuestionGeneratorWizardProps> = ({
             config.difficulty, 
             config.type,
             config.subQuestionCount,
-            apiKey,
+            authToken,
             config.customPrompt
         );
     };

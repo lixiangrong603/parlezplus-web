@@ -218,10 +218,10 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
        if (!resource.videoUrl) { await modal.alert({ message: '没有找到视频/音频源' }); return; }
        startAzureJob(resource, key, region);
     } else if (type === 'gemini') {
-       const key = localStorage.getItem(`${user.id}_gemini_api_key`);
-       if (!key) { await modal.alert({ message: '请先在设置中配置 Gemini API Key' }); return; }
+       const authToken = localStorage.getItem('auth_token');
+       if (!authToken) { await modal.alert({ message: '请先登录' }); return; }
        if (segments.length === 0) { await modal.alert({ message: '请先进行 Azure 转写以获取原文字幕。' }); return; }
-       startGeminiJob(resource.id, segments, key);
+       startGeminiJob(resource.id, segments, authToken);
     }
   };
 
@@ -452,16 +452,16 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                 ) : ( <div className="text-slate-700 dark:text-slate-300 font-mono text-xs">NO SOURCE</div> )}
             </div>
 
-            <div className="bg-slate-900 dark:bg-slate-950 rounded-2xl p-5 text-white flex-1 flex flex-col overflow-hidden">
-                <h4 className="text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-4 shrink-0">时间轴对齐</h4>
+            <div className="bg-slate-100 dark:bg-slate-900 rounded-2xl p-5 flex-1 flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+                <h4 className="text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase mb-4 shrink-0">时间轴对齐</h4>
                 <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
                     {segments.map((seg, i) => (
-                    <div key={seg.id} onClick={() => { setActiveSegId(seg.id); playSegment(seg.startTime); }} className={`p-3 rounded-xl border transition-all cursor-pointer ${activeSegId === seg.id ? 'bg-indigo-600 border-indigo-400' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+                    <div key={seg.id} onClick={() => { setActiveSegId(seg.id); playSegment(seg.startTime); }} className={`p-3 rounded-xl border transition-all cursor-pointer ${activeSegId === seg.id ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
                         <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">第 {i+1} 句</span>
-                            <span className="text-[10px] font-mono text-indigo-300">{seg.startTime}s - {seg.endTime}s</span>
+                            <span className={`text-[10px] font-mono ${activeSegId === seg.id ? 'text-indigo-200' : 'text-slate-500 dark:text-slate-400'}`}>第 {i+1} 句</span>
+                            <span className={`text-[10px] font-mono ${activeSegId === seg.id ? 'text-indigo-200' : 'text-indigo-600 dark:text-indigo-400'}`}>{seg.startTime}s - {seg.endTime}s</span>
                         </div>
-                        <p className="text-xs truncate opacity-70">{seg.text}</p>
+                        <p className={`text-xs truncate ${activeSegId === seg.id ? 'text-white opacity-90' : 'text-slate-600 dark:text-slate-300 opacity-80'}`}>{seg.text}</p>
                     </div>
                     ))}
                 </div>
@@ -614,8 +614,8 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                   questions={questions}
                   onChange={setQuestions}
                   fullText={fullText}
-                  geminiKey={user?.id ? localStorage.getItem(`${user.id}_gemini_api_key`) || '' : ''}
-                  onOpenSettings={() => void modal.alert({ message: '请先在设置中配置 Gemini API Key' })}
+                  authToken={localStorage.getItem('auth_token') || ''}
+                  onOpenSettings={() => void modal.alert({ message: '请先登录' })}
                   resourceId={resource.id}
               />
           </div>

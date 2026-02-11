@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .wrangler/
+
+# Environment variables
+.dev.vars
+.env
+.env.local

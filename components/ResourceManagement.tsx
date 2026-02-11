@@ -147,9 +147,11 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
   useEffect(() => {
     const loadData = async () => {
       if (user) {
-        const loadedChannels = await getChannels(user.id);
+        const [loadedChannels, loadedResources] = await Promise.all([
+            getChannels(user.id),
+            getResources(user.id, false)
+        ]);
         setChannels(loadedChannels);
-        const loadedResources = await getResources(user.id);
         setResources(loadedResources);
         
         // 默认选中第一个频道
@@ -231,9 +233,11 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
     const deletedId = channelDeleteConfirmState.channelId;
     setChannelDeleteConfirmState(null);
 
-    const updatedChannels = await getChannels(user.id);
+    const [updatedChannels, allResources] = await Promise.all([
+        getChannels(user.id),
+        getResources(user.id, false)
+    ]);
     setChannels(updatedChannels);
-    const allResources = await getResources(user.id);
     setResources(allResources);
     if (activeChannelId === deletedId) setActiveChannelId(updatedChannels[0]?.id || '');
   };
@@ -493,7 +497,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                                 onConfirm: async () => { 
                                   if (user) { 
                                     cascadeDeleteResource(resource.id, user.id); 
-                                    const updatedResources = await getResources(user.id);
+                                    const updatedResources = await getResources(user.id, false);
                                     setResources(updatedResources);
                                   } 
                                 }
@@ -536,7 +540,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
             onCreateWithFiles(newResources);
             setShowUploadModal(false);
             if (user) {
-              const updatedResources = await getResources(user.id);
+              const updatedResources = await getResources(user.id, false);
               setResources(updatedResources);
             }
           }}
@@ -551,7 +555,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
           onSuccess={async () => {
             setPublishingResource(null);
             if (user) {
-              const updatedResources = await getResources(user.id);
+              const updatedResources = await getResources(user.id, false);
               setResources(updatedResources);
             }
           }}

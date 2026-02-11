@@ -74,9 +74,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const changePassword = async (oldPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
-    // TODO: 实现 /api/users/{id}/password API 端点
-    // 当前为临时实现，不验证旧密码，仅做客户端检查
-    
     if (!user) {
       return { success: false, message: '用户未登录' };
     }
@@ -90,13 +87,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, message: '新密码不能与原密码相同' };
     }
 
-    // TODO: 调用 API 修改密码
-    // await apiClient.put(`/api/users/${user.id}/password`, { oldPassword, newPassword });
-    
-    // 临时：仅在客户端标记密码已更改
-    console.warn('Password change not implemented on backend. Use localStorage fallback.');
-    
-    return { success: true, message: '密码修改成功（临时实现）' };
+    try {
+      // 调用后端 API 修改密码，并设置 needsPasswordChange: false
+      const response = await fetch(`/api/users/${user.id}/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`,
+        },
+        body: JSON.stringify({
+          oldPassword,
+          newPassword,
+          needsPasswordChange: false, // 用户自己修改密码后不再需要强制修改
+        }),
+      });
+
+      const result = await response.json() as { data?: { success: boolean; message: string }; error?: string };
+
+      if (!response.ok) {
+        return { success: false, message: result.error || '修改密码失败' };
+      }
+
+      return { success: true, message: result.data?.message || '密码修改成功' };
+    } catch (error) {
+      console.error('Change password error:', error);
+      return { success: false, message: '网络错误，请稍后重试' };
+    }
   };
 
   const updateUser = (updatedUser: User) => {

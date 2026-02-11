@@ -22,7 +22,12 @@ export async function onRequestGet(context: any): Promise<Response> {
     let query: D1PreparedStatement;
     
     if (user.role === 'student') {
-      // 学生查看自己的练习数据
+      // 学生只能查看自己的练习数据
+      // 如果提供了 userId，必须是自己的 ID
+      if (userId && userId !== user.id) {
+        return errorResponse('学生只能查看自己的练习数据', 403);
+      }
+      
       if (resourceId) {
         query = env.DB
           .prepare('SELECT * FROM student_practice_data WHERE user_id = ? AND resource_id = ? AND is_deleted = 0')

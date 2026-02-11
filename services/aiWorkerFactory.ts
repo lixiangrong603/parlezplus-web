@@ -4,7 +4,9 @@
 // without requiring specific server-side configuration for worker files.
 
 export const createAiWorker = (): Worker => {
+  const pageOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const workerCode = `
+const PAGE_ORIGIN = '${pageOrigin}';
 import * as SpeechSDK from 'https://esm.sh/microsoft-cognitiveservices-speech-sdk@1.47.0';
 import { GoogleGenAI } from 'https://esm.sh/@google/genai';
 
@@ -166,11 +168,10 @@ const handleAzureAssessFull = async (id, payload) => {
                 "请用中文写一段50字左右的鼓励性评语，指出一个亮点和一个改进点。";
 
             const requestBody = {
-                model: 'gemini-3-flash-preview',
                 contents: [{ parts: [{ text: promptContent }] }]
             };
             
-            const response = await fetch('/api/proxy-gemini', {
+            const response = await fetch(PAGE_ORIGIN + '/api/proxy-gemini', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -180,12 +181,26 @@ const handleAzureAssessFull = async (id, payload) => {
             });
             
             if (!response.ok) {
-                throw new Error(\`Gemini proxy failed: \${response.status}\`);
+                let details = '';
+                try {
+                    const err = await response.json();
+                    if (err?.error) details = ' - ' + err.error;
+                    else details = ' - ' + JSON.stringify(err);
+                } catch {
+                    try {
+                        details = ' - ' + (await response.text());
+                    } catch {
+                        details = '';
+                    }
+                }
+                throw new Error(\`Gemini proxy failed: \${response.status}\${details}\`);
             }
             
-            const data = await response.json();
-            if (data && data.text) {
-                generalFeedback = data.text.trim();
+            const wrapper = await response.json();
+            const geminiData = wrapper.data || wrapper;
+            const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+                generalFeedback = text.trim();
             }
         } catch (geminiError) {
             console.error("Gemini call failed in worker:", geminiError);
@@ -227,16 +242,15 @@ const handleGeminiCorrect = async (id, payload) => {
     const segmentPayload = segments.map((s) => ({ id: s.id, text: s.id + ": " + s.text }));
     
     const requestBody = {
-        model: 'gemini-3-flash-preview',
         contents: [{ 
             parts: [{ 
                 text: "Translate the following French segments to Simplified Chinese. Return as a JSON array of objects with 'id' and 'translation'. Segments: " + JSON.stringify(segmentPayload) 
             }] 
         }],
-        config: { responseMimeType: "application/json" }
+        generationConfig: { responseMimeType: "application/json" }
     };
     
-    const response = await fetch('/api/proxy-gemini', {
+    const response = await fetch(PAGE_ORIGIN + '/api/proxy-gemini', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -246,11 +260,27 @@ const handleGeminiCorrect = async (id, payload) => {
     });
     
     if (!response.ok) {
-        throw new Error(\`Gemini API proxy failed: \${response.status}\`);
+        let details = '';
+        try {
+            const err = await response.json();
+            if (err?.error) details = ' - ' + err.error;
+            else details = ' - ' + JSON.stringify(err);
+        } catch {
+            try {
+                details = ' - ' + (await response.text());
+            } catch {
+                details = '';
+            }
+        }
+        throw new Error(\`Gemini API proxy failed: \${response.status}\${details}\`);
     }
     
-    const data = await response.json();
-    let jsonStr = data.text.trim();
+    const wrapper = await response.json();
+    const geminiData = wrapper.data || wrapper;
+    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("No text in Gemini response: " + JSON.stringify(geminiData).substring(0, 200));
+    
+    let jsonStr = text.trim();
     if (jsonStr.startsWith("\x60\x60\x60")) jsonStr = jsonStr.replace(/\x60+json|\x60+/g, "");
     
     try {
@@ -268,12 +298,11 @@ const handleGeminiGenerateQuiz = async (id, payload) => {
     const prompt = "Create " + count + " TCF-style reading comprehension questions (level " + difficulty + ") for the following French text: \\"" + fullText + "\\". Return as a valid JSON array of objects, each containing: 'text' (the question), 'options' (array of 4 objects with 'text' and 'isCorrect' boolean), and 'explanation' (in Chinese).";
 
     const requestBody = {
-      model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
-      config: { responseMimeType: "application/json" }
+      generationConfig: { responseMimeType: "application/json" }
     };
     
-    const response = await fetch('/api/proxy-gemini', {
+    const response = await fetch(PAGE_ORIGIN + '/api/proxy-gemini', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -283,13 +312,28 @@ const handleGeminiGenerateQuiz = async (id, payload) => {
     });
     
     if (!response.ok) {
-        throw new Error(\`Gemini API proxy failed: \${response.status}\`);
+        let details = '';
+        try {
+            const err = await response.json();
+            if (err?.error) details = ' - ' + err.error;
+            else details = ' - ' + JSON.stringify(err);
+        } catch {
+            try {
+                details = ' - ' + (await response.text());
+            } catch {
+                details = '';
+            }
+        }
+        throw new Error(\`Gemini API proxy failed: \${response.status}\${details}\`);
     }
     
-    const data = await response.json();
+    const wrapper2 = await response.json();
+    const geminiData = wrapper2.data || wrapper2;
+    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("No text in Gemini response: " + JSON.stringify(geminiData).substring(0, 200));
 
     try {
-        const rawQuestions = JSON.parse(data.text);
+        const rawQuestions = JSON.parse(text);
         const finalQuestions = rawQuestions.map((q, idx) => {
             const qId = "q-" + Date.now() + "-" + idx;
             const options = q.options.map((opt, oIdx) => ({
@@ -333,21 +377,22 @@ const handleGeminiGenerateSyllabusQuiz = async (id, payload) => {
     const topics = knowledgePoints.map((kp, idx) => "[" + idx + "] " + kp.name).join(", ");
     prompt += "Target Knowledge Points (with index): " + topics + ".\\n";
     
-    // Calculate total count: for ALL types, we generate count * knowledgePoints.length items
+    // totalCount is already calculated by the caller (count * knowledgePoints for simple types, or count for passage types)
     const isPassageType = type === 'reading-comprehension' || type === 'cloze-test' || type === 'compound-fill';
-    const totalCount = count * knowledgePoints.length;
+    const totalCount = count;
+    const perKpCount = Math.max(1, Math.round(totalCount / knowledgePoints.length));
     
     // Ensure even distribution and correct assignment
     if (!isPassageType) {
         prompt += "IMPORTANT DISTRIBUTION RULE:\\n";
         prompt += "- You MUST generate EXACTLY " + totalCount + " questions in total.\\n";
-        prompt += "- Generate " + count + " question(s) for EACH of the " + knowledgePoints.length + " knowledge points.\\n";
+        prompt += "- Generate " + perKpCount + " question(s) for EACH of the " + knowledgePoints.length + " knowledge points.\\n";
         prompt += "- Each question MUST include 'knowledgePointIndex' (integer) to indicate which knowledge point it tests.\\n";
         prompt += "- For example, if testing [0] 'voiture', set knowledgePointIndex: 0.\\n";
     } else {
         prompt += "IMPORTANT DISTRIBUTION RULE:\\n";
         prompt += "- You MUST generate EXACTLY " + totalCount + " passages in total.\\n";
-        prompt += "- Generate " + count + " passage(s) for EACH of the " + knowledgePoints.length + " knowledge points.\\n";
+        prompt += "- Generate " + perKpCount + " passage(s) for EACH of the " + knowledgePoints.length + " knowledge points.\\n";
         prompt += "- Each passage MUST include 'knowledgePointIndex' (integer) to indicate the primary knowledge point it covers.\\n";
         prompt += "- For example, if a passage focuses on [0] 'voiture', set knowledgePointIndex: 0.\\n";
     }
@@ -461,14 +506,13 @@ const handleGeminiGenerateSyllabusQuiz = async (id, payload) => {
     }
 
     const requestBody = {
-      model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
-      config: { 
+      generationConfig: { 
           responseMimeType: "application/json"
       }
     };
     
-    const fetchResponse = await fetch('/api/proxy-gemini', {
+    const fetchResponse = await fetch(PAGE_ORIGIN + '/api/proxy-gemini', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -478,16 +522,31 @@ const handleGeminiGenerateSyllabusQuiz = async (id, payload) => {
     });
     
     if (!fetchResponse.ok) {
-        throw new Error(\`Gemini proxy failed: \${fetchResponse.status}\`);
+        let details = '';
+        try {
+            const err = await fetchResponse.json();
+            if (err?.error) details = ' - ' + err.error;
+            else details = ' - ' + JSON.stringify(err);
+        } catch {
+            try {
+                details = ' - ' + (await fetchResponse.text());
+            } catch {
+                details = '';
+            }
+        }
+        throw new Error(\`Gemini proxy failed: \${fetchResponse.status}\${details}\`);
     }
     
-    const response = await fetchResponse.json();
+    const wrapper3 = await fetchResponse.json();
+    const geminiData = wrapper3.data || wrapper3;
+    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("No text in Gemini response: " + JSON.stringify(geminiData).substring(0, 200));
 
         self.postMessage({ type: 'PROGRESS', id, progress: 'Gemini: 已收到响应，正在解析题目...' });
 
     try {
         self.postMessage({ type: 'PROGRESS', id, progress: 'Gemini: 正在解析 JSON 并构建题目结构...' });
-        const rawQuestions = JSON.parse(response.text);
+        const rawQuestions = JSON.parse(text);
         
         const finalQuestions = rawQuestions.map((q, idx) => {
             const qId = "gen-" + Date.now() + "-" + idx;

@@ -151,7 +151,7 @@ export const AdminDashboard: React.FC = () => {
     <div className="h-screen w-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans overflow-hidden transition-colors duration-300">
       <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between shadow-sm shrink-0 transition-colors">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-black text-indigo-900 dark:text-indigo-400 tracking-tight">ParlezPlus</h1>
+          <h1 className="text-xl font-black text-indigo-900 dark:text-indigo-400 tracking-tight">Fluide</h1>
           <span className="bg-indigo-900 dark:bg-indigo-950 text-white dark:text-indigo-300 px-3 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border dark:border-indigo-900">Admin</span>
         </div>
         
