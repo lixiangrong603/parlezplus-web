@@ -52,7 +52,9 @@ async function removeQuestionsFromExamPapers(env: Env, questionIds: string[]): P
 
 // ============================================
 // GET /api/resources - 获取资源列表
-// 查询参数: teacherId (可选，教师查看自己的资源)
+// 查询参数: 
+//   teacherId (可选，教师查看自己的资源)
+//   summary=true (可选，只返回轻量字段，用于列表展示)
 // ============================================
 export async function onRequestGet(context: any): Promise<Response> {
   const { request, env } = context as { request: Request; env: Env };
@@ -66,6 +68,12 @@ export async function onRequestGet(context: any): Promise<Response> {
     const url = new URL(request.url);
     const teacherId = url.searchParams.get('teacherId');
     const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
+    const summaryMode = url.searchParams.get('summary') === 'true';
+    
+    // 轻量模式：只返回列表展示需要的字段，不包含大型 JSON 数据
+    const selectFields = summaryMode 
+      ? 'id, channel_id, teacher_id, title, level, cover_r2_key, video_r2_key, audio_r2_key, status, deadline, assigned_class_ids, grammar_tags, vocab_tags, created_at, is_deleted, deleted_at, deleted_by'
+      : '*';
     
     let query: D1PreparedStatement;
     
@@ -76,32 +84,45 @@ export async function onRequestGet(context: any): Promise<Response> {
       }
       if (includeDeleted) {
         query = env.DB
-          .prepare('SELECT * FROM resources WHERE teacher_id = ? ORDER BY created_at DESC')
+          .prepare(`SELECT ${selectFields} FROM resources WHERE teacher_id = ? ORDER BY created_at DESC`)
           .bind(teacherId);
       } else {
         query = env.DB
-          .prepare('SELECT * FROM resources WHERE teacher_id = ? AND is_deleted = 0 ORDER BY created_at DESC')
+          .prepare(`SELECT ${selectFields} FROM resources WHERE teacher_id = ? AND is_deleted = 0 ORDER BY created_at DESC`)
           .bind(teacherId);
       }
     } else {
       // 学生查看所有已发布的资源
       query = env.DB
-        .prepare('SELECT * FROM resources WHERE status = ? AND is_deleted = 0 ORDER BY created_at DESC')
+        .prepare(`SELECT ${selectFields} FROM resources WHERE status = ? AND is_deleted = 0 ORDER BY created_at DESC`)
         .bind('ready');
     }
     
     const { results } = await query.all<Resource>();
     
     // 解析 JSON 字段
-    const resourcesWithParsedJSON = results.map(resource => ({
-      ...resource,
-      transcript: JSON.parse(resource.transcript || '[]'),
-      raw_azure_words: resource.raw_azure_words ? JSON.parse(resource.raw_azure_words) : null,
-      questions: JSON.parse(resource.questions || '[]'),
-      assigned_class_ids: JSON.parse(resource.assigned_class_ids || '[]'),
-      grammar_tags: JSON.parse(resource.grammar_tags || '[]'),
-      vocab_tags: JSON.parse(resource.vocab_tags || '[]'),
-    }));
+    const resourcesWithParsedJSON = results.map(resource => {
+      const parsed: any = {
+        ...resource,
+        assigned_class_ids: JSON.parse(resource.assigned_class_ids || '[]'),
+        grammar_tags: JSON.parse(resource.grammar_tags || '[]'),
+        vocab_tags: JSON.parse(resource.vocab_tags || '[]'),
+      };
+      
+      // 轻量模式不解析大型字段
+      if (!summaryMode) {
+        parsed.transcript = JSON.parse(resource.transcript || '[]');
+        parsed.raw_azure_words = resource.raw_azure_words ? JSON.parse(resource.raw_azure_words) : null;
+        parsed.questions = JSON.parse(resource.questions || '[]');
+      } else {
+        // 轻量模式返回空数组/null，前端需要时再单独请求
+        parsed.transcript = [];
+        parsed.raw_azure_words = null;
+        parsed.questions = [];
+      }
+      
+      return parsed;
+    });
     
     return jsonResponse(resourcesWithParsedJSON);
   } catch (error) {

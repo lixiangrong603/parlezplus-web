@@ -362,6 +362,12 @@ async function handleGetSingleSession(context: any, sessionId: string): Promise<
 
 // ============================================
 // GET /api/exams/sessions - 获取考试会话列表
+// 查询参数:
+//   examId - 单个考试ID
+//   examIds - 批量考试ID（逗号分隔）
+//   classId - 按班级过滤学生
+//   studentId - 按学生ID过滤
+//   includeDeleted - 包含已删除数据
 // ============================================
 async function handleGetSessions(context: any): Promise<Response> {
   const { request, env } = context as { request: Request; env: Env };
@@ -374,58 +380,77 @@ async function handleGetSessions(context: any): Promise<Response> {
     
     const url = new URL(request.url);
     const examId = url.searchParams.get('examId');
+    const examIds = url.searchParams.get('examIds'); // 批量查询支持
+    const classId = url.searchParams.get('classId'); // 按班级过滤
     const studentId = url.searchParams.get('studentId');
     const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
     
-    let query: D1PreparedStatement;
+    let results: ExamSession[] = [];
     
     if (user.role === 'student') {
       // 学生查看自己的考试会话
-      if (includeDeleted) {
-        query = env.DB
-          .prepare('SELECT * FROM exam_sessions WHERE student_id = ? ORDER BY start_time DESC')
-          .bind(user.id);
-      } else {
-        query = env.DB
-          .prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
-          .bind(user.id);
-      }
+      const query = includeDeleted
+        ? env.DB.prepare('SELECT * FROM exam_sessions WHERE student_id = ? ORDER BY start_time DESC').bind(user.id)
+        : env.DB.prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC').bind(user.id);
+      results = (await query.all<ExamSession>()).results;
     } else if (user.role === 'teacher' || user.role === 'admin') {
       // 教师/管理员查看考试会话
-      if (examId) {
-        if (includeDeleted) {
-          query = env.DB
-            .prepare('SELECT * FROM exam_sessions WHERE exam_paper_id = ? ORDER BY start_time DESC')
-            .bind(examId);
-        } else {
-          query = env.DB
-            .prepare('SELECT * FROM exam_sessions WHERE exam_paper_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
-            .bind(examId);
+      
+      // 批量查询模式：examIds + classId（高性能优化）
+      if (examIds && classId) {
+        const examIdList = examIds.split(',').filter(id => id.trim());
+        if (examIdList.length > 0) {
+          // 先获取班级学生ID列表
+          const classroom = await env.DB
+            .prepare('SELECT students FROM classrooms WHERE id = ? AND is_deleted = 0')
+            .bind(classId)
+            .first<{ students: string }>();
+          
+          if (classroom) {
+            const students = JSON.parse(classroom.students || '[]');
+            const studentUserIds = students.map((s: any) => s.userId).filter(Boolean);
+            
+            if (studentUserIds.length > 0) {
+              // 构建批量查询
+              const examPlaceholders = examIdList.map(() => '?').join(',');
+              const studentPlaceholders = studentUserIds.map(() => '?').join(',');
+              const deletedCondition = includeDeleted ? '' : ' AND is_deleted = 0';
+              
+              const batchQuery = `
+                SELECT * FROM exam_sessions 
+                WHERE exam_paper_id IN (${examPlaceholders}) 
+                  AND student_id IN (${studentPlaceholders})
+                  ${deletedCondition}
+                ORDER BY start_time DESC
+              `;
+              
+              results = (await env.DB
+                .prepare(batchQuery)
+                .bind(...examIdList, ...studentUserIds)
+                .all<ExamSession>()).results;
+            }
+          }
         }
+      } else if (examId) {
+        // 单个考试查询
+        const query = includeDeleted
+          ? env.DB.prepare('SELECT * FROM exam_sessions WHERE exam_paper_id = ? ORDER BY start_time DESC').bind(examId)
+          : env.DB.prepare('SELECT * FROM exam_sessions WHERE exam_paper_id = ? AND is_deleted = 0 ORDER BY start_time DESC').bind(examId);
+        results = (await query.all<ExamSession>()).results;
       } else if (studentId) {
-        if (includeDeleted) {
-          query = env.DB
-            .prepare('SELECT * FROM exam_sessions WHERE student_id = ? ORDER BY start_time DESC')
-            .bind(studentId);
-        } else {
-          query = env.DB
-            .prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC')
-            .bind(studentId);
-        }
+        const query = includeDeleted
+          ? env.DB.prepare('SELECT * FROM exam_sessions WHERE student_id = ? ORDER BY start_time DESC').bind(studentId)
+          : env.DB.prepare('SELECT * FROM exam_sessions WHERE student_id = ? AND is_deleted = 0 ORDER BY start_time DESC').bind(studentId);
+        results = (await query.all<ExamSession>()).results;
       } else {
-        if (includeDeleted) {
-          query = env.DB
-            .prepare('SELECT * FROM exam_sessions ORDER BY start_time DESC LIMIT 100');
-        } else {
-          query = env.DB
-            .prepare('SELECT * FROM exam_sessions WHERE is_deleted = 0 ORDER BY start_time DESC LIMIT 100');
-        }
+        const query = includeDeleted
+          ? env.DB.prepare('SELECT * FROM exam_sessions ORDER BY start_time DESC LIMIT 100')
+          : env.DB.prepare('SELECT * FROM exam_sessions WHERE is_deleted = 0 ORDER BY start_time DESC LIMIT 100');
+        results = (await query.all<ExamSession>()).results;
       }
     } else {
       return errorResponse('无权限', 403);
     }
-    
-    const { results } = await query.all<ExamSession>();
     
     // 解析 JSON 字段
     const sessionsWithParsedJSON = results.map(session => ({

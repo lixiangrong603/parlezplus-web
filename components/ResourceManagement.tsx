@@ -149,7 +149,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
       if (user) {
         const [loadedChannels, loadedResources] = await Promise.all([
             getChannels(user.id),
-            getResources(user.id, false)
+            getResources(user.id, false, true) // 使用summary模式，只加载列表展示需要的轻量字段
         ]);
         setChannels(loadedChannels);
         setResources(loadedResources);
@@ -235,7 +235,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
 
     const [updatedChannels, allResources] = await Promise.all([
         getChannels(user.id),
-        getResources(user.id, false)
+        getResources(user.id, false, true) // 使用summary模式
     ]);
     setChannels(updatedChannels);
     setResources(allResources);
@@ -497,7 +497,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                                 onConfirm: async () => { 
                                   if (user) { 
                                     cascadeDeleteResource(resource.id, user.id); 
-                                    const updatedResources = await getResources(user.id, false);
+                                    const updatedResources = await getResources(user.id, false, true); // 使用summary模式
                                     setResources(updatedResources);
                                   } 
                                 }
@@ -540,7 +540,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
             onCreateWithFiles(newResources);
             setShowUploadModal(false);
             if (user) {
-              const updatedResources = await getResources(user.id, false);
+              const updatedResources = await getResources(user.id, false, true); // 使用summary模式
               setResources(updatedResources);
             }
           }}
@@ -555,7 +555,7 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
           onSuccess={async () => {
             setPublishingResource(null);
             if (user) {
-              const updatedResources = await getResources(user.id, false);
+              const updatedResources = await getResources(user.id, false, true); // 使用summary模式
               setResources(updatedResources);
             }
           }}

@@ -101,7 +101,7 @@ interface TeacherDashboardProps {
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
   const [activeTab, setActiveTab] = useState<'classes' | 'resources' | 'bank' | 'exams'>('classes');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -1353,7 +1353,7 @@ const AddTaskModal = ({
 };
 
 const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLogout: () => void }) => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'security'>('profile');
   const [azureKey, setAzureKey] = useState(user?.id ? localStorage.getItem(`${user.id}_azure_speech_key`) || '' : '');
   const [azureRegion, setAzureRegion] = useState(user?.id ? localStorage.getItem(`${user.id}_azure_speech_region`) || 'westeurope' : 'westeurope');
@@ -1434,6 +1434,7 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
       if (avatarPreview !== user.avatar) {
         const updatedUser = { ...user, avatar: avatarPreview || undefined };
         saveUser(updatedUser);
+        updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
       }
       
       setIsSaving(false);

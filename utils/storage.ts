@@ -40,6 +40,7 @@ import {
   deleteExamFolder as apiDeleteExamFolder,
   // 考试会话 API
   getExamSessions as apiGetExamSessions,
+  getExamSessionsByExamsAndClass as apiGetExamSessionsByExamsAndClass,
   createExamSession as apiCreateExamSession,
   updateExamSession as apiUpdateExamSession,
   deleteExamSession as apiDeleteExamSession,
@@ -1608,13 +1609,15 @@ export const deleteChannel = async (id: string, operatorId?: string, reason?: st
 
 // --- MEDIA RESOURCES ---
 // 重构：使用 Cloudflare D1 数据库 + R2 存储
-export const getResources = async (teacherId?: string, includeDeleted: boolean = false): Promise<MediaResource[]> => {
+export const getResources = async (teacherId?: string, includeDeleted: boolean = false, summary: boolean = false): Promise<MediaResource[]> => {
   try {
-    const raw = await apiGetResources(teacherId, includeDeleted);
+    const raw = await apiGetResources(teacherId, includeDeleted, summary);
     const resources = raw.map(mapApiToMediaResource);
     
-    // 更新本地缓存
-    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(resources));
+    // 只有完整模式才更新本地缓存
+    if (!summary) {
+      localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(resources));
+    }
     
     // 过滤已删除数据（如果后端未过滤）
     if (!includeDeleted) {
@@ -2674,12 +2677,28 @@ export const deleteExamSession = async (id: string, operatorId?: string, reason?
 
 // Get exam sessions by exam paper and class
 export const getExamSessionsByExamAndClass = async (examId: string, classId: string): Promise<ExamSession[]> => {
-  const allSessions = await getExamSessions();
-  const classroom = await getClassroomById(classId);
-  if (!classroom) return [];
+  // 使用批量API获取单个考试的会话
+  return getExamSessionsByExamsAndClass([examId], classId);
+};
+
+// 批量获取多个考试的会话（性能优化：一次API调用）
+export const getExamSessionsByExamsAndClass = async (examIds: string[], classId: string): Promise<ExamSession[]> => {
+  if (examIds.length === 0) return [];
   
-  const studentUserIds = new Set(classroom.students.map(s => s.userId).filter((id): id is string => !!id));
-  return allSessions.filter(s => s.examPaperId === examId && studentUserIds.has(s.studentId));
+  try {
+    const raw = await apiGetExamSessionsByExamsAndClass(examIds, classId, false);
+    return raw.map(mapApiToExamSession);
+  } catch (error) {
+    console.error('Failed to fetch exam sessions in batch:', error);
+    // Fallback: 使用本地缓存数据
+    const allSessions = getExamSessionsSync();
+    const classroom = getClassroomByIdSync(classId);
+    if (!classroom) return [];
+    
+    const studentUserIds = new Set(classroom.students.map(s => s.userId).filter((id): id is string => !!id));
+    const examIdSet = new Set(examIds);
+    return allSessions.filter(s => examIdSet.has(s.examPaperId) && studentUserIds.has(s.studentId));
+  }
 };
 
 // Update exam session (alias for saveExamSession for clarity)

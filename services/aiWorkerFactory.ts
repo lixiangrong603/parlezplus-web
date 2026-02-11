@@ -423,11 +423,13 @@ const handleGeminiGenerateSyllabusQuiz = async (id, payload) => {
         prompt += "  * B1-B2: 150-300 words.\\n";
         prompt += "  * C1-C2: 250-350 words.\\n";
         prompt += "- Questions should require inference, summary, or paraphrasing.\\n";
+        prompt += "- ANSWER RANDOMIZATION: The correct answer MUST be randomly distributed among options A, B, C, D across all sub-questions. Do NOT always put correct answer in position A.\\n";
     } else if (type === 'cloze-test') {
         prompt += "STRATEGY FOR CLOZE SELECTION (完型选择):\\n";
         prompt += "- Create a coherent short passage appropriate for Level " + difficulty + ".\\n";
         prompt += "- Replace " + (subQuestionCount || 5) + " key words with numbered placeholders: {{1}}, {{2}}, etc.\\n";
         prompt += "- Create a multiple-choice question for each blank.\\n";
+        prompt += "- ANSWER RANDOMIZATION: The correct answer MUST be randomly distributed among options A, B, C, D across all sub-questions. Do NOT always put correct answer in position A.\\n";
     } else if (type === 'compound-fill') {
         prompt += "STRATEGY FOR COMPOUND FILL-IN (复合填空):\\n";
         prompt += "- Create a comprehensive passage (approx 200 words) appropriate for Level " + difficulty + ".\\n";
@@ -445,6 +447,12 @@ const handleGeminiGenerateSyllabusQuiz = async (id, payload) => {
         prompt += "- The 'text' (Question Stem) MUST be a **SINGLE SENTENCE** (or max 2 closely related sentences).\\n";
         prompt += "- STRICTLY NO PARAGRAPHS for single questions.\\n";
         prompt += "- Keep stems concise (approx 15-25 words) to focus on the target point.\\n";
+        prompt += "- CRITICAL: The stem MUST use '___' (blank) to replace the answer position. The answer should NEVER appear directly in the stem.\\n";
+        prompt += "- Example: 'Il ___ beau demain.' NOT 'Il fera beau demain.'\\n";
+        prompt += "\\nANSWER RANDOMIZATION REQUIREMENT:\\n";
+        prompt += "- The correct answer MUST be randomly distributed among options A, B, C, D across all questions.\\n";
+        prompt += "- Do NOT make A the correct answer for all questions. Aim for roughly equal distribution.\\n";
+        prompt += "- Vary the position: some questions have B correct, some have C, some have D.\\n";
     }
 
     // 3. Question Type & JSON Schema

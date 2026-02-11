@@ -310,28 +310,38 @@ const QuestionList: React.FC<QuestionListProps> = ({ questions, onEdit, onDelete
               )}
 
               {q.type !== 'reading-comprehension' && q.type !== 'cloze-test' && q.type !== 'compound-fill' && (
-                (() => {
-                  const firstFour = q.options.slice(0, 4);
-                  const cols = getOptionGridColumns(firstFour.map(o => o.text));
-                  const gridColsClass =
-                    cols === 4 ? 'grid-cols-2 lg:grid-cols-4' :
-                    cols === 2 ? 'grid-cols-1 lg:grid-cols-2' :
-                    'grid-cols-1';
+                q.type === 'fill-in-the-blank' ? (
+                  /* 填空题只显示答案，不显示ABCD选项 */
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-500 dark:text-slate-400 font-medium">答案：</span>
+                    <span className="text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded">
+                      {q.options[0]?.text || '(无答案)'}
+                    </span>
+                  </div>
+                ) : (
+                  (() => {
+                    const firstFour = q.options.slice(0, 4);
+                    const cols = getOptionGridColumns(firstFour.map(o => o.text));
+                    const gridColsClass =
+                      cols === 4 ? 'grid-cols-2 lg:grid-cols-4' :
+                      cols === 2 ? 'grid-cols-1 lg:grid-cols-2' :
+                      'grid-cols-1';
 
-                  return (
-                    <div className={`grid gap-2 ${gridColsClass}`}>
-                      {firstFour.map((opt, i) => (
-                        <div key={opt.id} className={`flex items-start gap-2 text-xs min-w-0 ${opt.id === q.correctOptionId ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                          <div className={`w-4 h-4 rounded-full flex items-center justify-center border text-[9px] shrink-0 mt-0.5 ${opt.id === q.correctOptionId ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
-                            {String.fromCharCode(65 + i)}
+                    return (
+                      <div className={`grid gap-2 ${gridColsClass}`}>
+                        {firstFour.map((opt, i) => (
+                          <div key={opt.id} className={`flex items-start gap-2 text-xs min-w-0 ${opt.id === q.correctOptionId ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center border text-[9px] shrink-0 mt-0.5 ${opt.id === q.correctOptionId ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                              {String.fromCharCode(65 + i)}
+                            </div>
+                            <span className={cols === 4 ? 'truncate' : 'whitespace-normal break-words'}>{opt.text}</span>
                           </div>
-                          <span className={cols === 4 ? 'truncate' : 'whitespace-normal break-words'}>{opt.text}</span>
-                        </div>
-                      ))}
-                      {q.options.length > 4 && <div className="text-[10px] text-slate-400 pl-2 col-span-full">... 更多选项</div>}
-                    </div>
-                  );
-                })()
+                        ))}
+                        {q.options.length > 4 && <div className="text-[10px] text-slate-400 pl-2 col-span-full">... 更多选项</div>}
+                      </div>
+                    );
+                  })()
+                )
               )}
             </div>
           ))}

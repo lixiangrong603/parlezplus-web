@@ -23,7 +23,7 @@ interface StudentDashboardProps {
 }
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelectResource, onEnterTeacherMode }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
   const [activeClass, setActiveClass] = useState<Classroom | null>(null);
   const [allClassrooms, setAllClassrooms] = useState<Classroom[]>([]);
@@ -72,6 +72,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     if (user) {
       const updatedUser = { ...user, avatar: croppedImage };
       saveUser(updatedUser);
+      updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
     }
   };
 
@@ -80,6 +81,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     if (user) {
       const updatedUser = { ...user, avatar: undefined };
       saveUser(updatedUser);
+      updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
     }
   };
 

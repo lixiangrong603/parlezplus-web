@@ -158,10 +158,11 @@ export function logout() {
 // 资源 API
 // ============================================
 
-export async function getResources(teacherId?: string, includeDeleted?: boolean): Promise<any[]> {
+export async function getResources(teacherId?: string, includeDeleted?: boolean, summary?: boolean): Promise<any[]> {
   const params = new URLSearchParams();
   if (teacherId) params.append('teacherId', teacherId);
   if (includeDeleted) params.append('includeDeleted', 'true');
+  if (summary) params.append('summary', 'true');
   const queryString = params.toString();
   return apiClient.get<any[]>(`/api/resources${queryString ? `?${queryString}` : ''}`);
 }
@@ -396,6 +397,16 @@ export async function getExamSessions(examId?: string, studentId?: string, inclu
   if (includeDeleted) params.append('includeDeleted', 'true');
   const queryString = params.toString();
   return apiClient.get<any[]>(`/api/exams/sessions${queryString ? `?${queryString}` : ''}`);
+}
+
+// 批量获取考试会话（按多个考试ID和班级ID）- 性能优化
+export async function getExamSessionsByExamsAndClass(examIds: string[], classId: string, includeDeleted?: boolean): Promise<any[]> {
+  if (examIds.length === 0) return [];
+  const params = new URLSearchParams();
+  params.append('examIds', examIds.join(','));
+  params.append('classId', classId);
+  if (includeDeleted) params.append('includeDeleted', 'true');
+  return apiClient.get<any[]>(`/api/exams/sessions?${params.toString()}`);
 }
 
 export async function createExamSession(data: any): Promise<any> {
