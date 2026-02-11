@@ -1,7 +1,7 @@
 # ParlezPlus Cloudflare Pages + D1 + R2 配置
 # 文档: https://developers.cloudflare.com/pages/functions/wrangler-configuration/
 
-name = "parlezplus"
+name = "fluide"
 compatibility_date = "2024-02-09"
 pages_build_output_dir = "dist"
 
@@ -79,4 +79,4 @@ bucket_name = "parlezplus-media"
 # 5. 创建 KV 命名空间: npx wrangler kv:namespace create "KV"
 # 6. 填入上述创建后返回的 ID
 # 7. 执行数据库 Schema: npx wrangler d1 execute parlezplus_db --file=database/schema.sql
-# 8. 部署: npx wrangler pages deploy dist --project-name=parlezplus
+# 8. 部署: npx wrangler pages deploy dist --project-name=fluide

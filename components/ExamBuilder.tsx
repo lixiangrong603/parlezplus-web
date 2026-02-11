@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { User, Question, ExamPaper, ExamSection, ExamItem, QuestionType } from '../types';
-import { getQuestionsByIds, saveExamPaper, updateExamPaper } from '../utils/storage';
+import { getQuestionsByIds, getQuestionsWithResourceInfo, saveExamPaper, updateExamPaper } from '../utils/storage';
 import QuestionSelector from '../components/QuestionSelector';
 import ExamStemRenderer from '../components/ExamStemRenderer';
 import { getOptionGridColumns } from '../utils/optionLayout';
@@ -100,8 +100,15 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
     const missing = uniqueIds.filter(id => !current[id]);
     if (missing.length === 0) return current;
 
-    const fetched = await getQuestionsByIds(missing);
-    if (!fetched || fetched.length === 0) return current;
+    // Use getQuestionsWithResourceInfo to ensure resource questions are loaded correctly
+    // This prioritizes finding questions in resources (with resourceId) over the question bank
+    const questionsWithInfo = await getQuestionsWithResourceInfo(missing);
+    const fetched = questionsWithInfo.map(info => info.question);
+    
+    if (!fetched || fetched.length === 0) {
+      console.warn('[ExamBuilder] Failed to load questions:', missing);
+      return current;
+    }
 
     const merged = { ...current };
     for (const q of fetched) merged[q.id] = q;
@@ -741,8 +748,59 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                     );
                   }
 
-                  const q = questionById[item.questionId!];
-                  if (!q) return null;
+                  const qId = item.questionId;
+                  if (!qId) {
+                    return (
+                      <div key={`missing-id-${qIdx}`} className="group/item flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-3 relative py-2 break-words max-w-full">
+                        <div className="flex-1 min-w-0 max-w-full">
+                          <div className="p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded text-sm text-rose-700 dark:text-rose-200">
+                            ⚠️ 该试卷条目缺少 questionId，无法渲染题目内容。
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 justify-end w-full sm:w-auto mt-2 sm:mt-0 print:hidden bg-slate-50 sm:bg-white/95 p-1.5 rounded-lg shadow-sm sm:shadow-lg border border-slate-200 ring-1 ring-slate-200/50 z-20 sm:absolute sm:-right-3 sm:top-0 relative">
+                          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded px-1">
+                            <span className="text-[10px] text-slate-400 font-bold px-1">分值:</span>
+                            <input type="number" step="0.1" min="0" value={item.points} onChange={(e) => updatePoints(sIdx, qIdx, Number(e.target.value))} className="w-10 text-center bg-transparent p-1 text-xs font-bold outline-none" />
+                          </div>
+                          <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                          <button onClick={() => moveItem(sIdx, qIdx, 'up')} className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition-colors"><ChevronUp className="w-4 h-4"/></button>
+                          <button onClick={() => moveItem(sIdx, qIdx, 'down')} className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition-colors"><ChevronDown className="w-4 h-4"/></button>
+                          <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                          <button onClick={() => deleteItem(sIdx, qIdx)} className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition-colors"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const q = questionById[qId];
+                  if (!q) {
+                    return (
+                      <div key={`${qId}-missing-${qIdx}`} className="group/item flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-3 relative py-2 break-words max-w-full">
+                        <div className="flex-1 min-w-0 max-w-full">
+                          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-sm text-amber-700 dark:text-amber-200">
+                            ⚠️ 题目未加载，暂无法渲染内容（ID: <span className="font-mono text-[12px]">{qId}</span>）。
+                            <button
+                              onClick={() => { void ensureQuestionsLoaded([qId]); }}
+                              className="ml-3 underline font-bold hover:text-amber-800 dark:hover:text-amber-100"
+                            >
+                              重试加载
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 justify-end w-full sm:w-auto mt-2 sm:mt-0 print:hidden bg-slate-50 sm:bg-white/95 p-1.5 rounded-lg shadow-sm sm:shadow-lg border border-slate-200 ring-1 ring-slate-200/50 z-20 sm:absolute sm:-right-3 sm:top-0 relative">
+                          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded px-1">
+                            <span className="text-[10px] text-slate-400 font-bold px-1">分值:</span>
+                            <input type="number" step="0.1" min="0" value={item.points} onChange={(e) => updatePoints(sIdx, qIdx, Number(e.target.value))} className="w-10 text-center bg-transparent p-1 text-xs font-bold outline-none" />
+                          </div>
+                          <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                          <button onClick={() => moveItem(sIdx, qIdx, 'up')} className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition-colors"><ChevronUp className="w-4 h-4"/></button>
+                          <button onClick={() => moveItem(sIdx, qIdx, 'down')} className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition-colors"><ChevronDown className="w-4 h-4"/></button>
+                          <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                          <button onClick={() => deleteItem(sIdx, qIdx)} className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition-colors"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                      </div>
+                    );
+                  }
 
                   const isReadingSet = q.type === 'reading-comprehension';
                   const isCloze = q.type === 'cloze-test' || q.type === 'compound-fill';

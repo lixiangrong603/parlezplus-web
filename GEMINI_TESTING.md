@@ -24,7 +24,7 @@ ON CONFLICT(user_id) DO UPDATE SET gemini_key_encrypted='YOUR_ENCRYPTED_KEY_HERE
 ### 2. 获取 JWT Token
 ```powershell
 # 登录获取 token
-$response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/auth/login" `
+$response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/auth/login" `
   -Method POST `
   -ContentType "application/json" `
   -Body '{"username":"admin","password":"Admin@2024"}'
@@ -56,7 +56,7 @@ $body = @{
   )
 } | ConvertTo-Json -Depth 10
 
-$response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+$response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/proxy-gemini" `
   -Method POST `
   -Headers $headers `
   -Body $body
@@ -101,7 +101,7 @@ $body = @{
   )
 } | ConvertTo-Json -Depth 10
 
-$response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+$response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/proxy-gemini" `
   -Method POST `
   -Headers $headers `
   -Body $body
@@ -135,7 +135,7 @@ Provide:
   )
 } | ConvertTo-Json -Depth 10
 
-$response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+$response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/proxy-gemini" `
   -Method POST `
   -Headers $headers `
   -Body $body
@@ -171,7 +171,7 @@ Provide:
   )
 } | ConvertTo-Json -Depth 10
 
-$response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+$response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/proxy-gemini" `
   -Method POST `
   -Headers $headers `
   -Body $body
@@ -203,7 +203,7 @@ for ($i = 1; $i -le $iterations; $i++) {
   
   $startTime = Get-Date
   
-  $response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+  $response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/proxy-gemini" `
     -Method POST `
     -Headers $headers `
     -Body $body
@@ -262,7 +262,7 @@ for ($i = 1; $i -le 5; $i++) {
       duration = ($endTime - $startTime).TotalMilliseconds
       success = $response.success
     }
-  } -ArgumentList "https://your-domain.pages.dev/api/proxy-gemini", $token, $i
+  } -ArgumentList "https://fluide.pages.dev/api/proxy-gemini", $token, $i
 }
 
 $results = $jobs | Wait-Job | Receive-Job
@@ -289,7 +289,7 @@ UPDATE user_api_keys SET gemini_key_encrypted='invalid-key-12345' WHERE user_id=
 "
 
 # 发送请求
-$response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+$response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/proxy-gemini" `
   -Method POST `
   -Headers $headers `
   -Body $body `
@@ -315,7 +315,7 @@ VALUES ('test-user-001', 'testuser', 'hash123', 'student', 'Test User', $(Get-Da
 "
 
 # 登录测试用户
-$testResponse = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/auth/login" `
+$testResponse = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/auth/login" `
   -Method POST `
   -ContentType "application/json" `
   -Body '{"username":"testuser","password":"Test@123"}'
@@ -328,7 +328,7 @@ $testHeaders = @{
   "Content-Type" = "application/json"
 }
 
-$response = Invoke-RestMethod -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+$response = Invoke-RestMethod -Uri "https://fluide.pages.dev/api/proxy-gemini" `
   -Method POST `
   -Headers $testHeaders `
   -Body $body `
@@ -347,7 +347,7 @@ if ($response.success -eq $false -and $response.error -like "*未配置 Gemini A
 ```powershell
 # 测试 Cloudflare Pages 域名解析
 $domainNames = @(
-  "your-domain.pages.dev",
+  "fluide.pages.dev",
   "generativelanguage.googleapis.com"
 )
 
@@ -364,7 +364,7 @@ foreach ($domain in $domainNames) {
 ### 测试 10: 网络路由检测
 ```powershell
 # 检查请求是否通过 Cloudflare CDN
-$response = Invoke-WebRequest -Uri "https://your-domain.pages.dev/api/proxy-gemini" `
+$response = Invoke-WebRequest -Uri "https://fluide.pages.dev/api/proxy-gemini" `
   -Method OPTIONS `
   -Headers @{ "Origin" = "https://example.com" }
 
@@ -389,10 +389,10 @@ foreach ($header in $cfHeaders) {
 ### 查看 Workers 日志
 ```powershell
 # 实时查看 Cloudflare Workers 日志
-wrangler tail --project-name=parlezplus-web
+wrangler tail --project-name=fluide
 
 # 筛选 Gemini 相关日志
-wrangler tail --project-name=parlezplus-web | Select-String "gemini"
+wrangler tail --project-name=fluide | Select-String "gemini"
 ```
 
 ### 查看 D1 数据库统计
@@ -458,7 +458,7 @@ LIMIT 10;
 # test-gemini-proxy.ps1
 
 param(
-  [string]$Domain = "your-domain.pages.dev",
+  [string]$Domain = "fluide.pages.dev",
   [string]$Username = "admin",
   [string]$Password = "Admin@2024"
 )
@@ -489,7 +489,7 @@ Write-Host "`n=== 测试完成 ===" -ForegroundColor Cyan
 
 运行:
 ```powershell
-.\test-gemini-proxy.ps1 -Domain "parlezplus.pages.dev" -Username "admin" -Password "Admin@2024"
+.\test-gemini-proxy.ps1 -Domain "fluide.pages.dev" -Username "admin" -Password "Admin@2024"
 ```
 
 ---
@@ -516,7 +516,7 @@ Write-Host "`n=== 测试完成 ===" -ForegroundColor Cyan
 ### 问题 1: 连接超时
 ```powershell
 # 检查网络连通性
-Test-NetConnection -ComputerName your-domain.pages.dev -Port 443
+Test-NetConnection -ComputerName fluide.pages.dev -Port 443
 ```
 
 ### 问题 2: SSL 证书错误

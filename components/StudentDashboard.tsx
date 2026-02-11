@@ -209,19 +209,35 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     return result;
   }, [resources, filterTab, activeClass?.id, submissions, user]);
 
-  const incompleteCount = resources.filter(r => {
+  // 统计跟读资源的未完成/完成情况
+  const incompleteResourcesCount = resources.filter(r => {
       const isAssigned = (activeClass?.id && r.assignedClassIds?.includes(activeClass.id)) || (!r.assignedClassIds || r.assignedClassIds.length === 0);
       const sub = submissions.find(s => s.resourceId === r.id && s.studentId === user?.id);
       const isGraded = sub?.status === 'graded';
       return isAssigned && !r.isCompleted && !isGraded && r.status === 'ready';
   }).length;
   
-  const completedCount = resources.filter(r => {
+  const completedResourcesCount = resources.filter(r => {
       const isAssigned = (activeClass?.id && r.assignedClassIds?.includes(activeClass.id)) || (!r.assignedClassIds || r.assignedClassIds.length === 0);
       const sub = submissions.find(s => s.resourceId === r.id && s.studentId === user?.id);
       const isGraded = sub?.status === 'graded';
       return isAssigned && (r.isCompleted || isGraded) && r.status === 'ready';
   }).length;
+
+  // 统计试卷任务的未完成/完成情况
+  const incompleteExamsCount = assignedExams.filter(exam => {
+      const session = examSessionMap.get(exam.id);
+      return !session?.isSubmitted;
+  }).length;
+
+  const completedExamsCount = assignedExams.filter(exam => {
+      const session = examSessionMap.get(exam.id);
+      return session?.isSubmitted;
+  }).length;
+
+  // 总计
+  const incompleteCount = incompleteResourcesCount + incompleteExamsCount;
+  const completedCount = completedResourcesCount + completedExamsCount;
 
   // 使用 ID 生成唯一的动态封面作为保底
   const getFallbackCover = (id: string) => {
@@ -400,7 +416,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                 <div className="mb-8">
                   <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
                     <FileText size={20} className="text-indigo-600" />
-                    试卷任务
+                    作业任务
                   </h2>
                   
                   {viewMode === 'grid' ? (
@@ -424,7 +440,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                             </div>
                             <div className="absolute top-3 left-3 md:top-4 md:left-4">
                               <div className="bg-white/20 backdrop-blur-md text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg">
-                                试卷
+                                作业
                               </div>
                             </div>
                             {deadline && (
@@ -533,7 +549,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                       <table className="hidden md:table w-full text-left border-collapse table-fixed">
                         <thead className="bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800">
                           <tr>
-                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">试卷名称</th>
+                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">作业名称</th>
                             <th className="w-24 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">类型</th>
                             <th className="w-48 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">截止时间</th>
                             <th className="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">得分</th>
@@ -562,7 +578,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                   <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded uppercase">
-                                    试卷
+                                    作业
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">

@@ -724,7 +724,7 @@ const ClassDetailView = ({
     setShowBatchImport(false);
   };
 
-  const handleResetPassword = (studentId: string) => {
+  const handleResetPassword = async (studentId: string) => {
     const student = classroom?.students.find(s => s.id === studentId);
     if (student && student.userId) {
         const user = getUserById(student.userId);
@@ -734,9 +734,27 @@ const ClassDetailView = ({
               title: "重置密码",
               message: `确定要将学生 ${user.name} 的密码重置为默认值 (123456) 吗？`,
               onConfirm: async () => {
-                user.password = '123456';
-                await saveUser(user);
-                setConfirmConfig({ isOpen: true, title: "完成", message: "密码已成功重置为 123456", onConfirm: () => {}, type: "info" });
+                try {
+                  await apiClient.post(`/api/users/${user.id}/change-password`, { 
+                    newPassword: '123456', 
+                    needsPasswordChange: true 
+                  });
+                  setConfirmConfig({ 
+                    isOpen: true, 
+                    title: "完成", 
+                    message: "密码已成功重置为 123456，学生下次登录时需要修改密码", 
+                    onConfirm: () => {}, 
+                    type: "info" 
+                  });
+                } catch (e: any) {
+                  setConfirmConfig({ 
+                    isOpen: true, 
+                    title: "错误", 
+                    message: e?.message || '重置密码失败', 
+                    onConfirm: () => {}, 
+                    type: "danger" 
+                  });
+                }
               }
             });
         }

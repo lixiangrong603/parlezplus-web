@@ -161,57 +161,57 @@ const ClozeExercise: React.FC<ClozeExerciseProps> = ({
     const isFinalState = isReadOnly || attempts >= 2 || (isSubmitted && score.correct === score.total);
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-slate-950">
+        <div className="flex flex-col h-[100dvh] bg-white dark:bg-slate-950 overflow-hidden">
            {/* Header - Unified with QuizTaker */}
-           <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <h1 className={`font-bold text-lg font-serif ${isSubmitted ? 'text-indigo-800 dark:text-indigo-200' : 'text-slate-800 dark:text-slate-100'}`}>
-                        {isFinalState ? <span className="flex items-center gap-2"><Lock size={18} /> 完形填空</span> : (isSubmitted ? <span className="flex items-center gap-2"><Edit3 size={18} /> 发现错误</span> : "听写填空")}
+           <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <h1 className={`font-bold text-base font-serif shrink-0 ${isSubmitted ? 'text-indigo-800 dark:text-indigo-200' : 'text-slate-800 dark:text-slate-100'}`}>
+                        {isFinalState ? <span className="flex items-center gap-1.5"><Lock size={16} /> <span className="hidden xs:inline">完形填空</span><span className="xs:hidden">完形</span></span> : (isSubmitted ? <span className="flex items-center gap-1.5"><Edit3 size={16} /> <span className="hidden xs:inline">发现错误</span><span className="xs:hidden">纠错</span></span> : "听写填空")}
                     </h1>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
                     {isSubmitted ? (
-                        <div className="flex items-center gap-2">
-                            <div className={`text-sm font-black px-3 py-1 rounded-lg ${score.correct === score.total ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400' : 'bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400'}`}>
-                                {score.correct} / {score.total}
+                        <div className="flex items-center gap-1.5">
+                            <div className={`text-xs font-black px-2 py-1 rounded-lg ${score.correct === score.total ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400' : 'bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400'}`}>
+                                {score.correct}/{score.total}
                             </div>
                             
                             {!isFinalState && (
                                 <button
                                     onClick={handleRetry}
-                                    className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg font-bold text-sm hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all font-serif flex items-center gap-1"
+                                    className="px-2.5 py-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg font-bold text-xs hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all font-serif flex items-center gap-1"
                                 >
-                                    <RefreshCcw size={14} /> 修改
+                                    <RefreshCcw size={14} /> <span className="hidden xxs:inline">修改</span>
                                 </button>
                             )}
 
                             <button
                                 onClick={onComplete}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-sm transition-all font-serif flex items-center gap-1 ${
+                                className={`px-2.5 py-1.5 rounded-lg font-bold text-xs transition-all font-serif flex items-center gap-1 ${
                                     !isFinalState 
                                     ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' 
                                     : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
                                 }`}
                             >
-                                {isFinalState ? "完成" : "跳过"} <ArrowRight size={14} />
+                                <span className="hidden xxs:inline">{isFinalState ? "完成" : "跳过"}</span> <ArrowRight size={14} />
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                             <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
                                 {filledCount}/{clozeItems.length}
                             </div>
                             <button
                                 onClick={handleCheck}
                                 disabled={!isAllFilled}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 font-serif ${
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 font-serif ${
                                     isAllFilled 
                                     ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
                                     : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-80'
                                 }`}
                             >
-                                <CheckCircle2 size={16} /> {attempts === 1 ? '再查' : '提交'}
+                                <CheckCircle2 size={14} /> <span className="hidden xxs:inline">{attempts === 1 ? '再查' : '提交'}</span>
                             </button>
                         </div>
                     )}

@@ -37,6 +37,9 @@ export async function onRequest(context: any): Promise<Response> {
     const headers = new Headers();
     headers.set('Content-Type', contentType);
     headers.set('Accept-Ranges', 'bytes');
+    // 某些网络环境/浏览器在 HTTP/3(QUIC) 下会出现 ERR_QUIC_PROTOCOL_ERROR，
+    // 对媒体流接口清除 Alt-Svc 可促使客户端优先使用 HTTP/2(TCP) 以提高稳定性。
+    headers.set('Alt-Svc', 'clear');
     
     // 设置缓存策略
     const folder = r2Key.split('/')[0];

@@ -110,46 +110,46 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
     }
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-slate-950 min-h-screen">
+        <div className="flex flex-col h-[100dvh] bg-white dark:bg-slate-950 overflow-hidden">
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <h1 className="font-bold text-slate-800 dark:text-slate-100 text-lg">练习测验</h1>
+            <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <h1 className="font-bold text-slate-800 dark:text-slate-100 text-base shrink-0">练习测验</h1>
                     {isSubmitted && (
-                        <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-900 rounded-full">
-                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">得分:</span>
-                            <span className={`text-sm font-bold ${percentage >= 60 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                {score}/{total} ({percentage}%)
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-900 rounded-full min-w-0">
+                            <span className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap hidden xs:inline">得分:</span>
+                            <span className={`text-xs font-bold ${percentage >= 60 ? 'text-emerald-600' : 'text-red-500'} whitespace-nowrap`}>
+                                {score}/{total}
                             </span>
                         </div>
                     )}
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
                     <button 
                         onClick={isSubmitted ? onComplete : handleSubmit}
                         disabled={!isSubmitted && Object.keys(answers).length === 0}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 font-serif"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 font-serif whitespace-nowrap"
                     >
                         {isSubmitted ? (
-                            <><CheckCircle size={16} /> 完成</>
+                            <><CheckCircle size={14} /> <span className="hidden xxs:inline">完成</span></>
                         ) : (
-                            <><CheckCircle size={16} /> 提交</>
+                            <><CheckCircle size={14} /> <span className="hidden xxs:inline">提交</span></>
                         )}
                     </button>
                     <button 
                         onClick={toggleTextSize}
-                        className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400"
+                        className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400 shrink-0"
                         title="Change Text Size"
                     >
-                        <Type size={20} />
+                        <Type size={18} />
                     </button>
                 </div>
             </div>
 
             {/* Questions List */}
-            <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6 md:p-8 max-w-4xl mx-auto w-full">
-                <div className="space-y-8">
+            <div className="flex-1 overflow-y-auto no-scrollbar p-3 sm:p-4 md:p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                <div className="space-y-6 sm:space-y-8">
                     {validQuestions.map((q, idx) => {
                         const userAnswer = answers[q.id];
                         const isCorrect = isSubmitted && calculateCorrectness(q);
@@ -163,13 +163,13 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
 
                         return (
                             <div key={q.id} className="animate-fade-in">
-                                <div className="flex items-start gap-2 mb-3">
-                                    <span className={`font-bold ${questionClass} ${serifFont} min-w-[24px] text-slate-400/80 select-none mt-0.5`}>
+                                <div className="flex items-start gap-1.5 sm:gap-2 mb-3">
+                                    <span className={`font-bold ${questionClass} ${serifFont} min-w-[20px] sm:min-w-[24px] text-slate-400/80 select-none mt-0.5`}>
                                         {idx + 1}.
                                     </span>
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex-1 min-w-0 overflow-hidden">
                                         <h3
-                                            className={`${questionClass} ${serifFont} text-slate-800 dark:text-slate-100 leading-normal mb-3`}
+                                            className={`${questionClass} ${serifFont} text-slate-800 dark:text-slate-100 leading-normal mb-3 break-words`}
                                             dangerouslySetInnerHTML={{ __html: q.text }}
                                         />
                                         
@@ -177,7 +177,7 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                                             <img
                                                 src={q.imageUrl}
                                                 alt="Question"
-                                                className="max-w-[200px] h-auto object-contain mb-4 border border-slate-200 dark:border-slate-700 rounded"
+                                                className="max-w-full sm:max-w-[200px] h-auto object-contain mb-4 border border-slate-200 dark:border-slate-700 rounded"
                                             />
                                         )}
 
@@ -230,12 +230,12 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                                                         className={containerClass}
                                                     >
                                                         <span className={letterClass}>{optionLetter}.</span>
-                                                        <div className="flex-1">
-                                                            <span className={textClass} dangerouslySetInnerHTML={{ __html: opt.text }} />
+                                                        <div className="flex-1 min-w-0 overflow-hidden">
+                                                            <span className={`${textClass} break-words`} dangerouslySetInnerHTML={{ __html: opt.text }} />
                                                             {opt.imageUrl && (
                                                                 <img 
                                                                     src={opt.imageUrl} 
-                                                                    className="mt-2 max-h-32 rounded border border-slate-200 dark:border-slate-700" 
+                                                                    className="mt-2 max-w-full max-h-32 rounded border border-slate-200 dark:border-slate-700" 
                                                                     alt="Option"
                                                                 />
                                                             )}
@@ -252,9 +252,9 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                                         </div>
 
                                         {isSubmitted && q.explanation && (
-                                            <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900 border-l-4 border-indigo-400 text-sm text-slate-600 dark:text-slate-300 rounded-r">
-                                                <span className="font-bold text-xs text-indigo-500 uppercase tracking-widest block mb-1">解析</span>
-                                                <div className="leading-relaxed whitespace-pre-wrap">{q.explanation}</div>
+                                            <div className="mt-4 p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-900 border-l-4 border-indigo-400 text-xs sm:text-sm text-slate-600 dark:text-slate-300 rounded-r">
+                                                <span className="font-bold text-[9px] sm:text-xs text-indigo-500 uppercase tracking-widest block mb-1">解析</span>
+                                                <div className="leading-relaxed whitespace-pre-wrap break-words">{q.explanation}</div>
                                             </div>
                                         )}
                                     </div>

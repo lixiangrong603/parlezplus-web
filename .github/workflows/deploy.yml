@@ -43,7 +43,7 @@ jobs:
           set -euo pipefail
           for i in 1 2 3; do
             echo "Deploy attempt $i/3"
-            npx --yes wrangler@4.63.0 pages deploy dist --project-name=parlezplus --commit-dirty=true && break
+            npx --yes wrangler@4.63.0 pages deploy dist --project-name=fluide --commit-dirty=true && break
             if [ "$i" -lt 3 ]; then
               echo "Deploy failed; retrying in 20s..."
               sleep 20

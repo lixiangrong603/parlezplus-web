@@ -127,14 +127,14 @@ npm run build
 
 ### 2. 部署到 Cloudflare Pages
 ```bash
-npx wrangler pages deploy dist --project-name=parlezplus
+npx wrangler pages deploy dist --project-name=fluide
 ```
 
 首次部署会自动创建项目。
 
 ### 3. 配置自定义域名（可选）
 在 Cloudflare Dashboard:
-1. 进入 **Pages** → 选择 `parlezplus` 项目
+1. 进入 **Pages** → 选择 `fluide` 项目
 2. 点击 **Custom domains** → **Set up a custom domain**
 3. 输入你的域名（如 `app.yourdomain.com`）
 4. 按提示配置 DNS

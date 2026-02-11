@@ -115,13 +115,18 @@ export const apiClient = new ApiClient();
 
 // 将后端返回的蛇形命名用户对象转换为前端驼峰命名
 function transformUserFromApi(apiUser: any): any {
+  // 安全检查：如果 apiUser 为空，直接返回 null
+  if (!apiUser) {
+    return null;
+  }
+  
   return {
     ...apiUser,
-    // 关键字段映射：蛇形 → 驼峰
+    // 关键字段映射：蛇形 → 驼峰，确保布尔字段返回明确的 true/false
     classId: apiUser.class_id ?? apiUser.classId,
-    needsPasswordChange: apiUser.needs_password_change === 1 || apiUser.needs_password_change === true || apiUser.needsPasswordChange,
-    isBlocked: apiUser.is_blocked === 1 || apiUser.is_blocked === true || apiUser.isBlocked,
-    isDeleted: apiUser.is_deleted === 1 || apiUser.is_deleted === true || apiUser.isDeleted,
+    needsPasswordChange: Boolean(apiUser.needs_password_change === 1 || apiUser.needs_password_change === true || apiUser.needsPasswordChange === true),
+    isBlocked: Boolean(apiUser.is_blocked === 1 || apiUser.is_blocked === true || apiUser.isBlocked === true),
+    isDeleted: Boolean(apiUser.is_deleted === 1 || apiUser.is_deleted === true || apiUser.isDeleted === true),
     deletedAt: apiUser.deleted_at ?? apiUser.deletedAt,
     deletedBy: apiUser.deleted_by ?? apiUser.deletedBy,
   };
@@ -316,6 +321,11 @@ export async function getQuestions(teacherId?: string, type?: string, level?: st
   if (includeDeleted) params.append('includeDeleted', 'true');
   const queryString = params.toString();
   return apiClient.get<any[]>(`/api/questions${queryString ? `?${queryString}` : ''}`);
+}
+
+export async function getQuestionById(id: string): Promise<any> {
+  if (!id) throw new Error('Missing question id');
+  return apiClient.get<any>(`/api/questions/${id}`);
 }
 
 export async function createQuestion(data: any): Promise<any> {

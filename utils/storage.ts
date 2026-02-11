@@ -24,6 +24,7 @@ import {
   deleteSyllabusCourse as apiDeleteSyllabusCourse,
   // 题库 API
   getQuestions as apiGetQuestions,
+  getQuestionById as apiGetQuestionById,
   createQuestion as apiCreateQuestion,
   updateQuestion as apiUpdateQuestion,
   deleteQuestion as apiDeleteQuestion,
@@ -580,6 +581,9 @@ export const getBankQuestions = async (teacherId?: string, includeDeleted: boole
     const raw = await apiGetQuestions(teacherId, undefined, undefined, includeDeleted);
     const questions = raw.map(mapApiToQuestion);
     
+    // Update local cache so synchronous readers (like ExamBuilder initial load) can see them
+    localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(questions));
+
     return questions;
   } catch (error) {
     console.error('Failed to fetch questions from API:', error);
@@ -2331,33 +2335,151 @@ export const deleteExamFolder = async (id: string, operatorId?: string, reason?:
   }
 };
 
-export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
-  const allQuestions = getBankQuestionsSync(undefined, true);
-  const allResources = await getResources();
-  
-  const results: Question[] = [];
-  
-  for (const id of ids) {
-    // Try from question bank first
-    const bankQ = allQuestions.find(q => q.id === id);
-    if (bankQ) {
-      results.push(bankQ);
-      continue;
+export const getQuestionsByIds = async (ids: string[], teacherId?: string): Promise<Question[]> => {
+  const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  // 1) Fast path: local cached question bank
+  let cachedBank = getBankQuestionsSync(undefined, true);
+
+  // If cache is empty (fresh device/session), hydrate once via API to avoid N id-by-id calls.
+  // This also prevents ExamBuilder from rendering nothing when localStorage hasn't been populated yet.
+  if (cachedBank.length === 0 && teacherId) {
+    try {
+      cachedBank = await getBankQuestions(teacherId, true);
+    } catch {
+      // ignore; we'll fall back to per-id fetch below
     }
-    
-    // Try from media resources
-    for (const resource of allResources) {
-      if (resource.questions) {
-        const resourceQ = resource.questions.find(q => q.id === id);
-        if (resourceQ) {
-          results.push(resourceQ);
-          break;
+  }
+
+  const bankById = new Map(cachedBank.map(q => [q.id, q]));
+
+  const resultsById = new Map<string, Question>();
+  const missing: string[] = [];
+
+  for (const id of uniqueIds) {
+    const q = bankById.get(id);
+    if (q) resultsById.set(id, q);
+    else missing.push(id);
+  }
+
+  // 2) Online path: hydrate missing bank questions via API (single fetch per id)
+  // Keep concurrency small to avoid overwhelming the edge.
+  const maxConcurrency = 6;
+  const fetchedFromApi: Question[] = [];
+
+  const worker = async (id: string) => {
+    try {
+      const raw = await apiGetQuestionById(id);
+      const mapped = mapApiToQuestion(raw);
+      fetchedFromApi.push(mapped);
+      resultsById.set(id, mapped);
+    } catch {
+      // ignore; may be resource-embedded or deleted
+    }
+  };
+
+  for (let i = 0; i < missing.length; i += maxConcurrency) {
+    const batch = missing.slice(i, i + maxConcurrency);
+    await Promise.all(batch.map(worker));
+  }
+
+  // Update local bank cache opportunistically
+  if (fetchedFromApi.length > 0) {
+    const merged = [...cachedBank];
+    const existing = new Set(merged.map(q => q.id));
+    for (const q of fetchedFromApi) {
+      if (!existing.has(q.id)) merged.push(q);
+    }
+    localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(merged));
+  }
+
+  // 3) Resource fallback: try cached resources from localStorage (no network)
+  const stillMissing = uniqueIds.filter(id => !resultsById.has(id));
+  if (stillMissing.length > 0) {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.RESOURCES);
+      const cachedResources: MediaResource[] = data ? JSON.parse(data) : [];
+      console.log('[getQuestionsByIds] Resource cache check:', {
+        stillMissing,
+        cachedResourcesCount: cachedResources.length,
+        resourcesWithQuestions: cachedResources.filter(r => r.questions && r.questions.length > 0).length
+      });
+      for (const id of stillMissing) {
+        for (const resource of cachedResources) {
+          const rq = resource.questions?.find(q => q.id === id);
+          if (rq) {
+            console.log('[getQuestionsByIds] Found question in resource cache:', id, 'from resource:', resource.title);
+            resultsById.set(id, { ...rq, type: rq.type || 'multiple-choice' } as Question);
+            break;
+          }
         }
       }
+    } catch (err) {
+      console.error('[getQuestionsByIds] Error reading resource cache:', err);
+    }
+  }
+
+  // 4) Online resource fallback (teacher): if resource cache is empty on a fresh device/session,
+  // we won't be able to resolve resource-embedded questions unless we fetch resources once.
+  const stillMissingAfterCache = uniqueIds.filter(id => !resultsById.has(id));
+  if (stillMissingAfterCache.length > 0) {
+    // Always try to fetch resources if there are still missing questions, not just for teachers
+    const effectiveTeacherId = teacherId || 'fallback';
+    console.log('[getQuestionsByIds] Still missing after cache:', stillMissingAfterCache, 'fetching resources with teacherId:', effectiveTeacherId);
+    try {
+      const resources = await getResources(teacherId, true);
+      console.log('[getQuestionsByIds] Fetched resources:', resources.length, 'with questions:', resources.filter(r => r.questions && r.questions.length > 0).length);
+      for (const id of stillMissingAfterCache) {
+        for (const resource of resources) {
+          const rq = resource.questions?.find(q => q.id === id);
+          if (rq) {
+            console.log('[getQuestionsByIds] Found question via API:', id, 'from resource:', resource.title);
+            resultsById.set(id, { ...rq, type: rq.type || 'multiple-choice' } as Question);
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[getQuestionsByIds] Error fetching resources:', err);
     }
   }
   
-  return results;
+  // Final log
+  const finalMissing = uniqueIds.filter(id => !resultsById.has(id));
+  if (finalMissing.length > 0) {
+    console.warn('[getQuestionsByIds] Questions still not found after all fallbacks:', finalMissing);
+  }
+
+  // Preserve original id order
+  return uniqueIds.map(id => resultsById.get(id)).filter((q): q is Question => !!q);
+};
+
+/**
+ * Pre-cache questions into the local question bank storage.
+ * This is useful for resource-embedded questions that need to be accessible
+ * before ensureQuestionsLoaded is called in ExamBuilder.
+ */
+export const preCacheQuestions = (questions: Question[]): void => {
+  if (!questions || questions.length === 0) return;
+  
+  const data = localStorage.getItem(STORAGE_KEYS.QUESTION_BANK);
+  const existing: Question[] = data ? JSON.parse(data) : [];
+  const existingIds = new Set(existing.map(q => q.id));
+  
+  let changed = false;
+  for (const q of questions) {
+    if (q.id && !existingIds.has(q.id)) {
+      existing.push(q);
+      existingIds.add(q.id);
+      changed = true;
+    }
+  }
+  
+  if (changed) {
+    localStorage.setItem(STORAGE_KEYS.QUESTION_BANK, JSON.stringify(existing));
+    console.log('[preCacheQuestions] Cached', questions.length, 'questions');
+  }
 };
 
 // Get questions with their resource info
@@ -2368,14 +2490,9 @@ export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array
   const results: Array<{ question: Question; resourceId?: string; resourceTitle?: string }> = [];
   
   for (const id of ids) {
-    // Try from question bank first
-    const bankQ = allQuestions.find(q => q.id === id);
-    if (bankQ) {
-      results.push({ question: bankQ });
-      continue;
-    }
+    let found = false;
     
-    // Try from media resources
+    // Try from media resources FIRST (priority) to preserve resource association
     for (const resource of allResources) {
       if (resource.questions) {
         const resourceQ = resource.questions.find(q => q.id === id);
@@ -2385,8 +2502,17 @@ export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array
             resourceId: resource.id,
             resourceTitle: resource.title
           });
+          found = true;
           break;
         }
+      }
+    }
+    
+    // Only fall back to question bank if not found in resources
+    if (!found) {
+      const bankQ = allQuestions.find(q => q.id === id);
+      if (bankQ) {
+        results.push({ question: bankQ });
       }
     }
   }
@@ -2452,16 +2578,24 @@ export const getExamSessionByIdSync = (id: string): ExamSession | undefined => {
 
 export const saveExamSession = async (session: ExamSession): Promise<void> => {
   try {
-    const isNew = !session.id || session.id.startsWith('temp-');
+    // 检查本地是否已有此session,决定是创建还是更新
+    const sessions = getExamSessionsSync();
+    const existsLocally = sessions.some(s => s.id === session.id);
+    const isNew = !existsLocally && !session.id?.startsWith('temp-');
     
-    if (isNew) {
+    if (!existsLocally) {
+      // 首次保存,先创建session
       const result = await apiCreateExamSession({
         exam_paper_id: session.examPaperId,
         exam_title: session.examTitle,
         total_score: session.totalScore
       });
-      session.id = result.id;
+      // 保持原有ID(backend已确保idempotent)
+      if (!session.id) {
+        session.id = result.id;
+      }
     } else {
+      // 已存在,更新session
       await apiUpdateExamSession(session.id, {
         answers: session.answers,
         elapsed_time: session.elapsedTime,
@@ -2476,7 +2610,6 @@ export const saveExamSession = async (session: ExamSession): Promise<void> => {
     }
     
     // 更新本地缓存
-    const sessions = getExamSessionsSync();
     const index = sessions.findIndex(s => s.id === session.id);
     if (index !== -1) {
       sessions[index] = session;

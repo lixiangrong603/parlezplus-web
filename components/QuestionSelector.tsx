@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Question, MediaResource, SyllabusCourse, Unit, KnowledgePoint, TranscriptSegment } from '../types';
-import { getBankQuestions, getResources, getSyllabusCourses, getChannels } from '../utils/storage';
+import { getBankQuestions, getResources, getSyllabusCourses, getChannels, preCacheQuestions } from '../utils/storage';
 import { Search, Filter, X, CheckSquare, Square, FileText, Layers, Video, BookOpen, FolderOpen, ChevronDown, Puzzle, BookA, AlignLeft, Calendar } from 'lucide-react';
 import UnitTreeSelector from './UnitTreeSelector';
 import { getOptionGridColumns } from '../utils/optionLayout';
@@ -35,6 +35,9 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
   const [resources, setResources] = useState<MediaResource[]>([]);
   const [courses, setCourses] = useState<SyllabusCourse[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
+
+  const [bankLoaded, setBankLoaded] = useState(false);
+  const [resourcesLoaded, setResourcesLoaded] = useState(false);
   
   // Filter states
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
@@ -45,20 +48,35 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
   const [kpTypeFilter, setKpTypeFilter] = useState<string>('ALL');
 
   useEffect(() => {
-    const loadData = async () => {
-      const [questionsData, resourcesData, coursesData, channelsData] = await Promise.all([
+    // Bank view is the default: load only what's needed for bank filtering/rendering.
+    // (QuestionList feels faster largely because it doesn't pull resources/channels at the same time.)
+    setBankLoaded(false);
+    (async () => {
+      const [questionsData, coursesData] = await Promise.all([
         getBankQuestions(user.id),
-        getResources(user.id),
-        getSyllabusCourses(user.id),
-        getChannels(user.id)
+        getSyllabusCourses(user.id)
       ]);
       setBankQuestions(questionsData);
-      setResources(resourcesData);
       setCourses(coursesData);
-      setChannels(channelsData);
-    };
-    loadData();
+      setBankLoaded(true);
+    })();
   }, [user.id]);
+
+  useEffect(() => {
+    if (sourceFilter !== 'resources') return;
+    if (resourcesLoaded) return;
+
+    setResourcesLoaded(false);
+    (async () => {
+      const [resourcesData, channelsData] = await Promise.all([
+        getResources(user.id),
+        getChannels(user.id)
+      ]);
+      setResources(resourcesData);
+      setChannels(channelsData);
+      setResourcesLoaded(true);
+    })();
+  }, [sourceFilter, resourcesLoaded, user.id]);
 
   // 构建知识点映射
   const knowledgePointMap = useMemo(() => {
@@ -277,6 +295,15 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ user, onConfirm, on
       void modal.alert({ message: '请至少选择一道题目' });
       return;
     }
+    
+    // Pre-cache selected questions (especially resource-embedded ones) so ExamBuilder can find them
+    const selectedQuestions = allQuestions.filter(q => selectedIds.includes(q.id));
+    if (selectedQuestions.length > 0) {
+      // Strip ExtendedQuestion-specific fields before caching
+      const questionsToCache = selectedQuestions.map(({ source, sourceId, resourceLevel, resourceGrammarTags, resourceVocabTags, resourceTranscript, ...q }) => q as Question);
+      preCacheQuestions(questionsToCache);
+    }
+    
     onConfirm(selectedIds);
   };
 

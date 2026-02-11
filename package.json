@@ -11,7 +11,7 @@
     "build:watch": "vite build --watch",
     "preview": "vite preview",
     "lint": "echo 'Linting skipped' && exit 0",
-    "deploy": "npm run build && npx wrangler pages deploy dist --project-name=parlezplus",
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name=fluide",
     "db:create": "npx wrangler d1 create parlezplus_db",
     "db:migrate": "npx wrangler d1 execute parlezplus_db --file=database/schema.sql",
     "db:seed": "npx wrangler d1 execute parlezplus_db --file=database/seed.sql",

@@ -24,11 +24,16 @@ const OperationLogViewer: React.FC<OperationLogViewerProps> = ({ onClose, curren
     filterLogs();
   }, [logs, searchTerm, typeFilter]);
 
-  const loadLogs = () => {
-    const allLogs = getOperationLogs();
-    // 按时间倒序排列
-    const sortedLogs = allLogs.sort((a, b) => b.timestamp - a.timestamp);
-    setLogs(sortedLogs);
+  const loadLogs = async () => {
+    try {
+      const allLogs = await getOperationLogs();
+      // 按时间倒序排列
+      const sortedLogs = allLogs.sort((a, b) => b.timestamp - a.timestamp);
+      setLogs(sortedLogs);
+    } catch (error) {
+      console.error('Failed to load operation logs:', error);
+      setLogs([]);
+    }
   };
 
   const filterLogs = () => {
@@ -57,6 +62,7 @@ const OperationLogViewer: React.FC<OperationLogViewerProps> = ({ onClose, curren
       delete_user: '删除用户',
       delete_classroom: '删除班级',
       delete_exam: '删除试卷',
+      delete_exam_folder: '删除试卷文件夹',
       delete_resource: '删除资源',
       delete_channel: '删除频道',
       delete_question: '删除题目',

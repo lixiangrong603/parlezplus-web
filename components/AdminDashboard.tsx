@@ -6,8 +6,8 @@ import {
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { 
-  getUsers, saveUser, toggleBlockUser, 
-  checkUserReferences, cascadeDeleteUser, ReferenceInfo 
+  getUsersAsync, saveUser,
+  checkUserReferences, ReferenceInfo 
 } from '../utils/storage';
 import { apiClient } from '../services/api/client';
 import { ThemeContext } from '../App';
@@ -32,7 +32,10 @@ export const AdminDashboard: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
-    setUsers(getUsers());
+    (async () => {
+      const allUsers = await getUsersAsync();
+      setUsers(allUsers);
+    })();
   }, []);
 
   const handleAddUser = async () => {
@@ -63,7 +66,8 @@ export const AdminDashboard: React.FC = () => {
         needsPasswordChange: true
       };
       saveUser(user);
-      setUsers(getUsers());
+      const allUsers = await getUsersAsync();
+      setUsers(allUsers);
       setShowAddModal(false);
       setNewUser({ username: '', name: '', role: 'teacher' });
     } catch (e: any) {
@@ -119,18 +123,28 @@ export const AdminDashboard: React.FC = () => {
         confirmText: '删除'
       });
       if (!ok) return;
-      cascadeDeleteUser(id, currentUser?.id);
-      setUsers(getUsers());
+      
+      try {
+        await apiClient.delete(`/api/users/${id}`);
+        const allUsers = await getUsersAsync();
+        setUsers(allUsers);
+      } catch (e: any) {
+        await modal.alert({ message: e?.message || '删除失败' });
+      }
     }
   };
   
   const executeDelete = async () => {
     if (!deleteConfirmState) return;
 
-    cascadeDeleteUser(deleteConfirmState.userId, currentUser?.id);
-    
-    setUsers(getUsers());
-    setDeleteConfirmState(null);
+    try {
+      await apiClient.delete(`/api/users/${deleteConfirmState.userId}`);
+      const allUsers = await getUsersAsync();
+      setUsers(allUsers);
+      setDeleteConfirmState(null);
+    } catch (e: any) {
+      await modal.alert({ message: e?.message || '删除失败' });
+    }
   };
 
   const handleToggleBlock = async (id: string) => {
@@ -138,8 +152,19 @@ export const AdminDashboard: React.FC = () => {
       await modal.alert({ message: '不能锁定当前登录账号' });
       return;
     }
-    toggleBlockUser(id);
-    setUsers(getUsers());
+    
+    const userToToggle = users.find(u => u.id === id);
+    if (!userToToggle) return;
+    
+    try {
+      await apiClient.put(`/api/users/${id}`, {
+        isBlocked: !userToToggle.isBlocked
+      });
+      const allUsers = await getUsersAsync();
+      setUsers(allUsers);
+    } catch (e: any) {
+      await modal.alert({ message: e?.message || '操作失败' });
+    }
   };
 
   const filteredUsers = users.filter(u => 

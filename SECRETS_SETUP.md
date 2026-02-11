@@ -13,7 +13,7 @@ $JWT_SECRET = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | Fo
 Write-Host "生成的 JWT_SECRET: $JWT_SECRET"
 
 # 设置到 Cloudflare Pages
-npx wrangler pages secret put JWT_SECRET --project-name=parlezplus
+npx wrangler pages secret put JWT_SECRET --project-name=fluide
 # 输入提示时，粘贴上面生成的密钥
 ```
 
@@ -27,11 +27,11 @@ $MASTER_KEY = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | Fo
 Write-Host "生成的 MASTER_KEY: $MASTER_KEY"
 
 # 设置到 Cloudflare Pages
-npx wrangler pages secret put GEMINI_MASTER_KEY --project-name=parlezplus
+npx wrangler pages secret put GEMINI_MASTER_KEY --project-name=fluide
 # 粘贴上面生成的密钥
 
 # 如果需要单独的 Azure 加密密钥（或使用同一个）
-npx wrangler pages secret put AZURE_MASTER_KEY --project-name=parlezplus
+npx wrangler pages secret put AZURE_MASTER_KEY --project-name=fluide
 ```
 
 ### 3️⃣ 验证配置
@@ -64,14 +64,14 @@ A: Cloudflare 检测到 wrangler.toml 后，优先使用文件配置，Dashboard
 A: 不需要！Secrets 只需设置一次，会持久保存。
 
 **Q: 如何查看当前设置的 Secrets？**  
-A: 运行 `npx wrangler pages secret list --project-name=parlezplus`（只显示名称，不显示值）
+A: 运行 `npx wrangler pages secret list --project-name=fluide`（只显示名称，不显示值）
 
 **Q: 如何删除某个 Secret？**  
-A: `npx wrangler pages secret delete JWT_SECRET --project-name=parlezplus`
+A: `npx wrangler pages secret delete JWT_SECRET --project-name=fluide`
 
 ## 测试登录
 
-配置完成后，访问 https://parlezplus.pages.dev 测试：
+配置完成后，访问 https://fluide.pages.dev 测试：
 
 | 用户名 | 密码 | 角色 |
 |--------|------|------|

@@ -23,7 +23,7 @@ const ExamAnalysisModal: React.FC<ExamAnalysisModalProps> = ({ exam, user, onClo
     setLoading(true);
     try {
       const qIds = exam.sections.flatMap(s => s.items.map(i => i.questionId));
-      const allQuestions = await getQuestionsByIds(qIds);
+      const allQuestions = await getQuestionsByIds(qIds, user.id);
       const result = await calculateExamAnalysis({ exam, user, allQuestions });
       setAnalysis(result);
     } catch (error) {
