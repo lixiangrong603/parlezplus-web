@@ -60,6 +60,7 @@ import {
   // 操作日志 API
   getOperationLogs as apiGetOperationLogs,
   createOperationLog as apiCreateOperationLog,
+  getMediaUrl,
 } from '../services/api/client';
 
 const STORAGE_KEYS = {
@@ -107,7 +108,7 @@ const mapApiToSyllabusCourse = (raw: any): SyllabusCourse => ({
 const mapApiToQuestion = (raw: any): Question => ({
   id: raw.id,
   text: raw.text,
-  imageUrl: raw.image_r2_key ?? raw.imageUrl ?? undefined,
+  imageUrl: getMediaUrl(raw.image_r2_key ?? raw.imageUrl ?? undefined) || undefined,
   options: raw.options || [],
   correctOptionId: raw.correct_option_id ?? raw.correctOptionId ?? '',
   explanation: raw.explanation ?? undefined,
@@ -132,11 +133,11 @@ const mapApiToMediaResource = (raw: any): MediaResource => ({
   channelId: raw.channel_id ?? raw.channelId ?? '',
   title: raw.title ?? '',
   level: raw.level ?? 'A1',
-  videoUrl: raw.video_r2_key ?? raw.videoUrl ?? '',
-  audioUrl: raw.audio_r2_key ?? raw.audioUrl ?? undefined,
-  backingTrackUrl: raw.backing_track_r2_key ?? raw.backingTrackUrl ?? undefined,
-  vocalTrackUrl: raw.vocal_track_r2_key ?? raw.vocalTrackUrl ?? undefined,
-  coverImage: raw.cover_r2_key ?? raw.coverImage ?? '',
+  videoUrl: getMediaUrl(raw.video_r2_key ?? raw.videoUrl ?? ''),
+  audioUrl: getMediaUrl(raw.audio_r2_key ?? raw.audioUrl ?? undefined) || undefined,
+  backingTrackUrl: getMediaUrl(raw.backing_track_r2_key ?? raw.backingTrackUrl ?? undefined) || undefined,
+  vocalTrackUrl: getMediaUrl(raw.vocal_track_r2_key ?? raw.vocalTrackUrl ?? undefined) || undefined,
+  coverImage: getMediaUrl(raw.cover_r2_key ?? raw.coverImage ?? ''),
   transcript: raw.transcript ?? [],
   rawAzureWords: raw.raw_azure_words ?? raw.rawAzureWords ?? undefined,
   questions: raw.questions ?? [],
@@ -844,7 +845,7 @@ export const getSubmissions = async (includeDeleted: boolean = false): Promise<S
       submittedAt: typeof s.submitted_at === 'number'
         ? new Date(s.submitted_at).toLocaleString()
         : String(s.submitted_at || ''),
-      audioUrl: s.audio_r2_key,
+      audioUrl: getMediaUrl(s.audio_r2_key),
       aiScore: s.ai_score || undefined,
       aiSegmentEvals: s.ai_segment_evals || undefined,
       teacherFeedback: s.teacher_feedback || undefined,
@@ -1314,7 +1315,7 @@ export const getUsersAsync = async (includeDeleted: boolean = false): Promise<Us
       username: u.username,
       role: u.role,
       name: u.name,
-      avatar: u.avatar_r2_key,
+      avatar: getMediaUrl(u.avatar_r2_key),
       classId: u.class_id,
       needsPasswordChange: u.needs_password_change === 1,
       isBlocked: u.is_blocked === 1,

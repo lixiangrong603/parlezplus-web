@@ -3,8 +3,8 @@
     {
       "allowed": {
         "origins": ["https://www.fluide.top", "https://fluide.top", "https://parlezplus.pages.dev", "http://localhost:5173", "http://localhost:8788"],
-        "methods": ["GET", "HEAD"],
-        "headers": ["*"]
+        "methods": ["GET", "HEAD", "PUT"],
+        "headers": ["*", "Content-Type", "Cache-Control", "x-amz-date", "x-amz-content-sha256", "authorization"]
       },
       "exposeHeaders": ["Content-Length", "Content-Type", "Content-Range", "ETag"],
       "maxAgeSeconds": 86400

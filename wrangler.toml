@@ -37,6 +37,8 @@ bucket_name = "fluide"
 [vars]
 ENVIRONMENT = "development"
 MEDIA_BASE_URL = ""
+R2_DIRECT_UPLOAD_ENABLED = "false"
+R2_ACCOUNT_ID = ""
 
 # ============================================
 # 本地开发配置
@@ -55,6 +57,8 @@ MEDIA_BASE_URL = ""
 [env.production.vars]
 ENVIRONMENT = "production"
 MEDIA_BASE_URL = "https://media.fluide.top"
+R2_DIRECT_UPLOAD_ENABLED = "true"
+R2_ACCOUNT_ID = "65f30ce18e94f4485a7ed7dff78a3915"
 
 [[env.production.d1_databases]]
 binding = "DB"

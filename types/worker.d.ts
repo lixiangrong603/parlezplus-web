@@ -14,6 +14,13 @@ export interface Env {
   ENVIRONMENT: string;
   // 可选：R2 自定义域名基础地址（用于生成直连 URL，例如 https://media.fluide.top）
   MEDIA_BASE_URL?: string;
+  // 可选：开启前端直传（通过签名 URL）
+  R2_DIRECT_UPLOAD_ENABLED?: string;
+  // 可选：R2 Account ID（用于构造 S3 API endpoint）
+  R2_ACCOUNT_ID?: string;
+  // 可选：用于签名直传 URL 的 R2 S3 凭据（建议通过 wrangler secret 设置）
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
   
   // 敏感密钥 (通过 wrangler secret put 设置)
   GEMINI_MASTER_KEY?: string;

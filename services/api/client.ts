@@ -82,19 +82,71 @@ class ApiClient {
   }
 
   async uploadFile(file: File, folder: string): Promise<{ r2_key: string; cdn_url: string; size: number }> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('folder', folder);
+    const directUploadEnabled = ((import.meta as any).env?.VITE_R2_DIRECT_UPLOAD_ENABLED || '').toString().toLowerCase() === 'true'
+      || (typeof window !== 'undefined' && window.location.hostname.endsWith('fluide.top'));
+
+    if (directUploadEnabled) {
+      try {
+        const directHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (this.token) {
+          directHeaders['Authorization'] = `Bearer ${this.token}`;
+        }
+
+        const directResp = await fetch(`${API_BASE_URL}/api/upload-direct`, {
+          method: 'POST',
+          headers: directHeaders,
+          body: JSON.stringify({
+            folder,
+            fileName: file.name,
+            contentType: file.type || 'application/octet-stream',
+          }),
+        });
+
+        if (directResp.ok) {
+          const directData = await directResp.json() as {
+            data: {
+              r2_key: string;
+              upload_url: string;
+              upload_headers?: Record<string, string>;
+              cdn_url: string;
+            };
+          };
+
+          const uploadResp = await fetch(directData.data.upload_url, {
+            method: 'PUT',
+            headers: {
+              ...(directData.data.upload_headers || {}),
+            },
+            body: file,
+          });
+
+          if (uploadResp.ok) {
+            return {
+              r2_key: directData.data.r2_key,
+              cdn_url: directData.data.cdn_url,
+              size: file.size,
+            };
+          }
+        }
+      } catch (error) {
+        console.warn('Direct upload failed, fallback to /api/upload:', error);
+      }
+    }
 
     const headers: Record<string, string> = {};
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
+    headers['Content-Type'] = file.type || 'application/octet-stream';
+    headers['X-Upload-Folder'] = folder;
+    headers['X-Upload-Filename'] = encodeURIComponent(file.name || `upload-${Date.now()}.bin`);
 
     const response = await fetch(`${API_BASE_URL}/api/upload`, {
       method: 'POST',
       headers,
-      body: formData,
+      body: file,
     });
 
     if (!response.ok) {
@@ -229,6 +281,26 @@ export async function callGeminiAPI(body: any): Promise<any> {
 export function getMediaUrl(r2Key: string | null | undefined): string {
   if (!r2Key) return '';
 
+  const extractVersionFromKey = (key: string): string => {
+    const fileName = key.split('/').pop() || '';
+    const match = fileName.match(/^(\d{10,})[_-]/);
+    return match ? match[1] : '';
+  };
+
+  const appendVersionParam = (url: string, version: string): string => {
+    if (!version) return url;
+    try {
+      const isAbsolute = url.startsWith('http://') || url.startsWith('https://');
+      const parsed = new URL(url, isAbsolute ? undefined : 'https://local.placeholder');
+      if (!parsed.searchParams.has('v')) {
+        parsed.searchParams.set('v', version);
+      }
+      return isAbsolute ? parsed.toString() : `${parsed.pathname}${parsed.search}`;
+    } catch {
+      return url;
+    }
+  };
+
   const mediaBaseUrl = ((import.meta as any).env?.VITE_MEDIA_BASE_URL || '').toString().trim().replace(/\/$/, '');
   const inferredMediaBaseUrl = mediaBaseUrl || (typeof window !== 'undefined' && window.location.hostname.endsWith('fluide.top')
     ? 'https://media.fluide.top'
@@ -237,7 +309,8 @@ export function getMediaUrl(r2Key: string | null | undefined): string {
   // 兼容旧格式：/api/media/<key> -> 优先替换为自定义域名直连
   if (r2Key.startsWith('/api/media/')) {
     const key = r2Key.slice('/api/media/'.length);
-    return inferredMediaBaseUrl ? `${inferredMediaBaseUrl}/${key}` : r2Key;
+    const target = inferredMediaBaseUrl ? `${inferredMediaBaseUrl}/${key}` : r2Key;
+    return appendVersionParam(target, extractVersionFromKey(key));
   }
 
   // 如果已经是完整 URL，直接返回
@@ -247,14 +320,28 @@ export function getMediaUrl(r2Key: string | null | undefined): string {
     const idx = r2Key.indexOf(marker);
     if (idx !== -1) {
       const key = r2Key.slice(idx + marker.length);
-      return inferredMediaBaseUrl ? `${inferredMediaBaseUrl}/${key}` : r2Key;
+      const target = inferredMediaBaseUrl ? `${inferredMediaBaseUrl}/${key}` : r2Key;
+      return appendVersionParam(target, extractVersionFromKey(key));
     }
+
+    try {
+      const absolute = new URL(r2Key);
+      if (absolute.hostname === 'media.fluide.top') {
+        const key = absolute.pathname.replace(/^\//, '');
+        return appendVersionParam(r2Key, extractVersionFromKey(key));
+      }
+    } catch {
+      return r2Key;
+    }
+
     return r2Key;
   }
   
   // 否则：r2Key 视为对象 key，优先走自定义域名
-  if (inferredMediaBaseUrl) return `${inferredMediaBaseUrl}/${r2Key}`;
-  return `${API_BASE_URL}/api/media/${r2Key}`;
+  if (inferredMediaBaseUrl) {
+    return appendVersionParam(`${inferredMediaBaseUrl}/${r2Key}`, extractVersionFromKey(r2Key));
+  }
+  return appendVersionParam(`${API_BASE_URL}/api/media/${r2Key}`, extractVersionFromKey(r2Key));
 }
 
 // ============================================
