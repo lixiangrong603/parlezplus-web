@@ -68,7 +68,12 @@ export async function onRequestPost(context: any): Promise<Response> {
       return errorResponse('直传配置不完整，请设置 R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY', 500);
     }
 
-    const payload = (await request.json()) as DirectUploadRequest;
+    let payload: DirectUploadRequest;
+    try {
+      payload = (await request.json()) as DirectUploadRequest;
+    } catch {
+      return errorResponse('请求体必须是 JSON', 400);
+    }
     const folder = payload?.folder;
     const fileName = (payload?.fileName || '').trim();
     const contentType = (payload?.contentType || 'application/octet-stream').trim();
@@ -157,6 +162,7 @@ export async function onRequestPost(context: any): Promise<Response> {
     });
   } catch (error) {
     console.error('upload-direct error:', error);
-    return errorResponse('生成直传链接失败', 500);
+    const message = error instanceof Error ? error.message : '未知错误';
+    return errorResponse(`生成直传链接失败: ${message}`, 500);
   }
 }

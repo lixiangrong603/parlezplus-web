@@ -82,8 +82,7 @@ class ApiClient {
   }
 
   async uploadFile(file: File, folder: string): Promise<{ r2_key: string; cdn_url: string; size: number }> {
-    const directUploadEnabled = ((import.meta as any).env?.VITE_R2_DIRECT_UPLOAD_ENABLED || '').toString().toLowerCase() === 'true'
-      || (typeof window !== 'undefined' && window.location.hostname.endsWith('fluide.top'));
+    const directUploadEnabled = ((import.meta as any).env?.VITE_R2_DIRECT_UPLOAD_ENABLED || '').toString().toLowerCase() === 'true';
 
     if (directUploadEnabled) {
       try {
