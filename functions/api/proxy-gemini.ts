@@ -17,7 +17,8 @@ export async function onRequestPost(context: any): Promise<Response> {
       return errorResponse('未授权 - 请检查登录状态', 401);
     }
     
-    console.log('Proxy-Gemini: 用户验证成功 -', user.username, user.id);
+    // 移除高频成功日志
+    // console.log('Proxy-Gemini: 用户验证成功 -', user.username, user.id);
     
     // 从数据库获取用户的加密 Gemini Key
     const keyRecord = await env.DB
@@ -30,7 +31,7 @@ export async function onRequestPost(context: any): Promise<Response> {
       return errorResponse('未配置 Gemini API Key，请在设置中添加', 400);
     }
     
-    console.log('Proxy-Gemini: 找到加密的 Gemini Key');
+    // console.log('Proxy-Gemini: 找到加密的 Gemini Key');
     
     // 解密 API Key
     const apiKey = await decryptApiKey(keyRecord.gemini_key_encrypted, env.GEMINI_MASTER_KEY || '');

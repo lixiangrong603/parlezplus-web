@@ -4,7 +4,7 @@ import { MediaResource, Classroom, Submission, ExamPaper, User, ExamSession } fr
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, ChevronRight, Lock, BookOpen, CheckCircle, Clock, Eye, EyeOff, Save, Play, ChevronDown, Layers, Sun, Moon, AlertCircle, FileCheck, FileText, LayoutGrid, List, Camera, Trash2, Loader2, User as UserIcon } from 'lucide-react';
 import AvatarEditor from './AvatarEditor';
-import { getClassroomById, getClassrooms, getSubmissions, getExamPapers, getExamSessions, saveUser } from '../utils/storage';
+import { getClassroomById, getClassrooms, getSubmissions, getExamPapers, getExamSessions, saveUser, getDeletedExamSessionsByExam } from '../utils/storage';
 import { generateRandomCoverArt, getInitials, getColorFromString, compressImage, validateImageFile } from '../utils/mediaUtils';
 import { ThemeContext } from '../App';
 import ExamTaker from './ExamTaker';
@@ -35,6 +35,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   const [examSessions, setExamSessions] = useState<ExamSession[]>([]);
   const [assignedExams, setAssignedExams] = useState<ExamPaper[]>([]);
   const [takingExam, setTakingExam] = useState<ExamPaper | null>(null);
+  const [redoInfoMap, setRedoInfoMap] = useState<Map<string, string>>(new Map()); // examId -> reason
   const [showSettings, setShowSettings] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
   const [candidateImage, setCandidateImage] = useState<string | null>(null);
@@ -194,6 +195,34 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     }
   }, [user?.classId, activeClass?.id]);
 
+  // Load redo info for assigned exams (check for "return to redo" records)
+  useEffect(() => {
+    if (!user || assignedExams.length === 0) return;
+    let active = true;
+    const loadRedoInfo = async () => {
+      const map = new Map<string, string>();
+      for (const exam of assignedExams) {
+        try {
+          const deletedSessions = await getDeletedExamSessionsByExam(exam.id, user.id);
+          // Find the most recent deleted session with a reason
+          const sorted = deletedSessions
+            .filter(s => s.deletedReason)
+            .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+          if (sorted.length > 0) {
+            map.set(exam.id, sorted[0].deletedReason!);
+          }
+        } catch (error) {
+          console.error(`Failed to load redo info for exam ${exam.id}:`, error);
+        }
+      }
+      if (active) {
+        setRedoInfoMap(map);
+      }
+    };
+    loadRedoInfo();
+    return () => { active = false; };
+  }, [assignedExams, user]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (classSwitcherRef.current && !classSwitcherRef.current.contains(event.target as Node)) {
@@ -245,12 +274,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
   // 统计试卷任务的未完成/完成情况
   const incompleteExamsCount = assignedExams.filter(exam => {
       const session = examSessionMap.get(exam.id);
-      return !session?.isSubmitted;
+      const isReturned = redoInfoMap.has(exam.id); // 被打回的exam
+      return !session?.isSubmitted || isReturned; // 未提交 或 被打回
   }).length;
 
   const completedExamsCount = assignedExams.filter(exam => {
       const session = examSessionMap.get(exam.id);
-      return session?.isSubmitted;
+      const isReturned = redoInfoMap.has(exam.id); // 被打回的exam
+      return session?.isSubmitted && !isReturned; // 已提交 且 未被打回
   }).length;
 
   // 总计
@@ -445,13 +476,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                           const isOverdue = !!deadline && Date.now() > deadline;
                           const session = examSessionMap.get(exam.id);
                           const submittedSession = session?.isSubmitted ? session : undefined;
+                          const hasRedoRequest = redoInfoMap.has(exam.id);
                           return (
                         <div
                           key={exam.id}
-                          className="bg-white dark:bg-slate-900 rounded-xl md:rounded-[1.5rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.02] active:scale-[0.98] hover:shadow-md border border-slate-100 dark:border-slate-800 group relative flex flex-col font-sans"
+                          className={`bg-white dark:bg-slate-900 rounded-xl md:rounded-[1.5rem] shadow-sm overflow-hidden cursor-pointer transform transition-all hover:scale-[1.02] active:scale-[0.98] hover:shadow-md border ${hasRedoRequest ? 'border-red-300 dark:border-red-700 ring-2 ring-red-200 dark:ring-red-800' : 'border-slate-100 dark:border-slate-800'} group relative flex flex-col font-sans`}
                           onClick={() => setTakingExam(exam)}
                         >
-                          <div className="relative h-24 md:h-36 bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden shrink-0 rounded-t-xl md:rounded-t-[1.5rem]">
+                          {/* Redo Badge */}
+                          {hasRedoRequest && (
+                            <div className="absolute top-2 left-2 z-10 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg animate-pulse">
+                              <AlertCircle size={10} /> 需重做
+                            </div>
+                          )}
+                          <div className={`relative h-24 md:h-36 ${hasRedoRequest ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-indigo-500 to-purple-600'} overflow-hidden shrink-0 rounded-t-xl md:rounded-t-[1.5rem]`}>
                             <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30"></div>
                             <div className="absolute inset-0 flex items-center justify-center">
                               <FileText size={48} className="text-white/20 md:size-[64px]" />
@@ -527,17 +565,28 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                           const isOverdue = !!deadline && Date.now() > deadline;
                           const session = examSessionMap.get(exam.id);
                           const submittedSession = session?.isSubmitted ? session : undefined;
+                          const hasRedoRequest = redoInfoMap.has(exam.id);
                           return (
                             <div 
                               key={exam.id}
-                              className="p-3.5 flex items-center gap-3.5 active:bg-slate-50 dark:active:bg-slate-800 active:scale-[0.98] transition-all cursor-pointer"
+                              className={`p-3.5 flex items-center gap-3.5 active:bg-slate-50 dark:active:bg-slate-800 active:scale-[0.98] transition-all cursor-pointer ${hasRedoRequest ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
                               onClick={() => setTakingExam(exam)}
                             >
-                              <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center text-white shrink-0">
+                              <div className={`w-10 h-10 rounded-xl ${hasRedoRequest ? 'bg-red-500' : 'bg-indigo-500'} flex items-center justify-center text-white shrink-0 relative`}>
                                 <FileText size={20} />
+                                {hasRedoRequest && (
+                                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 border-2 border-white dark:border-slate-900 rounded-full flex items-center justify-center">
+                                    <span className="text-[8px] font-bold text-white">!</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex-1 min-w-0 flex flex-col items-start text-left">
-                                <h4 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate w-full">{exam.title}</h4>
+                                <div className="flex items-center gap-1.5 w-full">
+                                  <h4 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate">{exam.title}</h4>
+                                  {hasRedoRequest && (
+                                    <span className="text-[8px] font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-1 py-0.5 rounded shrink-0">需重做</span>
+                                  )}
+                                </div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span className={`text-[9px] font-medium ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
                                     {deadline ? new Date(deadline).toLocaleDateString() : '无期限'}
@@ -550,7 +599,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-1">
-                                {submittedSession ? (
+                                {hasRedoRequest ? (
+                                  <AlertCircle size={14} className="text-red-500 animate-pulse" />
+                                ) : submittedSession ? (
                                   <FileCheck size={14} className="text-indigo-500" />
                                 ) : session ? (
                                   <Clock size={14} className="text-orange-500" />
@@ -580,18 +631,29 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                             const isOverdue = !!deadline && Date.now() > deadline;
                             const session = examSessionMap.get(exam.id);
                             const submittedSession = session?.isSubmitted ? session : undefined;
+                            const hasRedoRequest = redoInfoMap.has(exam.id);
                             return (
                               <tr 
                                 key={exam.id} 
-                                className="group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer"
+                                className={`group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer ${hasRedoRequest ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
                                 onClick={() => setTakingExam(exam)}
                               >
                                 <td className="px-6 py-4 truncate text-left">
                                   <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center text-white shrink-0">
+                                    <div className={`w-10 h-10 rounded-lg ${hasRedoRequest ? 'bg-red-500' : 'bg-indigo-500'} flex items-center justify-center text-white shrink-0 relative`}>
                                       <FileText size={20} />
+                                      {hasRedoRequest && (
+                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 border-2 border-white dark:border-slate-900 rounded-full flex items-center justify-center">
+                                          <span className="text-[8px] font-bold text-white">!</span>
+                                        </div>
+                                      )}
                                     </div>
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{exam.title}</span>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{exam.title}</span>
+                                      {hasRedoRequest && (
+                                        <span className="text-[9px] font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded shrink-0 animate-pulse">需重做</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
@@ -612,7 +674,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                  {isOverdue && !session ? (
+                                  {hasRedoRequest ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg animate-pulse">
+                                      <AlertCircle size={12} /> 需重做
+                                    </span>
+                                  ) : isOverdue && !session ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">
                                       <AlertCircle size={12} /> 已逾期
                                     </span>

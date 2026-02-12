@@ -282,6 +282,8 @@ export interface ExamPaper {
 
   // [NEW] Online exam runtime settings (teacher-configurable)
   examTakerSettings?: ExamTakerSettings;
+  // 考试说明（教师自定义）
+  instructions?: string;
   // 软删除字段
   isDeleted?: boolean;
   deletedAt?: number;
@@ -331,6 +333,7 @@ export interface ExamSession {
   deletedAt?: number;
   deletedBy?: string;
   deletedReason?: string; // 删除/打回原因
+  redoMode?: 'clear' | 'revise'; // 打回模式：clear=清空重做, revise=修改重交
 }
 
 // --- 操作审计日志类型 ---

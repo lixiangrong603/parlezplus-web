@@ -12,7 +12,7 @@ import AvatarEditor from './AvatarEditor';
 import { Classroom, Student, Submission, MediaResource, User as UserType, ExamPaper, ExamSession } from '../types';
 import { 
   getClassrooms, saveClassroom, saveUser, getUsers, getUserById, 
-  getResources, getResourceById, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamAndClass,
+  getResources, getResourceById, saveResource, getExamPapers, updateExamPaper, getExamSessionsByExamsAndClass,
   checkClassroomReferences, cascadeDeleteClassroom, ReferenceInfo
 } from '../utils/storage';
 import { apiClient } from '../services/api/client';
@@ -482,12 +482,20 @@ const ClassDetailView = ({
     const assigned = allExams.filter(e => e.assignedClassIds?.includes(classId));
     setAssignedExams(assigned);
 
+    // 性能优化：一次API调用获取所有考试的会话数据
     const sessionsByExamId: Record<string, ExamSession[]> = {};
-    await Promise.all(
-      assigned.map(async (exam) => {
-        sessionsByExamId[exam.id] = await getExamSessionsByExamAndClass(exam.id, classId);
-      })
-    );
+    if (assigned.length > 0) {
+      const examIds = assigned.map(exam => exam.id);
+      const allSessions = await getExamSessionsByExamsAndClass(examIds, classId);
+      // 按考试ID分组
+      for (const session of allSessions) {
+        const examId = session.examPaperId;
+        if (!sessionsByExamId[examId]) {
+          sessionsByExamId[examId] = [];
+        }
+        sessionsByExamId[examId].push(session);
+      }
+    }
     setExamSessionsByExamId(sessionsByExamId);
   };
 
@@ -1433,13 +1441,12 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
       // 保存头像
       if (avatarPreview !== user.avatar) {
         const updatedUser = { ...user, avatar: avatarPreview || undefined };
-        saveUser(updatedUser);
+        await saveUser(updatedUser);
         updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
       }
       
       setIsSaving(false);
       onClose();
-      window.location.reload(); // 刷新以更新头像显示
     } catch (error) {
       console.error('Save settings error:', error);
       alert('保存失败，请检查网络连接');

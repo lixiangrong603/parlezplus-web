@@ -418,8 +418,11 @@ export async function updateExamSession(id: string, updates: any): Promise<{ suc
   return apiClient.put<{ success: boolean }>(`/api/exams/sessions/${id}`, updates);
 }
 
-export async function deleteExamSession(id: string): Promise<{ success: boolean }> {
-  return apiClient.delete<{ success: boolean }>(`/api/exams/sessions/${id}`);
+export async function deleteExamSession(id: string, reason?: string, redoMode?: 'clear' | 'revise'): Promise<{ success: boolean }> {
+  const body: { reason?: string; redoMode?: string } = {};
+  if (reason) body.reason = reason;
+  if (redoMode) body.redoMode = redoMode;
+  return apiClient.delete<{ success: boolean }>(`/api/exams/sessions/${id}`, Object.keys(body).length > 0 ? body : undefined);
 }
 
 // ============================================

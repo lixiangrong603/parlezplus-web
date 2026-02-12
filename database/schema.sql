@@ -226,6 +226,7 @@ CREATE TABLE IF NOT EXISTS exam_papers (
     assigned_class_ids TEXT DEFAULT '[]', -- JSON 数组
     assigned_class_deadlines TEXT DEFAULT '{}', -- JSON 对象
     exam_taker_settings TEXT, -- JSON
+    instructions TEXT, -- 考试说明（教师自定义）
     folder_id TEXT, -- 文件夹ID（可选）
     created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
     is_deleted INTEGER DEFAULT 0,
@@ -279,6 +280,7 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     deleted_at INTEGER,
     deleted_by TEXT,
     deleted_reason TEXT,
+    redo_mode TEXT, -- 'clear' (清空重做) | 'revise' (修改重交)
     FOREIGN KEY (exam_paper_id) REFERENCES exam_papers(id),
     FOREIGN KEY (student_id) REFERENCES users(id)
 );

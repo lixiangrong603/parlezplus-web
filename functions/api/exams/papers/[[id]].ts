@@ -44,6 +44,7 @@ export async function onRequestPut(context: any): Promise<Response> {
       assigned_class_ids?: string[];
       assigned_class_deadlines?: Record<string, number>;
       exam_taker_settings?: any;
+      instructions?: string;
     };
     
     // 构建更新语句
@@ -78,6 +79,11 @@ export async function onRequestPut(context: any): Promise<Response> {
     if (body.exam_taker_settings !== undefined) {
       updates.push('exam_taker_settings = ?');
       values.push(JSON.stringify(body.exam_taker_settings));
+    }
+    
+    if (body.instructions !== undefined) {
+      updates.push('instructions = ?');
+      values.push(body.instructions || null);
     }
     
     if (updates.length === 0) {

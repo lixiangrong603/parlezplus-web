@@ -66,4 +66,6 @@ Write-Host "     终端2: npm run pages:dev"
 Write-Host ""
 
 # 启动 Wrangler Pages Dev
-npx wrangler pages dev dist --live-reload
+# 日志级别：none=无日志, error=仅错误, warn=警告, log=正常(默认), debug=调试
+# 如需查看所有请求日志，可以去掉 --log-level error
+npx wrangler pages dev dist --live-reload --log-level error

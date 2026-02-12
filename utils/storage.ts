@@ -78,12 +78,7 @@ const STORAGE_KEYS = {
   OPERATION_LOGS: 'parlezplus_operation_logs'
 };
 
-// --- INITIAL DATA SEEDS ---
-const INITIAL_USERS: User[] = [];
-
-const INITIAL_CLASSROOMS: Classroom[] = [];
-
-const INITIAL_SYLLABUS: SyllabusCourse[] = [];
+// --- 注意：以下已迁移至云端数据库，本地只作为API失败时的空数据兜底 ---
 
 // --- API Response → Frontend Type Mapping Helpers ---
 // D1 returns snake_case, frontend types use camelCase
@@ -179,6 +174,7 @@ const mapApiToExamPaper = (raw: any): ExamPaper => ({
   assignedClassIds: raw.assigned_class_ids ?? raw.assignedClassIds ?? [],
   assignedClassDeadlines: raw.assigned_class_deadlines ?? raw.assignedClassDeadlines ?? {},
   examTakerSettings: raw.exam_taker_settings ?? raw.examTakerSettings ?? undefined,
+  instructions: raw.instructions ?? undefined,
   isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
   deletedAt: raw.deleted_at ?? raw.deletedAt,
   deletedBy: raw.deleted_by ?? raw.deletedBy,
@@ -217,6 +213,7 @@ const mapApiToExamSession = (raw: any): ExamSession => ({
   deletedAt: raw.deleted_at ?? raw.deletedAt,
   deletedBy: raw.deleted_by ?? raw.deletedBy,
   deletedReason: raw.deleted_reason ?? raw.deletedReason,
+  redoMode: raw.redo_mode ?? raw.redoMode,
 });
 
 // --- QUESTION BANK & SYLLABUS ---
@@ -240,8 +237,7 @@ export const getSyllabusCourses = async (teacherId?: string, includeDeleted: boo
     // Fallback to localStorage
     const data = localStorage.getItem(STORAGE_KEYS.SYLLABUS);
     if (!data) {
-      localStorage.setItem(STORAGE_KEYS.SYLLABUS, JSON.stringify(INITIAL_SYLLABUS));
-      return INITIAL_SYLLABUS;
+      return [];
     }
     let courses: SyllabusCourse[] = JSON.parse(data);
     
@@ -1301,8 +1297,7 @@ export const getStudentProgress = async (userId: string, resourceId: string): Pr
 export const getUsers = (includeDeleted: boolean = false): User[] => {
   const data = localStorage.getItem(STORAGE_KEYS.USERS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    return INITIAL_USERS;
+    return [];
   }
   const users: User[] = JSON.parse(data);
   return includeDeleted ? users : users.filter(u => !u.isDeleted);
@@ -1478,15 +1473,6 @@ const permanentlyDeleteUser = (id: string) => {
   const users = getUsers(true);
   const filtered = users.filter(u => u.id !== id);
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(filtered));
-};
-
-export const toggleBlockUser = (id: string) => {
-  const users = getUsers();
-  const index = users.findIndex(u => u.id === id);
-  if (index >= 0) {
-    users[index].isBlocked = !users[index].isBlocked;
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  }
 };
 
 // --- CHANNELS ---
@@ -1907,8 +1893,7 @@ export const getClassrooms = async (teacherId?: string, includeDeleted: boolean 
     // Fallback to localStorage
     const data = localStorage.getItem(STORAGE_KEYS.CLASSROOMS);
     if (!data) {
-      localStorage.setItem(STORAGE_KEYS.CLASSROOMS, JSON.stringify(INITIAL_CLASSROOMS));
-      return teacherId ? INITIAL_CLASSROOMS.filter(c => c.userId === teacherId) : INITIAL_CLASSROOMS;
+      return [];
     }
     
     let allClassrooms: Classroom[] = JSON.parse(data);
@@ -2111,7 +2096,8 @@ export const saveExamPaper = async (exam: ExamPaper): Promise<ExamPaper> => {
         folder_id: examToSave.folderId,
         assigned_class_ids: examToSave.assignedClassIds,
         assigned_class_deadlines: examToSave.assignedClassDeadlines,
-        exam_taker_settings: examToSave.examTakerSettings
+        exam_taker_settings: examToSave.examTakerSettings,
+        instructions: examToSave.instructions
       });
       examToSave.id = result.id;
     } else {
@@ -2122,7 +2108,8 @@ export const saveExamPaper = async (exam: ExamPaper): Promise<ExamPaper> => {
         folder_id: examToSave.folderId,
         assigned_class_ids: examToSave.assignedClassIds,
         assigned_class_deadlines: examToSave.assignedClassDeadlines,
-        exam_taker_settings: examToSave.examTakerSettings
+        exam_taker_settings: examToSave.examTakerSettings,
+        instructions: examToSave.instructions
       });
     }
     
@@ -2593,6 +2580,21 @@ export const getExamSessionById = async (id: string): Promise<ExamSession | unde
   return sessions.find(s => s.id === id);
 };
 
+// 获取某个考试的被删除会话（用于查询打回信息）
+export const getDeletedExamSessionsByExam = async (examId: string, studentId?: string): Promise<ExamSession[]> => {
+  try {
+    const raw = await apiGetExamSessions(examId, studentId, true);
+    const sessions = raw.map(mapApiToExamSession);
+    // 按 examPaperId 和 isDeleted 过滤（API 对学生可能返回所有会话）
+    return sessions.filter(s => s.isDeleted && s.examPaperId === examId);
+  } catch (error) {
+    console.error('Failed to fetch deleted exam sessions:', error);
+    // Fallback to localStorage
+    const allSessions: ExamSession[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXAM_SESSIONS) || '[]');
+    return allSessions.filter(s => s.isDeleted && s.examPaperId === examId && (!studentId || s.studentId === studentId));
+  }
+};
+
 // 同步版本
 export const getExamSessionByIdSync = (id: string): ExamSession | undefined => {
   const sessions = getExamSessionsSync();
@@ -2601,38 +2603,21 @@ export const getExamSessionByIdSync = (id: string): ExamSession | undefined => {
 
 export const saveExamSession = async (session: ExamSession): Promise<void> => {
   try {
-    // 检查本地是否已有此session,决定是创建还是更新
-    const sessions = getExamSessionsSync();
-    const existsLocally = sessions.some(s => s.id === session.id);
-    const isNew = !existsLocally && !session.id?.startsWith('temp-');
-    
-    if (!existsLocally) {
-      // 首次保存,先创建session
-      const result = await apiCreateExamSession({
-        exam_paper_id: session.examPaperId,
-        exam_title: session.examTitle,
-        total_score: session.totalScore
-      });
-      // 保持原有ID(backend已确保idempotent)
-      if (!session.id) {
-        session.id = result.id;
-      }
-    } else {
-      // 已存在,更新session
-      await apiUpdateExamSession(session.id, {
-        answers: session.answers,
-        elapsed_time: session.elapsedTime,
-        is_submitted: session.isSubmitted,
-        submit_time: session.submitTime,
-        score: session.score,
-        teacher_feedback: session.teacherFeedback,
-        manual_score: session.manualScore,
-        item_scores: session.itemScores,
-        status: session.status
-      });
-    }
+    // 直接更新会话（API 端点会在不存在时自动创建）
+    await apiUpdateExamSession(session.id, {
+      answers: session.answers,
+      elapsed_time: session.elapsedTime,
+      is_submitted: session.isSubmitted,
+      submit_time: session.submitTime,
+      score: session.score,
+      teacher_feedback: session.teacherFeedback,
+      manual_score: session.manualScore,
+      item_scores: session.itemScores,
+      status: session.status
+    });
     
     // 更新本地缓存
+    const sessions = getExamSessionsSync();
     const index = sessions.findIndex(s => s.id === session.id);
     if (index !== -1) {
       sessions[index] = session;
@@ -2642,21 +2627,14 @@ export const saveExamSession = async (session: ExamSession): Promise<void> => {
     localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
   } catch (error) {
     console.error('Failed to save exam session via API:', error);
-    // Fallback to localStorage
-    const sessions = getExamSessionsSync();
-    const index = sessions.findIndex(s => s.id === session.id);
-    if (index !== -1) {
-      sessions[index] = session;
-    } else {
-      sessions.push(session);
-    }
-    localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
+    // 发生错误时抛出异常，让调用方知道保存失败
+    throw error;
   }
 };
 
-export const deleteExamSession = async (id: string, operatorId?: string, reason?: string): Promise<void> => {
+export const deleteExamSession = async (id: string, operatorId?: string, reason?: string, redoMode?: 'clear' | 'revise'): Promise<void> => {
   try {
-    await apiDeleteExamSession(id);
+    await apiDeleteExamSession(id, reason, redoMode);
     
     // 更新本地缓存
     const sessions = getExamSessionsSync(undefined, true);
@@ -2666,6 +2644,7 @@ export const deleteExamSession = async (id: string, operatorId?: string, reason?
       sessions[sessionIndex].deletedAt = Date.now();
       sessions[sessionIndex].deletedBy = operatorId;
       sessions[sessionIndex].deletedReason = reason;
+      sessions[sessionIndex].redoMode = redoMode;
       localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
     }
   } catch (error) {
@@ -2678,6 +2657,7 @@ export const deleteExamSession = async (id: string, operatorId?: string, reason?
       sessions[sessionIndex].deletedAt = Date.now();
       sessions[sessionIndex].deletedBy = operatorId;
       sessions[sessionIndex].deletedReason = reason;
+      sessions[sessionIndex].redoMode = redoMode;
       localStorage.setItem(STORAGE_KEYS.EXAM_SESSIONS, JSON.stringify(sessions));
       
       // 记录操作日志
@@ -2727,13 +2707,29 @@ export const updateExamSession = async (session: ExamSession): Promise<void> => 
 };
 
 // Delete exam sessions by exam and student IDs (for "return to redo" feature)
-export const deleteExamSessionsByExam = async (examId: string, studentIds: string[], operatorId?: string, reason?: string): Promise<void> => {
-  const sessions = getExamSessionsSync(undefined, true); // 包含已删除数据
+export const deleteExamSessionsByExam = async (examId: string, studentIds: string[], operatorId?: string, reason?: string, redoMode?: 'clear' | 'revise'): Promise<void> => {
   const studentIdSet = new Set(studentIds);
-  
-  for (const session of sessions) {
+
+  // 优先从后端拉取该试卷会话，避免仅依赖本地缓存导致“打回无效”
+  try {
+    const raw = await apiGetExamSessions(examId, undefined, true);
+    const sessions = raw.map(mapApiToExamSession);
+
+    for (const session of sessions) {
+      if (studentIdSet.has(session.studentId)) {
+        await deleteExamSession(session.id, operatorId, reason, redoMode);
+      }
+    }
+    return;
+  } catch (error) {
+    console.error('Failed to fetch sessions for redo from API, fallback to cache:', error);
+  }
+
+  // Fallback: 本地缓存
+  const cachedSessions = getExamSessionsSync(undefined, true);
+  for (const session of cachedSessions) {
     if (session.examPaperId === examId && studentIdSet.has(session.studentId)) {
-      await deleteExamSession(session.id, operatorId, reason);
+      await deleteExamSession(session.id, operatorId, reason, redoMode);
     }
   }
 };

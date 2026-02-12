@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:wrangler": "npm run build && npx wrangler pages dev dist --live-reload",
+    "dev:wrangler": "npm run build && npx wrangler pages dev dist --live-reload --log-level error",
     "dev:quick": "powershell -ExecutionPolicy Bypass -File ./dev-start.ps1",
     "build": "vite build",
     "build:watch": "vite build --watch",

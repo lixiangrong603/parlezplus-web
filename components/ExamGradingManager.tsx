@@ -54,6 +54,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   const [showRedoConfirm, setShowRedoConfirm] = useState(false);
   const [showOnlyIncorrect, setShowOnlyIncorrect] = useState(false);
   const [redoReason, setRedoReason] = useState(''); // 打回原因
+  const [redoMode, setRedoMode] = useState<'clear' | 'revise'>('clear'); // 打回模式
   
   // Load initial data
   useEffect(() => {
@@ -563,15 +564,16 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
   };
 
   // Return to redo
-  const handleReturnToRedo = () => {
+  const handleReturnToRedo = async () => {
     if (!selectedStudentId) return;
     
-    const currentUser = exam?.teacherId;
-    deleteExamSessionsByExam(examId, [selectedStudentId], currentUser, redoReason || '教师要求重做');
-    loadSessions();
+    const currentUser = user?.id;
+    await deleteExamSessionsByExam(examId, [selectedStudentId], currentUser, redoReason || '教师要求重做', redoMode);
+    await loadSessions();
     setSelectedStudentId(null);
     setShowRedoConfirm(false);
     setRedoReason(''); // 清空原因
+    setRedoMode('clear'); // 重置模式
   };
 
   // Check answer helper
@@ -927,6 +929,44 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
               <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
                 原记录将被标记为已删除（可在系统中查看历史），操作将被记录到审计日志。
               </p>
+              
+              {/* 打回模式选择 */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                  打回模式
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                    <input
+                      type="radio"
+                      name="redoMode"
+                      value="clear"
+                      checked={redoMode === 'clear'}
+                      onChange={() => setRedoMode('clear')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div className="font-medium text-slate-900 dark:text-white">清空重做</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">学生打开后看到空白卷，从头开始作答</div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                    <input
+                      type="radio"
+                      name="redoMode"
+                      value="revise"
+                      checked={redoMode === 'revise'}
+                      onChange={() => setRedoMode('revise')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div className="font-medium text-slate-900 dark:text-white">修改重交</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">保留学生原有作答，允许修改后重新提交</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   打回原因（必填）
@@ -945,6 +985,7 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
                 onClick={() => {
                   setShowRedoConfirm(false);
                   setRedoReason('');
+                  setRedoMode('clear');
                 }}
                 className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
               >

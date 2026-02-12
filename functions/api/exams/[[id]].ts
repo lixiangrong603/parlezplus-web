@@ -96,6 +96,7 @@ async function handleCreatePaper(context: any): Promise<Response> {
       assigned_class_ids?: string[];
       assigned_class_deadlines?: Record<string, number>;
       exam_taker_settings?: any;
+      instructions?: string;
     };
     
     if (!body.title || !body.sections || body.total_score === undefined) {
@@ -110,9 +111,9 @@ async function handleCreatePaper(context: any): Promise<Response> {
       .prepare(`
         INSERT INTO exam_papers (
           id, teacher_id, title, sections, total_score,
-          assigned_class_ids, assigned_class_deadlines, exam_taker_settings, created_at
+          assigned_class_ids, assigned_class_deadlines, exam_taker_settings, instructions, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
         examId,
@@ -123,6 +124,7 @@ async function handleCreatePaper(context: any): Promise<Response> {
         JSON.stringify(body.assigned_class_ids || []),
         JSON.stringify(body.assigned_class_deadlines || {}),
         body.exam_taker_settings ? JSON.stringify(body.exam_taker_settings) : null,
+        body.instructions || null,
         Date.now()
       )
       .run();
@@ -177,6 +179,7 @@ async function handleUpdatePaper(context: any, examId: string): Promise<Response
       assigned_class_ids?: string[];
       assigned_class_deadlines?: Record<string, number>;
       exam_taker_settings?: any;
+      instructions?: string;
     };
     
     // 构建更新语句
@@ -211,6 +214,11 @@ async function handleUpdatePaper(context: any, examId: string): Promise<Response
     if (body.exam_taker_settings !== undefined) {
       updates.push('exam_taker_settings = ?');
       values.push(JSON.stringify(body.exam_taker_settings));
+    }
+    
+    if (body.instructions !== undefined) {
+      updates.push('instructions = ?');
+      values.push(body.instructions || null);
     }
     
     if (updates.length === 0) {
@@ -289,6 +297,17 @@ async function handleDeleteSession(context: any, sessionId: string): Promise<Res
       return errorResponse('缺少会话 ID', 400);
     }
     
+    // 尝试从请求体中读取 reason 和 redoMode
+    let reason: string | undefined;
+    let redoMode: 'clear' | 'revise' | undefined;
+    try {
+      const body = await request.json() as { reason?: string; redoMode?: 'clear' | 'revise' };
+      reason = body?.reason;
+      redoMode = body?.redoMode;
+    } catch {
+      // 没有 body 或解析失败，忽略
+    }
+    
     // 查询会话
     const session = await env.DB
       .prepare('SELECT * FROM exam_sessions WHERE id = ? AND is_deleted = 0')
@@ -304,10 +323,10 @@ async function handleDeleteSession(context: any, sessionId: string): Promise<Res
       return errorResponse('学生无权删除考试会话', 403);
     }
     
-    // 软删除会话
+    // 软删除会话，包含打回理由和重做模式
     await env.DB
-      .prepare('UPDATE exam_sessions SET is_deleted = 1, deleted_at = ?, deleted_by = ? WHERE id = ?')
-      .bind(Date.now(), user.id, sessionId)
+      .prepare('UPDATE exam_sessions SET is_deleted = 1, deleted_at = ?, deleted_by = ?, deleted_reason = ?, redo_mode = ? WHERE id = ?')
+      .bind(Date.now(), user.id, reason || null, redoMode || 'clear', sessionId)
       .run();
     
     return jsonResponse({ success: true, message: '考试会话已删除' });
@@ -547,14 +566,105 @@ async function handleUpdateSession(context: any, sessionId: string): Promise<Res
       return errorResponse('缺少会话 ID', 400);
     }
     
-    // 查询会话
-    const session = await env.DB
-      .prepare('SELECT * FROM exam_sessions WHERE id = ? AND is_deleted = 0')
+    // 查询会话（包括已删除的，以避免重复创建）
+    let session = await env.DB
+      .prepare('SELECT * FROM exam_sessions WHERE id = ?')
       .bind(sessionId)
       .first<ExamSession>();
     
+    // 如果会话不存在，尝试自动创建（仅限学生自己的会话）
     if (!session) {
-      return errorResponse('考试会话不存在', 404);
+      // 从 sessionId 解析出 exam_paper_id 和 student_id
+      // sessionId 格式: session_{examPaperId}_{studentId}
+      const parts = sessionId.split('_');
+      if (parts.length >= 3 && parts[0] === 'session') {
+        const examPaperId = parts.slice(1, -1).join('_'); // 支持 exam ID 中包含下划线
+        const studentIdFromSession = parts[parts.length - 1];
+        
+        // 安全检查：学生只能创建自己的会话
+        if (user.role === 'student' && studentIdFromSession !== user.id) {
+          return errorResponse('无权限', 403);
+        }
+        
+        // 查询试卷信息以创建会话
+        const examPaper = await env.DB
+          .prepare('SELECT id, title, total_score FROM exam_papers WHERE id = ? AND is_deleted = 0')
+          .bind(examPaperId)
+          .first<any>();
+        
+        if (examPaper) {
+          // 自动创建会话
+          await env.DB
+            .prepare(`
+              INSERT INTO exam_sessions (
+                id, exam_paper_id, exam_title, student_id, student_name,
+                answers, start_time, elapsed_time, total_score, is_submitted
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `)
+            .bind(
+              sessionId,
+              examPaper.id,
+              examPaper.title,
+              user.id,
+              user.name,
+              '{}',
+              Date.now(),
+              0,
+              examPaper.total_score,
+              0
+            )
+            .run();
+          
+          // 重新查询
+          session = await env.DB
+            .prepare('SELECT * FROM exam_sessions WHERE id = ?')
+            .bind(sessionId)
+            .first<ExamSession>();
+        }
+      }
+      
+      if (!session) {
+        return errorResponse('考试会话不存在且无法创建', 404);
+      }
+    }
+    
+    // 如果会话已被删除，需要恢复它
+    if (session && session.is_deleted) {
+      // 根据 redo_mode 决定是否清空答案
+      const sessionRedoMode = (session as any).redo_mode;
+      const shouldClearAnswers = !sessionRedoMode || sessionRedoMode === 'clear';
+      
+      if (shouldClearAnswers) {
+        // 清空重做：重置所有进度和答案
+        await env.DB
+          .prepare(`
+            UPDATE exam_sessions 
+            SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL,
+                answers = '{}', start_time = ?, elapsed_time = 0, is_submitted = 0, 
+                submit_time = NULL, score = NULL, redo_mode = NULL
+            WHERE id = ?
+          `)
+          .bind(Date.now(), sessionId)
+          .run();
+      } else {
+        // 修改重交：保留答案，仅重置提交状态
+        await env.DB
+          .prepare(`
+            UPDATE exam_sessions 
+            SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL,
+                is_submitted = 0, submit_time = NULL, score = NULL, redo_mode = NULL
+            WHERE id = ?
+          `)
+          .bind(sessionId)
+          .run();
+      }
+      
+      // 重新查询恢复后的会话
+      session = await env.DB
+        .prepare('SELECT * FROM exam_sessions WHERE id = ?')
+        .bind(sessionId)
+        .first<ExamSession>();
     }
     
     // 权限检查：学生只能更新自己的会话，教师可以批改

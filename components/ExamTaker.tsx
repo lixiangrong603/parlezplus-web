@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { ExamPaper, Question, ExamSection, ExamItem, User, ExamSession, MediaResource, RecorderState, ExamTakerSettings, ExamTakerResourcePlaybackSettings, SyllabusCourse } from '../types';
-import { saveExamSession, getExamSessionById, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper, getSyllabusCourses } from '../utils/storage';
+import { saveExamSession, getExamSessionById, getExamSessions, getQuestionsWithResourceInfo, getResources, getExamPaperById, updateExamPaper, getSyllabusCourses, getDeletedExamSessionsByExam } from '../utils/storage';
 import { getOptionGridColumns } from '../utils/optionLayout';
 import MediaPlayer from './MediaPlayer';
 import { ThemeContext } from '../App';
@@ -9,8 +9,9 @@ import { stripGapBackgroundHighlight } from '../utils/gapHtml';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, XCircle, 
   Clock, PlayCircle, AlertCircle, BookOpen, 
-  FileText, Menu, X, ChevronDown, ChevronUp, ArrowLeft, Star, Sun, Moon
+  FileText, Menu, X, ChevronDown, ChevronUp, ArrowLeft, Star, Sun, Moon, Edit3, Save, Loader2
 } from 'lucide-react';
+import { updateExamPaper as apiUpdateExamPaperDirect } from '../services/api/client';
 
 interface ExamTakerProps {
   exam: ExamPaper;
@@ -56,6 +57,15 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
   
   // Load syllabuses for knowledge points
   const [syllabuses, setSyllabuses] = useState<SyllabusCourse[]>([]);
+  
+  // Redo info (if exam was returned for redo)
+  const [redoInfo, setRedoInfo] = useState<{ reason: string; deletedAt?: number; redoMode?: 'clear' | 'revise' } | null>(null);
+
+  // Instructions editing (teacher only)
+  const [isEditingInstructions, setIsEditingInstructions] = useState(false);
+  const [instructionsDraft, setInstructionsDraft] = useState(exam.instructions || '');
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false);
+  const [currentInstructions, setCurrentInstructions] = useState(exam.instructions || '');
 
   useEffect(() => {
     let active = true;
@@ -70,28 +80,58 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     };
   }, []);
 
-  // Auto-close sidebar on mobile
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
-    };
-    // Only set on mount if strictly needed, but better to let user control it after mount.
-    // just init state is enough.
-  }, []);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [startTime, setStartTime] = useState<number>(0);
-  const [elapsedTime, setElapsedTime] = useState<number>(0);
-
   const isTeacherView = user.role === 'teacher' || user.role === 'admin';
 
   // Stable session id: one student + one exam = one session (no retake, overwrite)
   const sessionId = useMemo(() => `session_${exam.id}_${user.id}`,
     [exam.id, user.id]
   );
+
+  // Check for redo/return info (deleted sessions for this exam)
+  useEffect(() => {
+    if (user.role === 'teacher' || user.role === 'admin') return; // Teachers don't need to see redo info
+    let active = true;
+    const checkRedoInfo = async () => {
+      try {
+        // 首先检查当前会话是否有打回理由（会话恢复后 deleted_reason 会保留）
+        const currentSession = await getExamSessionById(sessionId);
+        if (currentSession && currentSession.deletedReason) {
+          if (active) {
+            setRedoInfo({ 
+              reason: currentSession.deletedReason, 
+              deletedAt: currentSession.deletedAt,
+              redoMode: currentSession.redoMode 
+            });
+          }
+          return;
+        }
+        
+        // 如果当前会话没有，查询历史被删除的会话
+        const deletedSessions = await getDeletedExamSessionsByExam(exam.id, user.id);
+        if (!active) return;
+        // Find the most recent deleted session with a reason
+        const sorted = deletedSessions
+          .filter(s => s.deletedReason)
+          .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+        if (sorted.length > 0) {
+          setRedoInfo({ 
+            reason: sorted[0].deletedReason!, 
+            deletedAt: sorted[0].deletedAt,
+            redoMode: sorted[0].redoMode 
+          });
+        }
+      } catch (error) {
+        console.error('Failed to check redo info:', error);
+      }
+    };
+    checkRedoInfo();
+    return () => { active = false; };
+  }, [exam.id, user.id, user.role, sessionId]);
+
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [startTime, setStartTime] = useState<number>(0);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
 
   const restoreAttemptedRef = useRef(false);
   const autoSaveTimeoutRef = useRef<number | null>(null);
@@ -145,8 +185,22 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     let active = true;
 
     const restoreSession = async () => {
-      const existing = await getExamSessionById(sessionId);
+      // 查询 session，包括已删除的（用于 revise 模式恢复）
+      const allSessions = await getExamSessions(user.id, true);
+      const existing = allSessions.find(s => s.id === sessionId);
       if (!existing || !active) return;
+
+      // 如果 session 被打回（is_deleted），根据 redoMode 决定行为
+      if (existing.isDeleted) {
+        if (existing.redoMode === 'revise') {
+          // 修改重交：恢复之前的答案到前端状态
+          const restoredAnswers = existing.answers || {};
+          setAnswers(restoredAnswers);
+          setCurrentSession(existing);
+        }
+        // 不论哪种模式，被打回的 session 停留在 start 页面，不自动进入考试
+        return;
+      }
 
       // Store current session for accessing teacher feedback and manual score
       setCurrentSession(existing);
@@ -529,6 +583,21 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     });
   };
 
+  // Helper: create a draft ExamSession object
+  const createDraftSession = (overrides?: Partial<ExamSession>): ExamSession => ({
+    id: sessionId,
+    examPaperId: exam.id,
+    examTitle: exam.title,
+    studentId: user.id,
+    studentName: user.name,
+    answers,
+    startTime: startTime || Date.now(),
+    elapsedTime,
+    totalScore: exam.totalScore,
+    isSubmitted: false,
+    ...overrides,
+  });
+
   // Handle exam start
   const handleStartExam = () => {
     autoSubmitTriggeredRef.current = false;
@@ -544,19 +613,16 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
 
     // Create/overwrite draft session immediately for persistence
     if (!isTeacherView) {
-      const draft: ExamSession = {
-        id: sessionId,
-        examPaperId: exam.id,
-        examTitle: exam.title,
-        studentId: user.id,
-        studentName: user.name,
-        answers: {},
+      // 如果是 revise 模式打回，保留当前 answers（已在 restoreSession 中恢复）
+      const isReviseRedo = redoInfo?.redoMode === 'revise';
+      const sessionOverrides: Partial<ExamSession> = {
         startTime: now,
         elapsedTime: 0,
-        totalScore: exam.totalScore,
-        isSubmitted: false,
       };
-      saveExamSession(draft);
+      if (!isReviseRedo) {
+        sessionOverrides.answers = {};
+      }
+      saveExamSession(createDraftSession(sessionOverrides));
     }
   };
 
@@ -572,19 +638,9 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     }
 
     autoSaveTimeoutRef.current = window.setTimeout(() => {
-      const draft: ExamSession = {
-        id: sessionId,
-        examPaperId: exam.id,
-        examTitle: exam.title,
-        studentId: user.id,
-        studentName: user.name,
-        answers,
-        startTime: startTime || Date.now(),
-        elapsedTime,
-        totalScore: exam.totalScore,
-        isSubmitted: false,
-      };
-      saveExamSession(draft);
+      saveExamSession(createDraftSession()).catch(err => {
+        console.error('Auto-save failed:', err);
+      });
     }, 800);
 
     return () => {
@@ -602,19 +658,9 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     if (isSubmitted) return;
 
     const interval = window.setInterval(() => {
-      const draft: ExamSession = {
-        id: sessionId,
-        examPaperId: exam.id,
-        examTitle: exam.title,
-        studentId: user.id,
-        studentName: user.name,
-        answers,
-        startTime: startTime || Date.now(),
-        elapsedTime,
-        totalScore: exam.totalScore,
-        isSubmitted: false,
-      };
-      saveExamSession(draft);
+      saveExamSession(createDraftSession()).catch(err => {
+        console.error('Heartbeat save failed:', err);
+      });
     }, 5000);
 
     return () => window.clearInterval(interval);
@@ -622,26 +668,16 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
 
   const handleExit = () => {
     if (!isTeacherView && viewMode === 'exam' && !isSubmitted) {
-      const draft: ExamSession = {
-        id: sessionId,
-        examPaperId: exam.id,
-        examTitle: exam.title,
-        studentId: user.id,
-        studentName: user.name,
-        answers,
-        startTime: startTime || Date.now(),
-        elapsedTime,
-        totalScore: exam.totalScore,
-        isSubmitted: false,
-      };
-      saveExamSession(draft);
+      saveExamSession(createDraftSession()).catch(err => {
+        console.error('Exit save failed:', err);
+      });
     }
     onExit();
   };
 
   // Handle submit
   const submitExam = async (skipConfirm: boolean) => {
-    if (isSubmitted) return;
+    if (isSubmitted || isSubmitting) return;
 
     if (!skipConfirm) {
       const ok = await modal.confirm({
@@ -656,25 +692,25 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     const { earnedScore, totalScore } = calculateScore();
     const submitTime = Date.now();
 
-    const session: ExamSession = {
-      id: sessionId,
-      examPaperId: exam.id,
-      examTitle: exam.title,
-      studentId: user.id,
-      studentName: user.name,
-      answers,
-      startTime,
+    const session = createDraftSession({
       submitTime,
       elapsedTime: submitTime - startTime,
       score: earnedScore,
       totalScore,
       isSubmitted: true
-    };
+    });
 
-    saveExamSession(session);
-
-    setIsSubmitted(true);
-    setViewMode('result');
+    setIsSubmitting(true);
+    try {
+      await saveExamSession(session);
+      setIsSubmitted(true);
+      setViewMode('result');
+    } catch (error) {
+      console.error('Failed to save exam session:', error);
+      alert('提交失败，请检查网络连接后重试。');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSubmit = () => void submitExam(false);
@@ -711,7 +747,10 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     const durationSec = examTakerSettings.sections?.[sec.id]?.durationSec;
     if (!durationSec || durationSec <= 0) return;
 
-    const start = sectionStartElapsedMsRef.current[sec.id] ?? 0;
+    // 如果 section 的开始时间还没设置，说明还在初始化阶段，不做自动跳转
+    const start = sectionStartElapsedMsRef.current[sec.id];
+    if (typeof start !== 'number') return;
+    
     const remaining = durationSec * 1000 - Math.max(0, elapsedTime - start);
     if (remaining > 0) return;
     if (sectionAutoAdvancedRef.current.has(sec.id)) return;
@@ -719,12 +758,12 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
     sectionAutoAdvancedRef.current.add(sec.id);
     lockSection(sec.id);
 
+    // 只前进到下一部分，不自动提交试卷
     const nextIndex = currentSectionIndex + 1;
     if (nextIndex < exam.sections.length) {
       setCurrentSectionIndex(nextIndex);
-    } else {
-      submitExam(true);
     }
+    // 如果是最后一个section，不自动提交，让学生手动提交
   }, [currentSectionIndex, elapsedTime, exam.sections, examTakerSettings.sections, isSubmitted, isTeacherView, viewMode]);
 
   // Render start page
@@ -763,18 +802,104 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
               </div>
             </div>
 
-            {/* Instructions */}
-            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-4 mb-6 hidden md:block">
-              <h3 className="font-bold text-amber-900 dark:text-amber-200 mb-2 flex items-center gap-2">
-                <AlertCircle size={18} /> 考试说明
-              </h3>
-              <ul className="text-sm text-amber-800 dark:text-amber-300 space-y-1 list-disc list-inside">
-                <li>本次考试共 {exam.sections.length} 个部分，{totalQuestions} 道题目</li>
-                <li>所有资源将在开始前加载完成，避免网络中断</li>
-                <li>考试过程中可以在不同部分之间跳转</li>
-                <li>提交后将显示得分和答案解析</li>
-              </ul>
-            </div>
+            {/* Instructions & Redo Warning combined */}
+            {(currentInstructions || redoInfo || isTeacherView) && (
+              <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-4 mb-4 md:mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                    <AlertCircle size={18} /> 考试说明
+                  </h3>
+                  {isTeacherView && !isEditingInstructions && (
+                    <button
+                      onClick={() => { setInstructionsDraft(currentInstructions); setIsEditingInstructions(true); }}
+                      className="flex items-center gap-1 text-xs font-bold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 px-2 py-1 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-all"
+                    >
+                      <Edit3 size={14} /> 编辑说明
+                    </button>
+                  )}
+                </div>
+
+                {/* Teacher editing mode */}
+                {isTeacherView && isEditingInstructions ? (
+                  <div className="space-y-3">
+                    <textarea
+                      value={instructionsDraft}
+                      onChange={(e) => setInstructionsDraft(e.target.value)}
+                      placeholder="输入考试说明，学生将在开始考试前看到这些内容..."
+                      className="w-full h-32 px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-400 dark:focus:ring-amber-600 focus:border-transparent resize-none text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                      autoFocus
+                    />
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setIsEditingInstructions(false)}
+                        className="px-3 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                        disabled={isSavingInstructions}
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setIsSavingInstructions(true);
+                          try {
+                            await apiUpdateExamPaperDirect(exam.id, { instructions: instructionsDraft });
+                            setCurrentInstructions(instructionsDraft);
+                            exam.instructions = instructionsDraft;
+                            setIsEditingInstructions(false);
+                          } catch (err) {
+                            console.error('Failed to save instructions:', err);
+                            modal.alert({ title: '保存失败', message: '考试说明保存失败，请重试', type: 'danger' });
+                          } finally {
+                            setIsSavingInstructions(false);
+                          }
+                        }}
+                        disabled={isSavingInstructions}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-all disabled:opacity-50"
+                      >
+                        {isSavingInstructions ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                        {isSavingInstructions ? '保存中...' : '保存'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Display instructions */}
+                    {currentInstructions ? (
+                      <p className="text-sm text-amber-800 dark:text-amber-300 whitespace-pre-wrap leading-relaxed">
+                        {currentInstructions}
+                      </p>
+                    ) : isTeacherView ? (
+                      <p className="text-sm text-amber-600/60 dark:text-amber-400/40 italic">
+                        暂无考试说明，点击上方「编辑说明」添加
+                      </p>
+                    ) : null}
+                  </>
+                )}
+
+                {/* Redo warning inside instructions area */}
+                {redoInfo && !isEditingInstructions && (
+                  <div className={`${currentInstructions ? 'mt-3 pt-3 border-t border-red-200 dark:border-red-800' : ''}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertCircle size={16} className="text-red-500 shrink-0" />
+                      <span className="font-bold text-sm text-red-700 dark:text-red-300">教师要求重做</span>
+                    </div>
+                    <p className="text-sm text-red-600 dark:text-red-400 font-medium pl-6">
+                      {redoInfo.reason}
+                    </p>
+                    {redoInfo.deletedAt && (
+                      <p className="text-xs text-red-500/70 dark:text-red-400/70 mt-1 pl-6">
+                        打回时间：{new Date(redoInfo.deletedAt).toLocaleString()}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 pl-6 bg-slate-100 dark:bg-slate-800 p-2 rounded">
+                      {redoInfo.redoMode === 'revise' 
+                        ? '此次重做保留了你的原有作答，你可以修改后重新提交。'
+                        : '此次重做已清空作答，请重新完成考试。'
+                      }
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Loading Progress */}
             {isLoading ? (
@@ -1064,10 +1189,18 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
             </button>
             <button
               onClick={handleSubmit}
-              disabled={isSubmitted}
-              className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-bold transition-all shrink-0"
+              disabled={isSubmitted || isSubmitting}
+              className="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-bold transition-all shrink-0 flex items-center gap-2"
             >
-              {isSubmitted ? '已提交' : '提交'}
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  提交中...
+                </>
+              ) : isSubmitted ? '已提交' : '提交'}
             </button>
           </div>
         </div>
@@ -1135,6 +1268,14 @@ const ExamTaker: React.FC<ExamTakerProps> = ({ exam, user, onExit }) => {
                 markedQuestionIds={markedQuestionIds}
                 toggleQuestionMark={toggleQuestionMark}
                 syllabuses={syllabuses}
+                onFinishSection={() => {
+                  lockSection(exam.sections[currentSectionIndex].id);
+                  const nextIndex = currentSectionIndex + 1;
+                  if (nextIndex < exam.sections.length) {
+                    setCurrentSectionIndex(nextIndex);
+                  }
+                }}
+                isLastSection={currentSectionIndex === exam.sections.length - 1}
               />
             )}
           </div>
@@ -1419,6 +1560,8 @@ interface RenderSectionProps {
   markedQuestionIds: Set<string>;
   toggleQuestionMark: (questionId: string) => void;
   syllabuses: SyllabusCourse[];
+  onFinishSection: () => void;
+  isLastSection: boolean;
 }
 
 const RenderSection: React.FC<RenderSectionProps> = ({
@@ -1445,7 +1588,9 @@ const RenderSection: React.FC<RenderSectionProps> = ({
   setCurrentResourceIndex,
   markedQuestionIds,
   toggleQuestionMark,
-  syllabuses
+  syllabuses,
+  onFinishSection,
+  isLastSection
 }) => {
   const questionClass = textSizeLevel === 0 ? 'text-base' : textSizeLevel === 1 ? 'text-lg' : 'text-xl';
   const optionClass = textSizeLevel === 0 ? 'text-sm' : textSizeLevel === 1 ? 'text-base' : 'text-lg';
@@ -2260,9 +2405,28 @@ const RenderSection: React.FC<RenderSectionProps> = ({
               </>
             ) : (
               typeof sectionDurationSec === 'number' && sectionDurationSec > 0 && (
-                <div className="px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/10 text-amber-800 dark:text-amber-200 text-sm font-black">
-                  剩余 {formatDuration(sectionRemainingMs || 0)}
-                </div>
+                <>
+                  <div className="px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/10 text-amber-800 dark:text-amber-200 text-sm font-black">
+                    剩余 {formatDuration(sectionRemainingMs || 0)}
+                  </div>
+                  {!isSubmitted && (
+                    <button
+                      onClick={() => {
+                        if (isLastSection) {
+                          // 最后一个section，提示学生手动点击提交按钮
+                          alert('这是最后一部分，请点击右上角"提交"按钮完成考试。');
+                        } else {
+                          // 不是最后一个section，允许手动结束
+                          onFinishSection();
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm"
+                      title={isLastSection ? "请使用右上角提交按钮" : "结束本部分并进入下一部分"}
+                    >
+                      {isLastSection ? '完成作答' : '结束本部分'}
+                    </button>
+                  )}
+                </>
               )
             )}
             <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-black tabular-nums">

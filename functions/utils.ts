@@ -245,7 +245,8 @@ export async function getUserFromRequest(request: Request, env: Env): Promise<Us
     return null;
   }
   
-  console.log('getUserFromRequest: JWT 验证成功 - userId:', payload.userId);
+  // 移除高频成功日志，避免生产环境日志过载
+  // console.log('getUserFromRequest: JWT 验证成功 - userId:', payload.userId);
   
   // 从数据库查询用户
   const result = await env.DB
