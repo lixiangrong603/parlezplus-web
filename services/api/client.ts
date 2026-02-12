@@ -219,6 +219,10 @@ export async function getResources(teacherId?: string, includeDeleted?: boolean,
   return apiClient.get<any[]>(`/api/resources${queryString ? `?${queryString}` : ''}`);
 }
 
+export async function getResourceByIdApi(id: string): Promise<any> {
+  return apiClient.get<any>(`/api/resources/${id}`);
+}
+
 export async function createResource(resource: any): Promise<{ id: string; created_at: number }> {
   return apiClient.post<{ id: string; created_at: number }>('/api/resources', resource);
 }

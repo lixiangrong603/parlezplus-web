@@ -2,6 +2,7 @@
 import { Channel, MediaResource, Classroom, User, AIResponse, Submission, SyllabusCourse, Question, ExamPaper, ExamSession, OperationLog, ExamFolder, ExamSection } from '../types';
 import { 
   getResources as apiGetResources, 
+  getResourceByIdApi,
   createResource as apiCreateResource, 
   updateResource as apiUpdateResource, 
   deleteResource as apiDeleteResource,
@@ -1646,8 +1647,16 @@ export const getResources = async (teacherId?: string, includeDeleted: boolean =
 };
 
 export const getResourceById = async (id: string, teacherId?: string, includeDeleted: boolean = false): Promise<MediaResource | undefined> => {
-  const resources = await getResources(teacherId, includeDeleted);
-  return resources.find(r => r.id === id);
+  try {
+    // 使用新的单资源 API 获取完整数据
+    const raw = await getResourceByIdApi(id);
+    return mapApiToMediaResource(raw);
+  } catch (error) {
+    console.error('Failed to fetch resource by ID from API:', error);
+    // Fallback: 从列表中查找
+    const resources = await getResources(teacherId, includeDeleted);
+    return resources.find(r => r.id === id);
+  }
 };
 
 export const saveResource = async (resource: MediaResource, teacherId?: string): Promise<MediaResource> => {

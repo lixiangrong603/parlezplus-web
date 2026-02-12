@@ -168,25 +168,35 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     let active = true;
 
     const ensureResourceLoaded = async () => {
+      // 如果已经有完整数据，无需加载
+      if (initialResource.transcript && initialResource.transcript.length > 0) {
+        return;
+      }
+      
+      setIsLoadingCDN(true);
+      
       try {
-        // Prefer CDN transcript if provided
+        // 1. 先尝试 CDN（如果有 transcriptUrl）
         if (initialResource.transcriptUrl) {
-          setIsLoadingCDN(true);
           const cdnData = await fetchResourceFromCDN(initialResource.transcriptUrl);
           if (!active) return;
           if (cdnData && cdnData.transcript && cdnData.transcript.length > 0) {
             setResource(prev => ({ ...prev, ...cdnData }));
-            return; // CDN success, no need for API fallback
+            return; // CDN success
           }
           // CDN failed or had no transcript, fall through to API
         }
 
-        // If transcript is missing/empty, fetch full resource from API
-        if (!initialResource.transcript || initialResource.transcript.length === 0) {
-          setIsLoadingCDN(true);
-          const full = await getResourceById(initialResource.id);
-          if (!active) return;
+        // 2. 从 API 获取完整资源数据
+        console.log('PracticeStudio: Fetching full resource from API for', initialResource.id);
+        const full = await getResourceById(initialResource.id);
+        if (!active) return;
+        
+        if (full && full.transcript && full.transcript.length > 0) {
+          console.log('PracticeStudio: Got full resource with', full.transcript.length, 'segments');
           setResource(prev => ({ ...prev, ...full }));
+        } else {
+          console.warn('PracticeStudio: API returned empty or undefined resource');
         }
       } catch (error) {
         console.error('Failed to load full resource:', error);
@@ -199,7 +209,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     return () => {
       active = false;
     };
-  }, [initialResource.id, initialResource.transcriptUrl]);
+  }, [initialResource.id, initialResource.transcriptUrl, initialResource.transcript?.length]);
 
   // Determine initial phase based on loaded content
   useEffect(() => {
