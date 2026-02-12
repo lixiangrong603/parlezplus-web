@@ -2487,10 +2487,11 @@ export const preCacheQuestions = (questions: Question[]): void => {
 
 // Get questions with their resource info
 export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array<{ question: Question; resourceId?: string; resourceTitle?: string }>> => {
-  const allQuestions = getBankQuestionsSync(undefined, true);
+  let allQuestions = getBankQuestionsSync(undefined, true);
   const allResources = await getResources();
   
   const results: Array<{ question: Question; resourceId?: string; resourceTitle?: string }> = [];
+  const missingIds: string[] = [];
   
   for (const id of ids) {
     let found = false;
@@ -2516,7 +2517,26 @@ export const getQuestionsWithResourceInfo = async (ids: string[]): Promise<Array
       const bankQ = allQuestions.find(q => q.id === id);
       if (bankQ) {
         results.push({ question: bankQ });
+      } else {
+        missingIds.push(id);
       }
+    }
+  }
+
+  // 跨浏览器场景：本地 QUESTION_BANK 可能为空，补拉后端题库再尝试一次
+  if (missingIds.length > 0) {
+    try {
+      const fetchedQuestions = await getBankQuestions(undefined, true);
+      allQuestions = fetchedQuestions;
+
+      for (const missingId of missingIds) {
+        const bankQ = allQuestions.find(q => q.id === missingId);
+        if (bankQ) {
+          results.push({ question: bankQ });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to backfill missing questions from API:', error);
     }
   }
   

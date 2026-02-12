@@ -123,6 +123,7 @@ function transformUserFromApi(apiUser: any): any {
   return {
     ...apiUser,
     // 关键字段映射：蛇形 → 驼峰，确保布尔字段返回明确的 true/false
+    avatar: apiUser.avatar_r2_key ?? apiUser.avatar,
     classId: apiUser.class_id ?? apiUser.classId,
     needsPasswordChange: Boolean(apiUser.needs_password_change === 1 || apiUser.needs_password_change === true || apiUser.needsPasswordChange === true),
     isBlocked: Boolean(apiUser.is_blocked === 1 || apiUser.is_blocked === true || apiUser.isBlocked === true),

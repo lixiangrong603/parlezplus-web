@@ -63,25 +63,41 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
     reader.readAsDataURL(file);
   };
 
-  const handleCropComplete = (croppedImage: string) => {
+  const handleCropComplete = async (croppedImage: string) => {
     setAvatarPreview(croppedImage);
     setShowAvatarEditor(false);
     setCandidateImage(null);
     
     // Save to server/storage
     if (user) {
-      const updatedUser = { ...user, avatar: croppedImage };
-      saveUser(updatedUser);
-      updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
+      setIsUploadingAvatar(true);
+      try {
+        const updatedUser = { ...user, avatar: croppedImage };
+        await saveUser(updatedUser);
+        updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
+      } catch (error) {
+        console.error('Failed to save avatar:', error);
+        alert('头像保存失败，请稍后重试');
+      } finally {
+        setIsUploadingAvatar(false);
+      }
     }
   };
 
-  const handleRemoveAvatar = () => {
+  const handleRemoveAvatar = async () => {
     setAvatarPreview(null);
     if (user) {
-      const updatedUser = { ...user, avatar: undefined };
-      saveUser(updatedUser);
-      updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
+      setIsUploadingAvatar(true);
+      try {
+        const updatedUser = { ...user, avatar: undefined };
+        await saveUser(updatedUser);
+        updateUser(updatedUser); // 更新 AuthContext 中的用户状态，让右上角头像立即更新
+      } catch (error) {
+        console.error('Failed to remove avatar:', error);
+        alert('头像删除失败，请稍后重试');
+      } finally {
+        setIsUploadingAvatar(false);
+      }
     }
   };
 

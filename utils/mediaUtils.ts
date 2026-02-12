@@ -181,34 +181,8 @@ export const getInitials = (name: string): string => {
  * @returns HSL颜色字符串
  */
 export const getColorFromString = (str: string): string => {
-  if (!str) return '#6366f1'; // indigo-500
-  
-  // 预设的协调配色方案，与网站主题相匹配
-  const themeColors = [
-    '#6366f1', // indigo-500
-    '#8b5cf6', // violet-500
-    '#a855f7', // purple-500
-    '#ec4899', // pink-500
-    '#f43f5e', // rose-500
-    '#10b981', // emerald-500
-    '#14b8a6', // teal-500
-    '#06b6d4', // cyan-500
-    '#3b82f6', // blue-500
-    '#6366f1', // indigo-500（重复一次增加权重）
-    '#f59e0b', // amber-500
-    '#ef4444', // red-500
-  ];
-  
-  // 使用简单哈希算法确保同一字符串总是返回相同颜色
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    hash = hash & hash;
-  }
-  
-  // 从预设颜色中选择一个
-  const index = Math.abs(hash) % themeColors.length;
-  return themeColors[index];
+  if (!str) return '#6366f1'; // 统一默认主题色（indigo-500）
+  return '#6366f1';
 };
 
 /**

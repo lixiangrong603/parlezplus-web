@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { ExamPaper, ExamSession, Question, MediaResource, User as UserType, SyllabusCourse } from '../types';
-import { getSyllabusCourses } from '../utils/storage';
+import { getSyllabusCoursesSync } from '../utils/storage';
 import { getOptionGridColumns } from '../utils/optionLayout';
 import { stripGapBackgroundHighlight } from '../utils/gapHtml';
 
@@ -54,7 +54,7 @@ const ExamStatisticsAnalysis: React.FC<ExamStatisticsAnalysisProps> = ({
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
   
   // Load syllabuses for knowledge points
-  const syllabuses = useMemo(() => getSyllabusCourses(), []);
+  const syllabuses = useMemo(() => getSyllabusCoursesSync(), []);
   
   // Get text size classes
   const textSizeClasses = useMemo(() => {
@@ -68,9 +68,9 @@ const ExamStatisticsAnalysis: React.FC<ExamStatisticsAnalysisProps> = ({
     if (!pointIds || pointIds.length === 0) return [];
     
     const names: string[] = [];
-    syllabuses.forEach(syllabus => {
-      syllabus.units.forEach(unit => {
-        unit.knowledgePoints.forEach(kp => {
+    (syllabuses || []).forEach(syllabus => {
+      (syllabus.units || []).forEach(unit => {
+        (unit.knowledgePoints || []).forEach(kp => {
           if (pointIds.includes(kp.id)) {
             names.push(kp.name);
           }
