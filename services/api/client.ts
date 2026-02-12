@@ -228,13 +228,32 @@ export async function callGeminiAPI(body: any): Promise<any> {
  */
 export function getMediaUrl(r2Key: string | null | undefined): string {
   if (!r2Key) return '';
+
+  const mediaBaseUrl = ((import.meta as any).env?.VITE_MEDIA_BASE_URL || '').toString().trim().replace(/\/$/, '');
+  const inferredMediaBaseUrl = mediaBaseUrl || (typeof window !== 'undefined' && window.location.hostname.endsWith('fluide.top')
+    ? 'https://media.fluide.top'
+    : '');
   
+  // 兼容旧格式：/api/media/<key> -> 优先替换为自定义域名直连
+  if (r2Key.startsWith('/api/media/')) {
+    const key = r2Key.slice('/api/media/'.length);
+    return inferredMediaBaseUrl ? `${inferredMediaBaseUrl}/${key}` : r2Key;
+  }
+
   // 如果已经是完整 URL，直接返回
-  if (r2Key.startsWith('http://') || r2Key.startsWith('https://') || r2Key.startsWith('/api/media/')) {
+  if (r2Key.startsWith('http://') || r2Key.startsWith('https://')) {
+    // 兼容：将指向本站 /api/media 的旧绝对链接替换为自定义域名
+    const marker = '/api/media/';
+    const idx = r2Key.indexOf(marker);
+    if (idx !== -1) {
+      const key = r2Key.slice(idx + marker.length);
+      return inferredMediaBaseUrl ? `${inferredMediaBaseUrl}/${key}` : r2Key;
+    }
     return r2Key;
   }
   
-  // 否则构建 CDN URL
+  // 否则：r2Key 视为对象 key，优先走自定义域名
+  if (inferredMediaBaseUrl) return `${inferredMediaBaseUrl}/${r2Key}`;
   return `${API_BASE_URL}/api/media/${r2Key}`;
 }
 

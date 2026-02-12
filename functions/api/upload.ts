@@ -34,11 +34,22 @@ export async function onRequestPost(context: any): Promise<Response> {
     const randomId = Math.random().toString(36).substring(7);
     const extension = file.name.split('.').pop() || 'bin';
     const r2Key = `${folder}/${user.id}/${timestamp}_${randomId}.${extension}`;
+
+    // 缓存策略（供 R2 自定义域名直连时使用）
+    let cacheControl: string;
+    if (folder === 'avatars' || folder === 'covers') {
+      cacheControl = 'public, max-age=31536000, immutable';
+    } else if (folder === 'videos' || folder === 'audios') {
+      cacheControl = 'public, max-age=86400';
+    } else {
+      cacheControl = 'public, max-age=3600';
+    }
     
     // 上传到 R2
     await env.R2_BUCKET.put(r2Key, file.stream(), {
       httpMetadata: {
         contentType: file.type || 'application/octet-stream',
+        cacheControl,
       },
       customMetadata: {
         uploadedBy: user.id,
@@ -47,8 +58,9 @@ export async function onRequestPost(context: any): Promise<Response> {
       },
     });
     
-    // 生成 CDN URL (通过 Workers 代理访问)
-    const cdnUrl = `/api/media/${r2Key}`;
+    // 生成可访问 URL：优先使用 R2 自定义域名，其次使用 Workers 代理
+    const mediaBaseUrl = (env.MEDIA_BASE_URL || '').trim().replace(/\/$/, '');
+    const cdnUrl = mediaBaseUrl ? `${mediaBaseUrl}/${r2Key}` : `/api/media/${r2Key}`;
     
     const result: UploadResult = {
       r2_key: r2Key,

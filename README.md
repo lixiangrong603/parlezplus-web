@@ -298,7 +298,7 @@ GEMINI_API_KEY=your-gemini-api-key  # 可选，使用代理则不需要
 
 ### 媒体文件无法播放
 - **原因**: R2 bucket 未创建或 wrangler.toml 配置错误
-- **解决**: `npx wrangler r2 bucket create parlezplus-media`
+- **解决**: `npx wrangler r2 bucket create fluide`
 
 更多问题请查看 [DEPLOYMENT.md](./DEPLOYMENT.md#常见问题)
 

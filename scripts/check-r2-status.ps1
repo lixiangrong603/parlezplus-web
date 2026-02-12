@@ -3,7 +3,7 @@
 Write-Host "`n=== R2 清理状态检查 ===`n" -ForegroundColor Cyan
 
 # 1. 检查本地 R2 文件数量
-$r2Path = ".wrangler\state\v3\r2\parlezplus-media\blobs"
+$r2Path = ".wrangler\state\v3\r2\fluide\blobs"
 if (Test-Path $r2Path) {
     $fileCount = (Get-ChildItem $r2Path -File).Count
     Write-Host "本地 R2 文件数量: $fileCount" -ForegroundColor Yellow

@@ -17,11 +17,11 @@ database_id = "c7b9d675-cfb5-4d16-b836-d0dc5c7ba24b"
 # ============================================
 # R2 存储桶绑定
 # 需要在 Dashboard 启用 R2: https://dash.cloudflare.com/?to=/:account/r2
-# 创建命令: npx wrangler r2 bucket create parlezplus-media
+# 创建命令: npx wrangler r2 bucket create fluide
 # ============================================
 [[r2_buckets]]
 binding = "R2_BUCKET"
-bucket_name = "parlezplus-media"
+bucket_name = "fluide"
 
 # ============================================
 # KV 命名空间 (可选，用于缓存)
@@ -36,6 +36,7 @@ bucket_name = "parlezplus-media"
 # ============================================
 [vars]
 ENVIRONMENT = "development"
+MEDIA_BASE_URL = ""
 
 # ============================================
 # 本地开发配置
@@ -53,6 +54,7 @@ ENVIRONMENT = "development"
 
 [env.production.vars]
 ENVIRONMENT = "production"
+MEDIA_BASE_URL = "https://media.fluide.top"
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -61,7 +63,7 @@ database_id = "c7b9d675-cfb5-4d16-b836-d0dc5c7ba24b"
 
 [[env.production.r2_buckets]]
 binding = "R2_BUCKET"
-bucket_name = "parlezplus-media"
+bucket_name = "fluide"
 
 # ============================================
 # 预览环境配置 (用于测试分支)
@@ -75,7 +77,7 @@ bucket_name = "parlezplus-media"
 # 1. 安装 Wrangler: npm install -g wrangler
 # 2. 登录 Cloudflare: npx wrangler login
 # 3. 创建 D1 数据库: npx wrangler d1 create parlezplus_db
-# 4. 创建 R2 存储桶: npx wrangler r2 bucket create parlezplus-media
+# 4. 创建 R2 存储桶: npx wrangler r2 bucket create fluide
 # 5. 创建 KV 命名空间: npx wrangler kv:namespace create "KV"
 # 6. 填入上述创建后返回的 ID
 # 7. 执行数据库 Schema: npx wrangler d1 execute parlezplus_db --file=database/schema.sql

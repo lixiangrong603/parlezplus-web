@@ -14,7 +14,7 @@ Write-Host "`n3. 查看所有用户头像..." -ForegroundColor Yellow
 npx wrangler d1 execute parlezplus_db --local --command="SELECT id, name, avatar_r2_key, is_deleted FROM users WHERE avatar_r2_key IS NOT NULL LIMIT 10"
 
 Write-Host "`n4. 统计本地 R2 文件数量..." -ForegroundColor Yellow
-$r2Path = ".wrangler\state\v3\r2\parlezplus-media\blobs"
+$r2Path = ".wrangler\state\v3\r2\fluide\blobs"
 if (Test-Path $r2Path) {
     $fileCount = (Get-ChildItem -Path $r2Path -File).Count
     Write-Host "本地 R2 文件数量: $fileCount" -ForegroundColor Green

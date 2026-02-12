@@ -51,7 +51,7 @@ database_id = "你的database_id" # 👈 填入这里
 
 ### 2. 创建 R2 存储桶
 ```bash
-npx wrangler r2 bucket create parlezplus-media
+npx wrangler r2 bucket create fluide
 ```
 
 ### 3. 创建 KV 命名空间

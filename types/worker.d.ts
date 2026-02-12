@@ -12,6 +12,8 @@ export interface Env {
   
   // 环境变量
   ENVIRONMENT: string;
+  // 可选：R2 自定义域名基础地址（用于生成直连 URL，例如 https://media.fluide.top）
+  MEDIA_BASE_URL?: string;
   
   // 敏感密钥 (通过 wrangler secret put 设置)
   GEMINI_MASTER_KEY?: string;

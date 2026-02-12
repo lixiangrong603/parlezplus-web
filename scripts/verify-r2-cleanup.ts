@@ -25,7 +25,7 @@ interface User {
 }
 
 // 本地 R2 存储路径
-const R2_LOCAL_PATH = join(process.cwd(), '.wrangler', 'state', 'v3', 'r2', 'parlezplus-media', 'blobs');
+const R2_LOCAL_PATH = join(process.cwd(), '.wrangler', 'state', 'v3', 'r2', 'fluide', 'blobs');
 
 // 获取所有本地 R2 文件
 function getLocalR2Files(): Set<string> {
@@ -74,8 +74,8 @@ async function verifyR2Cleanup() {
   console.log('   c) 检查控制台日志，查找 "Deleted R2 file:" 消息');
   
   console.log('\n5. 清空本地 R2 存储 (如果需要重新开始):');
-  console.log('   rm -rf .wrangler/state/v3/r2/parlezplus-media/blobs/*');
-  console.log('   或在 Windows: Remove-Item -Recurse -Force .wrangler\\state\\v3\\r2\\parlezplus-media\\blobs\\*');
+  console.log('   rm -rf .wrangler/state/v3/r2/fluide/blobs/*');
+  console.log('   或在 Windows: Remove-Item -Recurse -Force .wrangler\\state\\v3\\r2\\fluide\\blobs\\*');
   
   console.log('\n注意事项:');
   console.log('- 本地 R2 使用文件系统模拟，文件名是内容的 hash');

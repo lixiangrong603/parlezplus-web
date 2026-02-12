@@ -91,7 +91,7 @@ npm run db:reset
 
 ### 查看 R2 本地文件
 ```bash
-ls .wrangler/state/v3/r2/parlezplus-media/
+ls .wrangler/state/v3/r2/fluide/
 ```
 
 ### 使用远程 D1/R2（而非本地模拟）
@@ -146,7 +146,7 @@ npm run build
 
 - [x] Wrangler CLI 已安装（v4.63.0）
 - [x] D1 数据库已创建（parlezplus_db）
-- [x] R2 存储桶已配置（parlezplus-media）
+- [x] R2 存储桶已配置（fluide）
 - [x] .dev.vars 文件已创建
 - [x] .gitignore 已更新
 - [x] 开发脚本已添加
