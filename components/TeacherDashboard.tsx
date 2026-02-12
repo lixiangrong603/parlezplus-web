@@ -28,7 +28,8 @@ import ExamGradingManager from './ExamGradingManager';
 import RecycleBinViewer from './RecycleBinViewer';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { ChangePasswordForm } from './ChangePasswordForm';
-import { getInitials, getColorFromString, compressImage, validateImageFile } from '../utils/mediaUtils';
+import { getInitials, getColorFromString, compressImage, validateImageFile, generateRandomCoverArt } from '../utils/mediaUtils';
+import LazyImage, { DEFAULT_AVATAR_FALLBACK } from './LazyImage';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -173,7 +174,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
            </div>
            <button onClick={() => setShowSettings(true)} className="w-9 h-9 rounded-full border-2 border-slate-100 dark:border-slate-800 hover:border-indigo-400 p-0.5 transition-all active:scale-95 overflow-hidden">
              {user?.avatar ? (
-               <img src={user.avatar} className="w-full h-full rounded-full object-cover" />
+               <LazyImage
+                 src={user.avatar}
+                 fallbackSrc={DEFAULT_AVATAR_FALLBACK}
+                 alt={user?.name || 'avatar'}
+                 containerClassName="w-full h-full rounded-full"
+                 className="w-full h-full rounded-full object-cover"
+               />
              ) : (
                <div 
                  className="w-full h-full rounded-full flex items-center justify-center text-white text-sm font-black"
@@ -955,7 +962,13 @@ const ClassDetailView = ({
                           <tr key={res.id} className="group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors">
                             <td className="px-6 py-4 align-middle">
                               <div className="flex items-center gap-3 min-w-0">
-                                <img src={res.coverImage} className="w-12 h-12 rounded-xl object-cover shrink-0 shadow-sm" />
+                                <LazyImage
+                                  src={res.coverImage}
+                                  fallbackSrc={generateRandomCoverArt(res.id)}
+                                  alt={res.title}
+                                  containerClassName="w-12 h-12 rounded-xl shrink-0 shadow-sm"
+                                  className="w-full h-full rounded-xl object-cover"
+                                />
                                 <div className="min-w-0">
                                   <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{res.title}</p>
                                   <span className="text-[10px] px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded font-bold">{res.level}</span>
@@ -1325,7 +1338,13 @@ const AddTaskModal = ({
               resources.map(res => (
                 <div key={res.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl hover:bg-indigo-50 group">
                    <div className="flex items-center gap-4">
-                     <img src={res.coverImage} className="w-14 h-14 rounded-xl object-cover" />
+                     <LazyImage
+                       src={res.coverImage}
+                       fallbackSrc={generateRandomCoverArt(res.id)}
+                       alt={res.title}
+                       containerClassName="w-14 h-14 rounded-xl"
+                       className="w-full h-full rounded-xl object-cover"
+                     />
                      <p className="font-bold text-slate-800 dark:text-slate-100">{res.title}</p>
                    </div>
                    <button onClick={() => onAssignResource(res.id, selectedDeadline ? new Date(selectedDeadline).getTime() : undefined)} className="px-5 py-2 bg-indigo-600 text-white text-xs font-black rounded-xl opacity-0 group-hover:opacity-100 shadow-md">分发</button>
@@ -1516,10 +1535,12 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
                   <div className="flex flex-col items-center gap-4">
                     <div className="relative group">
                       {avatarPreview ? (
-                        <img 
-                          src={avatarPreview} 
-                          alt="Avatar" 
-                          className="w-32 h-32 rounded-full object-cover border-4 border-slate-100 dark:border-slate-800 shadow-lg"
+                        <LazyImage
+                          src={avatarPreview}
+                          fallbackSrc={DEFAULT_AVATAR_FALLBACK}
+                          alt="Avatar"
+                          containerClassName="w-32 h-32 rounded-full border-4 border-slate-100 dark:border-slate-800 shadow-lg"
+                          className="w-full h-full rounded-full object-cover"
                         />
                       ) : (
                         <div 

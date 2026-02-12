@@ -21,6 +21,7 @@ import {
 } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import ExamStatisticsAnalysis from './ExamStatisticsAnalysis';
+import LazyImage, { DEFAULT_AVATAR_FALLBACK } from './LazyImage';
 
 interface ExamGradingManagerProps {
   examId: string;
@@ -713,7 +714,13 @@ const ExamGradingManager: React.FC<ExamGradingManagerProps> = ({ examId, classId
                   >
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
                     {student.avatar ? (
-                      <img src={student.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                      <LazyImage
+                        src={student.avatar}
+                        fallbackSrc={DEFAULT_AVATAR_FALLBACK}
+                        alt={student.name}
+                        containerClassName="w-full h-full rounded-full"
+                        className="w-full h-full rounded-full object-cover"
+                      />
                     ) : (
                       <div 
                         className="w-full h-full rounded-full flex items-center justify-center"
@@ -1458,10 +1465,11 @@ const ExamAnswerSheet: React.FC<ExamAnswerSheetProps> = ({
 
                         {q.imageUrl && (
                           <div className="mb-3">
-                            <img 
-                              src={q.imageUrl} 
-                              alt="Question Image" 
-                              className="max-w-full h-auto max-h-[300px] rounded-lg border border-slate-200 dark:border-slate-700 object-contain"
+                            <LazyImage
+                              src={q.imageUrl}
+                              alt="Question Image"
+                              containerClassName="max-w-full h-auto max-h-[300px] rounded-lg border border-slate-200 dark:border-slate-700"
+                              className="max-w-full h-auto max-h-[300px] rounded-lg object-contain"
                             />
                           </div>
                         )}

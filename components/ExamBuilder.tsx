@@ -10,6 +10,7 @@ import SectionSortModal, { SortCriterion } from '../components/SectionSortModal'
 import { runExamPrint, ExamPrintMode } from '../utils/examPrint';
 import { generateWordDocument } from '../utils/wordExport';
 import { useModal } from '../contexts/ModalContext';
+import LazyImage from './LazyImage';
 
 interface ExamProps {
   user: User;
@@ -866,7 +867,12 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                                   {/* Sub-question image */}
                                                   {sq.imageUrl && (
                                                       <div className="my-2">
-                                                          <img src={sq.imageUrl} alt="Question" className="max-w-md rounded border" />
+                                                          <LazyImage
+                                                            src={sq.imageUrl}
+                                                            alt="Question"
+                                                            containerClassName="max-w-md rounded border"
+                                                            className="max-w-md rounded border"
+                                                          />
                                                       </div>
                                                   )}
                                                   
@@ -881,7 +887,12 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                                                           <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
                                                                       </div>
                                                                       {opt.imageUrl && (
-                                                                          <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="max-w-xs rounded border ml-6" />
+                                                                          <LazyImage
+                                                                          src={opt.imageUrl}
+                                                                          alt={`Option ${String.fromCharCode(65 + oIdx)}`}
+                                                                          containerClassName="max-w-xs rounded border ml-6"
+                                                                          className="max-w-xs rounded border ml-6"
+                                                                          />
                                                                       )}
                                                                   </div>
                                                               );
@@ -956,7 +967,12 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                                                       <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
                                                                   </div>
                                                                   {opt.imageUrl && (
-                                                                      <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="max-w-xs rounded border ml-6" />
+                                                                      <LazyImage
+                                                                      src={opt.imageUrl}
+                                                                      alt={`Option ${String.fromCharCode(65 + oIdx)}`}
+                                                                      containerClassName="max-w-xs rounded border ml-6"
+                                                                      className="max-w-xs rounded border ml-6"
+                                                                      />
                                                                   )}
                                                               </div>
                                                           );
@@ -993,7 +1009,12 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                           {/* Question image */}
                                           {q.imageUrl && (
                                               <div className="my-2">
-                                                <img src={q.imageUrl} alt="Question" className="max-w-[200px] h-auto rounded border" />
+                                                <LazyImage
+                                                  src={q.imageUrl}
+                                                  alt="Question"
+                                                  containerClassName="max-w-[200px] h-auto rounded border"
+                                                  className="max-w-[200px] h-auto rounded border"
+                                                />
                                               </div>
                                           )}
                                       </>
@@ -1013,7 +1034,12 @@ const ExamBuilder: React.FC<ExamProps> = ({ user, cart, onRemoveFromCart, onClea
                                                 <span className={`${showAnswers && isCorrect ? 'text-red-600 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>{opt.text}</span>
                                             </div>
                                             {opt.imageUrl && (
-                                                <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="max-w-xs rounded border ml-6" />
+                                                <LazyImage
+                                                  src={opt.imageUrl}
+                                                  alt={`Option ${String.fromCharCode(65 + oIdx)}`}
+                                                  containerClassName="max-w-xs rounded border ml-6"
+                                                  className="max-w-xs rounded border ml-6"
+                                                />
                                             )}
                                          </div>
                                      );

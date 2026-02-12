@@ -19,6 +19,7 @@ import { parseSubtitleJson } from '../utils/textAnalysis';
 import { extractVideoFrame, generateRandomCoverArt } from '../utils/mediaUtils';
 import SubtitleEditor from './SubtitleEditor';
 import { useModal } from '../contexts/ModalContext';
+import LazyImage from './LazyImage';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -458,19 +459,13 @@ const ResourceList = ({ onEdit, onCreateWithFiles, onBack, onPreview }: { onEdit
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
                           <div className="w-16 h-10 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shrink-0 flex items-center justify-center relative">
-                            <img 
-                                src={resource.coverImage || generateRandomCoverArt(resource.id)} 
-                                className="w-full h-full object-cover" 
-                                onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.parentElement?.classList.add('bg-slate-200');
-                                    const icon = e.currentTarget.parentElement?.querySelector('.fallback-icon');
-                                    if (icon) (icon as HTMLElement).style.display = 'block';
-                                }}
+                            <LazyImage
+                              src={resource.coverImage || generateRandomCoverArt(resource.id)}
+                              fallbackSrc={generateRandomCoverArt(resource.id)}
+                              alt={resource.title}
+                              containerClassName="w-full h-full"
+                              className="w-full h-full object-cover"
                             />
-                            <div className="fallback-icon hidden absolute inset-0 flex items-center justify-center text-slate-400">
-                                <ImageIcon size={16} />
-                            </div>
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" title={resource.title}>{resource.title}</p>

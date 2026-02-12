@@ -3,6 +3,7 @@ import { Student } from '../types';
 import { Users, UserPlus, RotateCcw, UserMinus, FileSpreadsheet, ChevronDown, ChevronUp } from 'lucide-react';
 import { getInitials, getColorFromString } from '../utils/mediaUtils';
 import { getUserById } from '../utils/storage';
+import LazyImage, { DEFAULT_AVATAR_FALLBACK } from './LazyImage';
 
 interface StudentRosterProps {
   classId: string;
@@ -72,9 +73,12 @@ export const StudentRoster: React.FC<StudentRosterProps> = ({
                   const userAvatar = student.userId ? getUserById(student.userId)?.avatar : undefined;
                   const avatar = userAvatar || student.avatar;
                   return avatar ? (
-                  <img 
-                    src={avatar} 
-                    className="w-12 h-12 rounded-full border-2 border-white dark:border-slate-700 shadow-sm object-cover" 
+                  <LazyImage
+                    src={avatar}
+                    fallbackSrc={DEFAULT_AVATAR_FALLBACK}
+                    alt={student.name}
+                    containerClassName="w-12 h-12 rounded-full border-2 border-white dark:border-slate-700 shadow-sm"
+                    className="w-full h-full rounded-full object-cover"
                   />
                 ) : (
                   <div 

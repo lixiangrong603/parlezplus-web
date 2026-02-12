@@ -9,6 +9,7 @@ import { generateRandomCoverArt, getInitials, getColorFromString, compressImage,
 import { ThemeContext } from '../App';
 import ExamTaker from './ExamTaker';
 import { ChangePasswordForm } from './ChangePasswordForm';
+import LazyImage, { DEFAULT_AVATAR_FALLBACK } from './LazyImage';
 
 // Icons used in StudentDashboard
 const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
@@ -377,9 +378,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
               title="我的设置"
             >
               {user?.avatar ? (
-                <img 
-                  src={user.avatar} 
-                  alt={user?.name}
+                <LazyImage
+                  src={user.avatar}
+                  fallbackSrc={DEFAULT_AVATAR_FALLBACK}
+                  alt={user?.name || 'avatar'}
+                  containerClassName="w-full h-full"
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -726,13 +729,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                             onClick={() => onSelectResource(resource)}
                           >
                             <div className={`relative h-32 md:h-40 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 rounded-t-lg md:rounded-t-[1.5rem] ${resource.isCompleted ? 'grayscale-[50%]' : ''}`}>
-                              <img 
-                                src={resource.coverImage || getFallbackCover(resource.id)} 
-                                alt={resource.title} 
+                              <LazyImage
+                                src={resource.coverImage || getFallbackCover(resource.id)}
+                                fallbackSrc={getFallbackCover(resource.id)}
+                                alt={resource.title}
+                                containerClassName="w-full h-full"
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                onError={(e) => {
-                                    e.currentTarget.src = getFallbackCover(resource.id);
-                                }} 
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                               
@@ -823,10 +825,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                               onClick={() => onSelectResource(resource)}
                             >
                               <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shrink-0 overflow-hidden">
-                                <img 
-                                  src={resource.coverImage || getFallbackCover(resource.id)} 
-                                  className="w-full h-full object-cover" 
-                                  alt=""
+                                <LazyImage
+                                  src={resource.coverImage || getFallbackCover(resource.id)}
+                                  fallbackSrc={getFallbackCover(resource.id)}
+                                  alt={resource.title}
+                                  containerClassName="w-full h-full"
+                                  className="w-full h-full object-cover"
                                 />
                               </div>
                               <div className="flex-1 min-w-0 flex flex-col items-start text-left">
@@ -882,10 +886,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                                 <td className="px-6 py-4 truncate text-left">
                                   <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center text-white shrink-0 overflow-hidden">
-                                      <img 
-                                        src={resource.coverImage || getFallbackCover(resource.id)} 
-                                        className="w-full h-full object-cover" 
-                                        alt=""
+                                      <LazyImage
+                                        src={resource.coverImage || getFallbackCover(resource.id)}
+                                        fallbackSrc={getFallbackCover(resource.id)}
+                                        alt={resource.title}
+                                        containerClassName="w-full h-full"
+                                        className="w-full h-full object-cover"
                                       />
                                     </div>
                                     <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{resource.title}</span>
@@ -976,10 +982,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ resources, onSelect
                     <div className="flex flex-col items-center gap-4">
                       <div className="relative group">
                         {avatarPreview ? (
-                          <img 
-                            src={avatarPreview} 
-                            alt="Avatar" 
-                            className="w-32 h-32 rounded-full object-cover border-4 border-slate-100 dark:border-slate-800 shadow-lg"
+                          <LazyImage
+                            src={avatarPreview}
+                            fallbackSrc={DEFAULT_AVATAR_FALLBACK}
+                            alt="Avatar"
+                            containerClassName="w-32 h-32 rounded-full border-4 border-slate-100 dark:border-slate-800 shadow-lg"
+                            className="w-full h-full rounded-full object-cover"
                           />
                         ) : (
                           <div 

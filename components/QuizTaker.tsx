@@ -4,6 +4,7 @@ import { CheckCircle, XCircle, ArrowLeft, Type, AlertCircle } from 'lucide-react
 import { saveStudentProgress } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import { getOptionGridColumns } from '../utils/optionLayout';
+import LazyImage from './LazyImage';
 
 interface QuizTakerProps {
     questions: Question[];
@@ -233,10 +234,11 @@ const QuizTaker: React.FC<QuizTakerProps> = ({
                                                         <div className="flex-1 min-w-0 overflow-hidden">
                                                             <span className={`${textClass} break-words`} dangerouslySetInnerHTML={{ __html: opt.text }} />
                                                             {opt.imageUrl && (
-                                                                <img 
-                                                                    src={opt.imageUrl} 
-                                                                    className="mt-2 max-w-full max-h-32 rounded border border-slate-200 dark:border-slate-700" 
+                                                                <LazyImage
+                                                                    src={opt.imageUrl}
                                                                     alt="Option"
+                                                                    containerClassName="mt-2 max-w-full max-h-32 rounded border border-slate-200 dark:border-slate-700"
+                                                                    className="max-w-full max-h-32 rounded"
                                                                 />
                                                             )}
                                                         </div>

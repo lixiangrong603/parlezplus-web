@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => {
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'import.meta.env.VITE_R2_DIRECT_UPLOAD_ENABLED': JSON.stringify(env.R2_DIRECT_UPLOAD_ENABLED || 'true'),
         '__APP_VERSION__': JSON.stringify(process.env.npm_package_version || '1.0.0'),
       },
       

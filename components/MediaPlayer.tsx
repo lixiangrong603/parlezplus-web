@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { MediaResource, RecorderState } from '../types';
 import { Download, Film } from 'lucide-react';
+import { generateRandomCoverArt } from '../utils/mediaUtils';
+import LazyImage from './LazyImage';
 
 // Icons needed for MediaPlayer
 const PlayIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>;
@@ -125,10 +127,12 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
                       animationPlayState: isPlaying ? 'running' : 'paused' 
                     }}
                 >
-                    <img 
-                      src={resource.coverImage} 
-                      className="w-full h-full object-cover rounded-full" 
+                    <LazyImage
+                      src={resource.coverImage}
+                      fallbackSrc={generateRandomCoverArt(resource.id)}
                       alt="Vinyl Disc"
+                      containerClassName="w-full h-full rounded-full"
+                      className="w-full h-full object-cover rounded-full"
                     />
                     <div className="absolute inset-0 rounded-full border border-white/5 pointer-events-none"></div>
                 </div>

@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useModal } from '../contexts/ModalContext';
 import MediaPlayer from './MediaPlayer';
 import { apiClient } from '../services/api/client';
+import LazyImage, { DEFAULT_AVATAR_FALLBACK } from './LazyImage';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -439,7 +440,13 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
                                         const userAvatar = student.userId ? getUserById(student.userId)?.avatar : undefined;
                                         const avatar = userAvatar || student.avatar;
                                         return avatar ? (
-                                            <img src={avatar} className="w-8 h-8 rounded-full border border-white dark:border-slate-700 shadow-sm object-cover" />
+                                            <LazyImage
+                                              src={avatar}
+                                              fallbackSrc={DEFAULT_AVATAR_FALLBACK}
+                                              alt={student.name}
+                                              containerClassName="w-8 h-8 rounded-full border border-white dark:border-slate-700 shadow-sm"
+                                              className="w-full h-full rounded-full object-cover"
+                                            />
                                         ) : (
                                             <div 
                                                 className="w-8 h-8 rounded-full border border-white dark:border-slate-700 shadow-sm flex items-center justify-center text-white text-[10px] font-black"

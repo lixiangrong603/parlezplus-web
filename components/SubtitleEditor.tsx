@@ -13,6 +13,7 @@ import QuizEditor from './QuizEditor';
 import { useModal } from '../contexts/ModalContext';
 import { generateRandomCoverArt } from '../utils/mediaUtils';
 import { apiClient } from '../services/api/client';
+import LazyImage from './LazyImage';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -437,7 +438,13 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
                                         <div className="absolute inset-0 rounded-full opacity-40 mix-blend-screen" style={{ background: `conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,0.08) 10%, transparent 20%, transparent 45%, rgba(255,255,255,0.12) 50%, transparent 55%, transparent 80%, rgba(255,255,255,0.08) 90%, transparent 100%)` }}></div>
                                         <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-30"></div>
                                         <div className="absolute w-[65%] h-[65%] rounded-full overflow-hidden border-4 border-[#18181b] z-10 bg-slate-800 shadow-md">
-                                            <img src={resource.coverImage || getFallbackCover(resource.id)} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.classList.add('bg-slate-700'); }} />
+                                            <LazyImage
+                                              src={resource.coverImage || getFallbackCover(resource.id)}
+                                              fallbackSrc={getFallbackCover(resource.id)}
+                                              alt={resource.title}
+                                              containerClassName="w-full h-full"
+                                              className="w-full h-full object-cover"
+                                            />
                                         </div>
                                         <div className="absolute w-3.5 h-3.5 bg-slate-200 rounded-full z-20 shadow-inner border border-slate-300 dark:border-slate-500">
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-black/50 rounded-full"></div>

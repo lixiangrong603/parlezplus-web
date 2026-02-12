@@ -6,6 +6,7 @@ import {
     Plus, Trash2, Image as ImageIcon, Sparkles, 
     AlertCircle, GripVertical, X, Minus
 } from 'lucide-react';
+import LazyImage from './LazyImage';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -277,7 +278,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                 </div>
                                 {q.imageUrl && (
                                     <div className="mt-3 relative inline-block group/img">
-                                        <img src={q.imageUrl} alt="Prompt" className="h-32 rounded-xl border border-slate-200 dark:border-slate-700 object-cover" />
+                                        <LazyImage
+                                            src={q.imageUrl}
+                                            alt="Prompt"
+                                            containerClassName="h-32 rounded-xl border border-slate-200 dark:border-slate-700"
+                                            className="h-32 rounded-xl object-cover"
+                                        />
                                         <button 
                                             onClick={() => removeImage(qIdx)}
                                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md opacity-0 group-hover/img:opacity-100 transition-opacity"
@@ -319,7 +325,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                 <div className="flex gap-2 pl-7 flex-wrap mt-2">
                                     {q.options.map((opt, oIdx) => opt.imageUrl && (
                                         <div key={opt.id} className="relative group/optimg">
-                                            <img src={opt.imageUrl} alt={`Opt ${oIdx+1}`} className="h-32 rounded-lg border border-slate-200 dark:border-slate-700 object-cover" />
+                                            <LazyImage
+                                                src={opt.imageUrl}
+                                                alt={`Opt ${oIdx+1}`}
+                                                containerClassName="h-32 rounded-lg border border-slate-200 dark:border-slate-700"
+                                                className="h-32 rounded-lg object-cover"
+                                            />
                                             <button 
                                                 onClick={() => removeImage(qIdx, oIdx)}
                                                 className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md opacity-0 group-hover/optimg:opacity-100 transition-opacity"
