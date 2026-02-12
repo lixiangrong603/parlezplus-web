@@ -94,7 +94,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
     <>
       {/* Hidden BGM Audio */}
       {resource.backingTrackUrl && (
-        <audio ref={bgmRef} src={resource.backingTrackUrl} preload="auto" crossOrigin="anonymous" />
+        <audio ref={bgmRef} src={resource.backingTrackUrl} preload="auto" />
       )}
 
       {/* Media Container: ALWAYS aspect-video */}
@@ -111,7 +111,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
           onEnded={onEnded}
           playsInline
           preload="metadata"
-          crossOrigin="anonymous"
         />
 
         {/* REFINED VINYL VIEW FOR AUDIO */}
