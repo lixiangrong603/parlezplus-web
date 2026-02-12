@@ -52,12 +52,13 @@ async function removeQuestionsFromExamPapers(env: Env, questionIds: string[]): P
 
 // ============================================
 // GET /api/resources - 获取资源列表
+// GET /api/resources/:id - 获取单个资源
 // 查询参数: 
 //   teacherId (可选，教师查看自己的资源)
 //   summary=true (可选，只返回轻量字段，用于列表展示)
 // ============================================
 export async function onRequestGet(context: any): Promise<Response> {
-  const { request, env } = context as { request: Request; env: Env };
+  const { request, env, params } = context as { request: Request; env: Env; params: { id?: string[] } };
   
   try {
     const user = await getUserFromRequest(request, env);
@@ -66,6 +67,47 @@ export async function onRequestGet(context: any): Promise<Response> {
     }
     
     const url = new URL(request.url);
+    
+    // 检查是否请求单个资源
+    const resourceId = params.id && params.id.length > 0 ? params.id.join('/') : null;
+    
+    if (resourceId) {
+      // ========== 单个资源获取 ==========
+      let query: D1PreparedStatement;
+      
+      if (user.role === 'teacher' || user.role === 'admin') {
+        // 教师/管理员可以查看自己的任何资源
+        query = env.DB
+          .prepare('SELECT * FROM resources WHERE id = ? AND is_deleted = 0')
+          .bind(resourceId);
+      } else {
+        // 学生只能查看已发布的资源
+        query = env.DB
+          .prepare('SELECT * FROM resources WHERE id = ? AND status = ? AND is_deleted = 0')
+          .bind(resourceId, 'ready');
+      }
+      
+      const resource = await query.first<Resource>();
+      
+      if (!resource) {
+        return errorResponse('资源不存在或无权访问', 404);
+      }
+      
+      // 解析 JSON 字段
+      const parsed: any = {
+        ...resource,
+        assigned_class_ids: JSON.parse(resource.assigned_class_ids || '[]'),
+        grammar_tags: JSON.parse(resource.grammar_tags || '[]'),
+        vocab_tags: JSON.parse(resource.vocab_tags || '[]'),
+        transcript: JSON.parse(resource.transcript || '[]'),
+        raw_azure_words: resource.raw_azure_words ? JSON.parse(resource.raw_azure_words) : null,
+        questions: JSON.parse(resource.questions || '[]'),
+      };
+      
+      return jsonResponse(parsed);
+    }
+    
+    // ========== 资源列表获取 ==========
     const teacherId = url.searchParams.get('teacherId');
     const includeDeleted = url.searchParams.get('includeDeleted') === 'true';
     const summaryMode = url.searchParams.get('summary') === 'true';

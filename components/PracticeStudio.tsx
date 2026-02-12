@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { RecorderState, MediaResource, Submission, TranscriptSegment } from '../types';
-import { fetchResourceFromCDN, saveStudentProgress, getStudentProgress, submitAssignment, getSubmissions, getResourceById } from '../utils/storage';
+import { fetchResourceFromCDN, saveStudentProgress, getStudentProgress, submitAssignment, getSubmissions, getResourceById, getResources } from '../utils/storage';
 import { encodeWAV, resampleAudio, stitchAudioSegments, mixAudio, dataURLtoBlob } from '../utils/audioUtils';
 import { uploadRecording } from '../services/api/client';
 import Transcript from './Transcript';
@@ -134,6 +134,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
   
   const [resource, setResource] = useState<MediaResource>(initialResource);
   const [isLoadingCDN, setIsLoadingCDN] = useState(false);
+  const [resourceLoadChecked, setResourceLoadChecked] = useState(false);
   
   // Phase Management: Quiz -> Cloze -> Shadowing
   const [practicePhase, setPracticePhase] = useState<'quiz' | 'cloze' | 'shadowing' | 'initializing'>('initializing');
@@ -168,28 +169,50 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     let active = true;
 
     const ensureResourceLoaded = async () => {
+      // 如果已经有完整数据，无需加载
+      if (initialResource.transcript && initialResource.transcript.length > 0) {
+        if (active) setResourceLoadChecked(true);
+        return;
+      }
+      
+      setIsLoadingCDN(true);
+      
       try {
-        // Prefer CDN transcript if provided
+        // 1. 先尝试 CDN（如果有 transcriptUrl）
         if (initialResource.transcriptUrl) {
-          setIsLoadingCDN(true);
           const cdnData = await fetchResourceFromCDN(initialResource.transcriptUrl);
           if (!active) return;
           if (cdnData && cdnData.transcript && cdnData.transcript.length > 0) {
             setResource(prev => ({ ...prev, ...cdnData }));
-            return; // CDN success, no need for API fallback
+            setResourceLoadChecked(true);
+            return; // CDN success
           }
           // CDN failed or had no transcript, fall through to API
         }
 
-        // If transcript is missing/empty, fetch full resource from API
-        if (!initialResource.transcript || initialResource.transcript.length === 0) {
-          setIsLoadingCDN(true);
-          const full = await getResourceById(initialResource.id);
-          if (!active) return;
+        // 2. 从 API 获取完整资源数据
+        console.log('PracticeStudio: Fetching full resource from API for', initialResource.id);
+        const full = await getResourceById(initialResource.id);
+        if (!active) return;
+        
+        if (full && full.transcript && full.transcript.length > 0) {
+          console.log('PracticeStudio: Got full resource with', full.transcript.length, 'segments');
           setResource(prev => ({ ...prev, ...full }));
+          setResourceLoadChecked(true);
+        } else {
+          console.warn('PracticeStudio: API returned empty or undefined resource, fallback to full list');
+          const all = await getResources(undefined, false, false);
+          if (!active) return;
+          const fallback = all.find(r => r.id === initialResource.id);
+          if (fallback) {
+            console.log('PracticeStudio: Fallback list found resource with', fallback.transcript?.length || 0, 'segments');
+            setResource(prev => ({ ...prev, ...fallback }));
+          }
+          setResourceLoadChecked(true);
         }
       } catch (error) {
         console.error('Failed to load full resource:', error);
+        if (active) setResourceLoadChecked(true);
       } finally {
         if (active) setIsLoadingCDN(false);
       }
@@ -199,12 +222,13 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     return () => {
       active = false;
     };
-  }, [initialResource.id, initialResource.transcriptUrl]);
+  }, [initialResource.id, initialResource.transcriptUrl, initialResource.transcript?.length]);
 
   // Determine initial phase based on loaded content
   useEffect(() => {
     if (!currentUserId) return;
     if (practicePhase !== 'initializing') return;
+    if (!resourceLoadChecked) return;
 
     const hasQuiz = !!resource.questions && resource.questions.length > 0;
     const hasCloze = !!resource.transcript && resource.transcript.some(seg => seg.words?.some(w => w.isCloze));
@@ -217,7 +241,7 @@ const PracticeStudio: React.FC<PracticeStudioProps> = ({ resource: initialResour
     } else {
       setPracticePhase('shadowing');
     }
-  }, [currentUserId, practicePhase, resource.questions, resource.transcript]);
+  }, [currentUserId, practicePhase, resource.questions, resource.transcript, resourceLoadChecked]);
 
   // Load persisted progress (if not fully graded, load partial work)
   useEffect(() => {
