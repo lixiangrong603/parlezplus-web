@@ -62,6 +62,16 @@ export async function onRequestPost(context: any): Promise<Response> {
     const mediaBaseUrl = (env.MEDIA_BASE_URL || '').trim().replace(/\/$/, '');
     const cdnUrl = mediaBaseUrl ? `${mediaBaseUrl}/${r2Key}` : `/api/media/${r2Key}`;
     
+    // 自动预热 CDN 缓存（异步，不阻塞响应）
+    if (mediaBaseUrl) {
+      const warmupUrl = `${mediaBaseUrl}/${r2Key}`;
+      context.waitUntil(
+        fetch(warmupUrl, { method: 'HEAD' })
+          .then(() => console.log(`CDN warmed up: ${r2Key}`))
+          .catch((err: Error) => console.warn(`CDN warmup failed: ${r2Key}`, err.message))
+      );
+    }
+    
     const result: UploadResult = {
       r2_key: r2Key,
       cdn_url: cdnUrl,
