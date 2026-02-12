@@ -1,7 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
-import { login as apiLogin, getCurrentUser, logout as apiLogout } from '../services/api/client';
+import { login as apiLogin, getCurrentUser, logout as apiLogout, apiClient } from '../services/api/client';
 import { useModal } from './ModalContext';
 
 interface AuthContextType {
@@ -21,6 +21,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // 同步 API Keys 从数据库到 localStorage（跨浏览器支持）
+  const syncApiKeys = useCallback(async (userId: string) => {
+    try {
+      // 检查 localStorage 中是否已有 key
+      const localAzureKey = localStorage.getItem(`${userId}_azure_speech_key`);
+      const localGeminiKey = localStorage.getItem(`${userId}_gemini_api_key`);
+      
+      // 如果 localStorage 已有 key，无需同步
+      if (localAzureKey && localGeminiKey) return;
+      
+      // 从数据库获取解密后的 key
+      const data = await apiClient.get<{
+        hasGeminiKey: boolean;
+        hasAzureKey: boolean;
+        azureRegion: string;
+        geminiKey?: string;
+        azureKey?: string;
+      }>(`/api/users/${userId}/api-keys?decrypt=true`);
+      
+      // 同步到 localStorage
+      if (data.azureKey && !localAzureKey) {
+        localStorage.setItem(`${userId}_azure_speech_key`, data.azureKey);
+      }
+      if (data.geminiKey && !localGeminiKey) {
+        localStorage.setItem(`${userId}_gemini_api_key`, data.geminiKey);
+      }
+      if (data.azureRegion) {
+        localStorage.setItem(`${userId}_azure_speech_region`, data.azureRegion);
+      }
+    } catch (error) {
+      // 静默失败，不影响用户体验
+      console.warn('Failed to sync API keys:', error);
+    }
+  }, []);
+
   useEffect(() => {
     // 尝试从 API 恢复会话
     const token = localStorage.getItem('auth_token');
@@ -36,6 +71,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .then(currentUser => {
           clearTimeout(timeoutId);
           setUser(currentUser);
+          // 登录后同步 API Keys 到 localStorage
+          syncApiKeys(currentUser.id);
         })
         .catch(err => {
           clearTimeout(timeoutId);
@@ -49,7 +86,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } else {
       setIsLoading(false);
     }
-  }, []);
+  }, [syncApiKeys]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
@@ -61,6 +98,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       setUser(loggedInUser);
+      // 登录后同步 API Keys 到 localStorage
+      syncApiKeys(loggedInUser.id);
       return true;
     } catch (error) {
       console.error('Login failed:', error);

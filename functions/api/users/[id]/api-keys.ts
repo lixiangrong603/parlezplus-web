@@ -5,6 +5,7 @@ import { getUserFromRequest, encryptApiKey, decryptApiKey, jsonResponse, errorRe
 
 // ============================================
 // GET /api/users/:id/api-keys - 获取用户的 API 配置状态
+// 查询参数: decrypt=true 时返回解密后的 key (用于跨浏览器同步)
 // ============================================
 export async function onRequestGet(context: any): Promise<Response> {
   const { request, env, params } = context as { request: Request; env: Env; params: { id: string } };
@@ -20,16 +21,43 @@ export async function onRequestGet(context: any): Promise<Response> {
       return errorResponse('无权访问', 403);
     }
     
+    const url = new URL(request.url);
+    const shouldDecrypt = url.searchParams.get('decrypt') === 'true';
+    
     const keyRecord = await env.DB
       .prepare('SELECT gemini_key_encrypted, azure_key_encrypted, azure_region FROM user_api_keys WHERE user_id = ?')
       .bind(params.id)
       .first<{ gemini_key_encrypted: string | null; azure_key_encrypted: string | null; azure_region: string }>();
     
-    return jsonResponse({
+    // 基础响应
+    const response: any = {
       hasGeminiKey: !!keyRecord?.gemini_key_encrypted,
       hasAzureKey: !!keyRecord?.azure_key_encrypted,
       azureRegion: keyRecord?.azure_region || 'westeurope',
-    });
+    };
+    
+    // 如果请求解密，返回解密后的 key
+    if (shouldDecrypt && keyRecord) {
+      const masterKey = env.GEMINI_MASTER_KEY || env.AZURE_MASTER_KEY || '';
+      
+      if (keyRecord.gemini_key_encrypted && masterKey) {
+        try {
+          response.geminiKey = await decryptApiKey(keyRecord.gemini_key_encrypted, masterKey);
+        } catch (e) {
+          console.error('Failed to decrypt gemini key:', e);
+        }
+      }
+      
+      if (keyRecord.azure_key_encrypted && masterKey) {
+        try {
+          response.azureKey = await decryptApiKey(keyRecord.azure_key_encrypted, masterKey);
+        } catch (e) {
+          console.error('Failed to decrypt azure key:', e);
+        }
+      }
+    }
+    
+    return jsonResponse(response);
   } catch (error) {
     console.error('Get API keys error:', error);
     return errorResponse('获取失败', 500);

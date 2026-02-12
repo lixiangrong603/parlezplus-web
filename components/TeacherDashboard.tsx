@@ -1379,14 +1379,55 @@ const TeacherSettingsModal = ({ onClose, onLogout }: { onClose: () => void, onLo
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
-    apiClient.get<{ hasGeminiKey: boolean; hasAzureKey: boolean; azureRegion: string }>(`/api/users/${user.id}/api-keys`).then(data => {
-      if (!active) return;
-      setHasD1GeminiKey(data.hasGeminiKey);
-      setHasD1AzureKey(data.hasAzureKey);
-      if (data.azureRegion && !localStorage.getItem(`${user.id}_azure_speech_region`)) {
-        setAzureRegion(data.azureRegion);
+    
+    const syncApiKeys = async () => {
+      try {
+        // 检查 localStorage 中是否已有 key
+        const localAzureKey = localStorage.getItem(`${user.id}_azure_speech_key`);
+        const localGeminiKey = localStorage.getItem(`${user.id}_gemini_api_key`);
+        
+        // 如果 localStorage 为空，尝试从数据库同步
+        const needsSync = !localAzureKey || !localGeminiKey;
+        const endpoint = needsSync 
+          ? `/api/users/${user.id}/api-keys?decrypt=true`
+          : `/api/users/${user.id}/api-keys`;
+        
+        const data = await apiClient.get<{ 
+          hasGeminiKey: boolean; 
+          hasAzureKey: boolean; 
+          azureRegion: string;
+          geminiKey?: string;
+          azureKey?: string;
+        }>(endpoint);
+        
+        if (!active) return;
+        
+        setHasD1GeminiKey(data.hasGeminiKey);
+        setHasD1AzureKey(data.hasAzureKey);
+        
+        // 同步 Azure Region
+        if (data.azureRegion) {
+          if (!localStorage.getItem(`${user.id}_azure_speech_region`)) {
+            localStorage.setItem(`${user.id}_azure_speech_region`, data.azureRegion);
+          }
+          setAzureRegion(data.azureRegion);
+        }
+        
+        // 同步解密后的 key 到 localStorage（跨浏览器）
+        if (data.azureKey && !localAzureKey) {
+          localStorage.setItem(`${user.id}_azure_speech_key`, data.azureKey);
+          setAzureKey(data.azureKey);
+        }
+        if (data.geminiKey && !localGeminiKey) {
+          localStorage.setItem(`${user.id}_gemini_api_key`, data.geminiKey);
+          setGeminiKey(data.geminiKey);
+        }
+      } catch (error) {
+        console.error('Failed to sync API keys:', error);
       }
-    }).catch(() => {});
+    };
+    
+    syncApiKeys();
     return () => { active = false; };
   }, [user?.id]);
 

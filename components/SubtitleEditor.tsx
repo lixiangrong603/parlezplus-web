@@ -12,6 +12,7 @@ import ResourceTagger from './ResourceTagger';
 import QuizEditor from './QuizEditor';
 import { useModal } from '../contexts/ModalContext';
 import { generateRandomCoverArt } from '../utils/mediaUtils';
+import { apiClient } from '../services/api/client';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -212,8 +213,31 @@ const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ resource, onBack, onSav
     }
     
     if (type === 'azure') {
-       const key = localStorage.getItem(`${user.id}_azure_speech_key`);
-       const region = localStorage.getItem(`${user.id}_azure_speech_region`);
+       let key = localStorage.getItem(`${user.id}_azure_speech_key`);
+       let region = localStorage.getItem(`${user.id}_azure_speech_region`);
+       
+       // 如果 localStorage 没有 key，尝试从数据库同步
+       if (!key) {
+         try {
+           const data = await apiClient.get<{
+             hasAzureKey: boolean;
+             azureKey?: string;
+             azureRegion?: string;
+           }>(`/api/users/${user.id}/api-keys?decrypt=true`);
+           
+           if (data.azureKey) {
+             key = data.azureKey;
+             localStorage.setItem(`${user.id}_azure_speech_key`, key);
+           }
+           if (data.azureRegion) {
+             region = data.azureRegion;
+             localStorage.setItem(`${user.id}_azure_speech_region`, region);
+           }
+         } catch (e) {
+           console.error('Failed to sync API keys:', e);
+         }
+       }
+       
        if (!key || !region) { await modal.alert({ message: '请先在设置中配置 Azure Speech Key 和 Region' }); return; }
        if (!resource.videoUrl) { await modal.alert({ message: '没有找到视频/音频源' }); return; }
        startAzureJob(resource, key, region);

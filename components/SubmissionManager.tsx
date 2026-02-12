@@ -13,6 +13,7 @@ import { useJobs } from '../contexts/JobContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useModal } from '../contexts/ModalContext';
 import MediaPlayer from './MediaPlayer';
+import { apiClient } from '../services/api/client';
 
 // --- SHARED MODAL COMPONENT ---
 const CustomConfirmModal = ({ 
@@ -234,7 +235,7 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
       }
   };
 
-  const handleEvaluate = () => {
+  const handleEvaluate = async () => {
       if (!currentSubmission?.audioUrl || !resource || !evalJobId) return;
       
       if (!user?.id) {
@@ -243,9 +244,31 @@ const SubmissionManager: React.FC<SubmissionManagerProps> = ({ taskId, classId, 
           return;
       }
       
-      const azureKey = localStorage.getItem(`${user.id}_azure_speech_key`);
-      const azureRegion = localStorage.getItem(`${user.id}_azure_speech_region`);
+      let azureKey = localStorage.getItem(`${user.id}_azure_speech_key`);
+      let azureRegion = localStorage.getItem(`${user.id}_azure_speech_region`);
       const authToken = localStorage.getItem('auth_token');
+      
+      // 如果 localStorage 没有 key，尝试从数据库同步
+      if (!azureKey) {
+        try {
+          const data = await apiClient.get<{
+            hasAzureKey: boolean;
+            azureKey?: string;
+            azureRegion?: string;
+          }>(`/api/users/${user.id}/api-keys?decrypt=true`);
+          
+          if (data.azureKey) {
+            azureKey = data.azureKey;
+            localStorage.setItem(`${user.id}_azure_speech_key`, azureKey);
+          }
+          if (data.azureRegion) {
+            azureRegion = data.azureRegion;
+            localStorage.setItem(`${user.id}_azure_speech_region`, azureRegion);
+          }
+        } catch (e) {
+          console.error('Failed to sync API keys:', e);
+        }
+      }
       
       if (!azureKey || !azureRegion || !authToken) {
           if(!azureKey) void modal.alert({ message: '未配置 Azure Speech Key' });

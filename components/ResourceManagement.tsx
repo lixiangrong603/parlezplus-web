@@ -10,7 +10,7 @@ import {
 import { MediaResource, TranscriptSegment, Channel, AzureWord, Classroom } from '../types';
 import { 
   getChannels, saveChannel,
-  getResources, saveResource,
+  getResources, saveResource, getResourceById,
   uploadResourceToMockCDN, getClassrooms,
   checkChannelReferences, cascadeDeleteChannel, cascadeDeleteResource, checkResourceReferences, ReferenceInfo
 } from '../utils/storage';
@@ -74,9 +74,28 @@ const CustomConfirmModal = ({
 export const ResourceManagement = ({ onExit, onPreview }: { onExit: () => void, onPreview: (resource: MediaResource) => void }) => {
   const [view, setView] = useState<'list' | 'editor'>('list');
   const [editingResource, setEditingResource] = useState<MediaResource | null>(null);
+  const [isLoadingResource, setIsLoadingResource] = useState(false);
 
-  const handleEdit = (resource: MediaResource) => {
-    setEditingResource(resource);
+  const handleEdit = async (resource: MediaResource) => {
+    // 如果资源的 transcript 为空（来自 summary 模式），先获取完整数据
+    if (!resource.transcript || resource.transcript.length === 0) {
+      setIsLoadingResource(true);
+      try {
+        const fullResource = await getResourceById(resource.id, resource.teacherId);
+        if (fullResource) {
+          setEditingResource(fullResource);
+        } else {
+          setEditingResource(resource);
+        }
+      } catch (error) {
+        console.error('Failed to load full resource:', error);
+        setEditingResource(resource);
+      } finally {
+        setIsLoadingResource(false);
+      }
+    } else {
+      setEditingResource(resource);
+    }
     setView('editor');
   };
 
@@ -89,6 +108,18 @@ export const ResourceManagement = ({ onExit, onPreview }: { onExit: () => void, 
         setView('list');
     }
   };
+
+  // 加载资源数据时显示加载状态
+  if (isLoadingResource) {
+    return (
+      <div className="h-full w-full bg-white dark:bg-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+          <p className="text-slate-500 dark:text-slate-400">加载资源数据...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (view === 'editor' && editingResource) {
     return (
